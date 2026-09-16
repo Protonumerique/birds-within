@@ -349,8 +349,103 @@ export const CLOCK = {
   maxStepSeconds: 10,
   /** Ceiling on ticks per second. A tick of `full` is ~17 ms in the worker. */
   maxPropagationHz: 20,
-  /** Time multipliers offered by the scrub control. */
-  rates: [1, 10, 60, 300, 1800],
+  /**
+   * Time multipliers offered by the scrub control.
+   *
+   * **Capped at 100x since 2026-09-16.** It used to run to 1800x, where a pass
+   * crossed the sky in two seconds. That is a curiosity rather than an image - the
+   * blends cut the corners of the arcs, the tracks lag by design, and there is
+   * nothing to look at that a slower rate does not show better. 100x is a pass in
+   * under a minute, which is the fastest rate that still reads as motion.
+   *
+   * It also settles the sound: see AUDIO.maxTimeRate.
+   */
+  rates: [1, 10, 60, 100],
+};
+
+/**
+ * Sound - Step 4, beginning with the drone.
+ *
+ * The belt sings and nothing else does, yet. `src/drone.ts` builds the bed; the
+ * performers (passes) and the debris interference are the next two pieces, and the
+ * engine in `src/audio.ts` is split so they can arrive without touching this.
+ *
+ * Three decisions are worth stating before the numbers:
+ *
+ * - **The bed is a bus, not a voice per object.** Five hundred oscillators is not a
+ *   performance problem so much as an acoustic one: five hundred detuned sines are
+ *   white noise, not a drone. The belt is instead cut into slices of equal
+ *   population in azimuth order, and each slice is one bass voice, panned to where
+ *   its members actually are. So the drone *is* the arc, flattened into the stereo
+ *   field, and the same object that lights a square in the grid is inside the voice
+ *   that square sits over.
+ * - **Pan is head-relative**, taken against the camera's right vector, so turning to
+ *   look sweeps the belt across the stereo field. It is also what makes the later
+ *   upgrade free: `PannerNode` wants the same direction vectors `SkyFrame` already
+ *   carries. Absolute pan would have been static - these objects never move.
+ * - **Selection is what gets loud.** The bed is deliberately mild and permanent;
+ *   keeping an object pulls one voice out of it and gives it its own pitch, filter
+ *   and envelope. Keep a dozen and the drone becomes invasive, which is the point.
+ */
+export const AUDIO = {
+  /** Master level once sound is on. Everything else is relative to this. */
+  masterGain: 0.45,
+  /** Seconds the master takes to arrive or leave when the button is pressed. */
+  fadeSeconds: 2.5,
+  /**
+   * Sound runs at real time and nowhere else.
+   *
+   * Above this the piece is an optical curiosity - a pass in a second, tracks
+   * lagging - and a drone whose pans sweep at that speed is a siren, not a sky. The
+   * master simply ducks while the rate is up and comes back when it returns to 1x,
+   * so the button's state survives a look-ahead.
+   */
+  maxTimeRate: 1,
+  /** Seconds to duck and unduck for the rate. Shorter than a deliberate fade. */
+  duckSeconds: 0.7,
+  drone: {
+    /**
+     * The bed's pitches, low to high, **one voice per ratio** - the slice count is
+     * this array's length, so the two can never disagree.
+     *
+     * A just pentatonic over an octave and a half. Adjacent slices are adjacent in
+     * the sky as well as in pitch, so sweeping the arc from east to west rises.
+     * Nine bass voices a whole tone apart would be mud; a pentatonic is not.
+     */
+    ratios: [1, 9 / 8, 4 / 3, 3 / 2, 5 / 3, 2, 9 / 4, 8 / 3, 3],
+    /** The root, Hz. C1 - under the bottom of a bass guitar. */
+    rootHz: 32.7,
+    /** One bed slice at full occupancy. Nine of these sum to the whole drone. */
+    bedGain: 0.085,
+    /** Members in a slice for it to reach full level. Below it the bed thins out. */
+    fullAt: 20,
+    /** The bed never falls below this fraction of its level while the belt is up. */
+    floorLevel: 0.25,
+    /** Detune between a slice's two sines. What makes the bed beat instead of sit. */
+    detuneCents: 7,
+    /** A triangle an octave up, under the pair, for body. */
+    bodyGain: 0.16,
+    /** Each voice breathes at its own rate, lowest slice slowest. Hz. */
+    breathHz: [0.043, 0.071],
+    /** How deep that breath cuts, as a fraction of the voice's level. */
+    breathDepth: 0.35,
+    /** A kept object's voice sits this many octaves above its slice. */
+    soloOctaves: 1,
+    soloGain: 0.17,
+    /** Spread across a slice, cents: neighbours kept together beat against each other. */
+    soloDetuneCents: 14,
+    /** The resonant lowpass that opens as a voice arrives. */
+    soloCutoffHz: 900,
+    soloQ: 7,
+    attackSeconds: 3,
+    releaseSeconds: 4,
+    /** Kept belt objects that can sound at once. Past this, a click still marks. */
+    maxSolo: 12,
+    /** How often the slices are recut, ms. The belt barely moves; this is not a tick. */
+    regroupMs: 2000,
+    /** Hard left and right are unpleasant on headphones; the field stops here. */
+    panSpread: 0.85,
+  },
 };
 
 /** `?debug` shows frame timing and worker stats. Hidden otherwise - the piece has no chrome for it. */

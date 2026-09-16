@@ -22,9 +22,9 @@ interface Track {
  * A track is a few hundred JS propagations in the worker, which shares its thread
  * with the frame ticks every object on screen depends on. So the number of requests
  * out at once is capped, and a track is only recomputed once scene time has drifted
- * far enough for it to be visibly wrong. At 1800x that means the tracks lag - which
- * is right: at that rate a 70-minute track crosses the sky in two seconds and reads
- * as a smear anyway, and frames matter more.
+ * far enough for it to be visibly wrong. At 100x that means the tracks lag a little -
+ * which is right: at that rate a 70-minute track crosses the sky in forty seconds, and
+ * frames matter more.
  *
  * Nothing here knows about the clock's generation. A rate change bumps it without
  * moving scene time, and blinking every track off for that would be worse than the

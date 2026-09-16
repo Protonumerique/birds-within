@@ -4,6 +4,7 @@ import type { SkyFrame } from './sky-frame';
 import type { Selection } from './selection';
 import { Group } from './ui-group';
 import { ChoirGrid } from './ui-choir';
+import type { AudioEngine } from './audio';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -12,6 +13,8 @@ export interface Hud {
   selectedIndex(): number;
   /** What wears a ring on the sky: every row on show, plus anything kept or pointed at. */
   ringed(): readonly number[];
+  /** Every belt object above the sky's floor - what the grid shows, and what sings. */
+  belt(): readonly number[];
 }
 
 export interface HudSource {
@@ -26,6 +29,8 @@ export interface HudSource {
   kind: Uint8Array;
   /** What the pointer is touching and what it has stuck to. Shared with the scene. */
   selection: Selection;
+  /** The sound. The panel owns its one control; nothing else here knows about it. */
+  audio: AudioEngine;
 }
 
 const releaseBelow = (HIGHLIGHT.releaseBelowDeg * Math.PI) / 180;
@@ -71,6 +76,10 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
         <div class="controls">
           <input id="scrub" type="range" min="-720" max="720" step="1" value="0" title="offset from now, minutes" />
         </div>
+        <div class="controls">
+          <button id="sound">SOUND</button>
+          <span class="sub" id="soundnote"></span>
+        </div>
       </header>
       <div class="lists"></div>
       <div class="spacer"></div>
@@ -98,6 +107,22 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
   };
   $<HTMLSelectElement>('rate').onchange = (e) => {
     clock.timeRate = Number((e.target as HTMLSelectElement).value);
+  };
+
+  // The one control the sound has. It is also the gesture that creates the audio
+  // context: a browser will not let a page make a sound without one, so "audible
+  // from the start" means from this press. Nothing is built until it happens.
+  const soundBtn = $<HTMLButtonElement>('sound');
+  const soundNote = $('soundnote');
+  soundBtn.onclick = async () => {
+    soundBtn.disabled = true;
+    try {
+      const on = await source.audio.toggle();
+      soundBtn.textContent = on ? 'MUTE' : 'SOUND';
+      soundBtn.classList.toggle('on', on);
+    } finally {
+      soundBtn.disabled = false;
+    }
   };
 
   let lastScrub = 0;
@@ -141,11 +166,16 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
   return {
     selectedIndex: trackTarget,
     ringed: () => ringed,
+    belt: () => choirUp,
 
     update(date, frame) {
       const iso = date.toISOString();
       tEl.firstChild!.textContent = `${iso.slice(11, 19)} UTC`;
       tlEl.textContent = `${iso.slice(0, 10)} · ${pad(date.getHours())}:${pad(date.getMinutes())} local`;
+      // Said only while it is true, and never otherwise: the drone is ducked while
+      // the clock runs fast, and a button that looks on while nothing is audible is
+      // worse than no button. See AUDIO.maxTimeRate.
+      soundNote.textContent = source.audio.silenced ? 'silent above 1×' : '';
       if (!frame) return;
 
       if (frame !== scanned) {

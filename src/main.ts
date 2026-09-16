@@ -11,6 +11,7 @@ import { Clock } from './clock';
 import { createHud } from './ui';
 import { Selection } from './selection';
 import { Trails } from './trails';
+import { AudioEngine } from './audio';
 import { createDebugPanel } from './debug';
 
 /**
@@ -55,6 +56,7 @@ async function main() {
   const clock = new Clock();
   const scene = new SkyScene(canvas, stream.count);
   const selection = new Selection();
+  const audio = new AudioEngine();
   scene.setClasses(stream.choir, stream.kind);
   const hud = createHud(hudRoot, clock, {
     names: stream.names,
@@ -63,10 +65,11 @@ async function main() {
     selection,
     choir: stream.choir,
     kind: stream.kind,
+    audio,
   });
   const debug = DEBUG ? createDebugPanel(document.body) : null;
   // ?debug: the running piece, for poking at from the console.
-  if (DEBUG) Object.assign(window, { birds: { stream, scene, clock, selection } });
+  if (DEBUG) Object.assign(window, { birds: { stream, scene, clock, selection, audio } });
 
   let lastHud = -Infinity;
   let lastWall = performance.now();
@@ -173,6 +176,20 @@ async function main() {
     }
 
     scene.render();
+
+    // Sound, after the scene: the drone pans against where the camera is looking, so
+    // it reads the heading the frame was just drawn with rather than the last one.
+    // It returns immediately while sound is off, which is every page nobody presses
+    // the button on.
+    audio.update(
+      pair?.from ?? null,
+      hud.belt(),
+      selection.marked,
+      (i) => stream.choir[i] === 1,
+      scene.heading,
+      clock.timeRate
+    );
+
     debug?.frame(wall - lastWall, stream.getStats());
     lastWall = wall;
     requestAnimationFrame(frame);

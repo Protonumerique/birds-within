@@ -182,6 +182,18 @@ select:hover {
   border-color: rgba(120, 160, 190, 0.4);
 }
 
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* The sound, while it is on. The belt's own blue, because the belt is what sings. */
+button.on {
+  color: var(--geo);
+  border-color: rgba(138, 212, 255, 0.45);
+  background: rgba(138, 212, 255, 0.1);
+}
+
 input[type="range"] {
   flex: 1 1 auto;
   width: 100%;

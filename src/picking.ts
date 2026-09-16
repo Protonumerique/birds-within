@@ -7,7 +7,8 @@ import type { FramePair } from './sky-stream';
  * Picking reads the SAME blend the GPU is drawing - the two ticks either side of
  * scene time, mixed and renormalised exactly as BLEND_GLSL does - so the ring lands
  * on the object where it actually appears on screen, not where it was at the last
- * tick. At 1800x a tick spans 90 s; picking the raw tick would miss by degrees.
+ * tick. At the top of the rate ladder a tick spans ten scene seconds; picking the raw
+ * tick would miss by degrees.
  *
  * Only objects above the horizon can be picked. Below-horizon objects are drawn, but
  * they are on the other side of the world: nothing about them is available to the eye,

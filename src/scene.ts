@@ -379,7 +379,7 @@ export class SkyScene {
     /**
      * Seconds of WALL time, not scene time - the one quantity in the app that is
      * deliberately not read from the clock. The tumble is a property of the mark, not
-     * of the orbit; at 1800x a scene-time tumble would strobe, and there is no real
+     * of the orbit; at 100x a scene-time tumble would race, and there is no real
      * rotation rate in the elements to be faithful to anyway.
      */
     uTime: { value: 0 },
@@ -653,6 +653,15 @@ export class SkyScene {
   }
 
   /** The pointer is over something takeable. */
+  /**
+   * Where the camera is looking, radians of yaw. The sound reads this: the stereo
+   * axis is the camera's right vector, so turning to look sweeps the belt across the
+   * field. Pitch does not enter into it - see the note in `Drone.update`.
+   */
+  get heading(): number {
+    return this.yaw;
+  }
+
   setPickCursor(over: boolean): void {
     this.renderer.domElement.classList.toggle('over', over);
   }

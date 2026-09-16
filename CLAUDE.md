@@ -238,8 +238,8 @@ enormously: every object a light gave p50 28.1 and 28.6 ms, every object a shard
 and at four to sixteen pixels would look exactly like this anyway.
 
 The tumble reads `uTime` in **wall seconds — the one quantity in the app deliberately
-not taken from the clock.** It is a property of the mark, not of the orbit: at 1800× a
-scene-time tumble would strobe, and there is no rotation rate in the elements to be
+not taken from the clock.** It is a property of the mark, not of the orbit: at 100× a
+scene-time tumble would race, and there is no rotation rate in the elements to be
 faithful to.
 
 The `kind` byte this reads has been in the catalogue since Step 1 and went unused
@@ -324,8 +324,8 @@ uniform; a tick arriving uploads into whichever of the two GPU slots is stale.
   `TRAIL.widthPx` and `TRAIL.opacity` are therefore real controls. `src/trails.ts` caps
   requests in flight and only recomputes a track once scene time has drifted
   `refreshSeconds`: a track is a few hundred JS propagations on the same worker thread
-  the frame ticks come from, and frames matter more. At 1800× the tracks lag, which is
-  right — at that rate a 70-minute track crosses the sky in two seconds.
+  the frame ticks come from, and frames matter more. At 100× the tracks lag a little,
+  which is right — at that rate a 70-minute track crosses the sky in forty seconds.
 - **Render order is a design decision**, set in `RENDER_ORDER`: points, tracks and rings
   under the haze so they emerge together; graticule and compass labels above it so the
   dome stays legible to the horizon.
@@ -437,7 +437,7 @@ about the mouse.
 
 - **Picking reads the blend, not the tick.** `src/picking.ts` mixes and renormalises the
   two frames exactly as `BLEND_GLSL` does, then projects. Picking the raw tick would
-  miss by degrees at 1800×, where a tick spans 90 s. It runs **once per rendered frame**
+  miss by degrees at the top of the rate ladder, where a tick spans ten scene seconds. It runs **once per rendered frame**
   at most, however many `pointermove`s arrive, and costs one projection per object above
   the horizon — the ~6–9% that are up. Everything else falls out on a sign test.
 - **Only what is above the horizon can be taken.** Below-horizon objects are drawn but
@@ -469,8 +469,13 @@ hands the scene the pair bracketing "now".
 
 - **Tick rate adapts to the time rate:** `CLOCK.propagationHz` (5) at 1×, raised so that no
   two ticks are more than `CLOCK.maxStepSeconds` (10 s of scene time) apart, capped at
-  `CLOCK.maxPropagationHz` (20). At 1800× a tick still spans 90 s, and blends cut the
-  corner of long arcs — at that speed it reads as motion blur.
+  `CLOCK.maxPropagationHz` (20). The ladder tops out at 100×, which asks for 10 Hz and
+  still spans 10 s a tick; blends cut the corner of the arcs, and it reads as motion blur.
+
+**The ladder stops at 100×, since 2026-09-16.** It ran to 1800×, where a pass crossed the
+sky in two seconds — a curiosity rather than an image, and nothing a slower rate does not
+show better. 100× is a pass in under a minute. It also settles the sound, which is ducked
+above 1× and at 1800 would be a siren.
 - **Discontinuities flush the buffer.** Scrubbing, NOW and rate changes bump
   `Clock.generation`; the stream drops its frames and refills from the new time, keeping
   the last frame on screen meanwhile. Late answers from an old generation are discarded.
@@ -495,6 +500,86 @@ about one frame a second, which looks exactly like a pipeline stall — a bare W
 trails, sun position — reads from it. Mixing in a bare `new Date()` anywhere else is how a
 scrubbed timeline silently desynchronises from what is drawn. `Clock.generation` counts
 discontinuities; anything that buffers ahead in scene time must flush when it changes.
+
+### Sound: the drone first
+
+Step 4, begun 2026-09-16. Only the belt sings so far. `src/audio.ts` owns the context and
+the master chain; `src/drone.ts` is the belt's bus and knows nothing about the rest. The
+performers (passes) and the debris interference arrive as siblings of `Drone` on the same
+bus, which is why the split is there before there is anything to put in it.
+
+**Nothing exists until the button is pressed.** A browser will not let a page make a sound
+without a gesture, so "the drone is audible from the start" has to mean "from the first
+press" — there is no arguing with the policy. The context, the forty-odd oscillators and
+all of their cost are built inside that click and not before, so a page nobody turns the
+sound on for pays nothing at all. The one control is `SOUND` / `MUTE`, under the time
+controls, and it wears the belt's own blue while it is on. Once the fade out is inaudible
+the context is **suspended**: `setTargetAtTime` is asymptotic and never actually reaches
+zero, so a muted tab would otherwise run forty oscillators for its life.
+
+**The bed is a bus, not a voice per object.** Five hundred oscillators is not a
+performance problem so much as an acoustic one: five hundred detuned sines are white
+noise, not a drone. The belt is instead sorted by azimuth — the same order the grid is
+built in — and cut into as many slices of **equal population** as there are pitches in
+`AUDIO.drone.ratios`, nine. Each slice is one bass voice: two sines a few cents apart with
+a triangle an octave up for body, panned to the mean direction of its members, breathing
+at its own slow rate. The drone *is* the arc, flattened into the stereo field, and the
+object that lights a square in the grid is inside the voice that square sits over. Equal
+population rather than equal angle, because the belt is not evenly filled and a slice of
+empty sky would be a voice silent for no audible reason.
+
+The pitches are a just pentatonic over an octave and a half from C1, ascending with
+azimuth, so adjacent slices are adjacent in the sky *and* in pitch and sweeping the arc
+rises. Nine bass voices a whole tone apart would be mud; a pentatonic is not.
+
+**Pan is head-relative.** The stereo axis is the camera's right vector, so turning to look
+sweeps the belt across the field — absolute pan would have been static, since these
+objects never move. With up = +Y and the view built from yaw and pitch, the cross product
+loses the pitch term entirely: right is `(cos yaw, 0, sin yaw)` whatever the camera is
+looking at, and its dot with an object's direction also does the right thing overhead,
+where there is no left or right and the dot goes to zero. It is the same direction vector
+`SkyFrame` already carries, which is what makes HRTF a later swap of one node rather than
+a rewrite of the mapping.
+
+**Keeping an object pulls a voice out of the bed.** A kept belt object gets a sawtooth an
+octave above *its own slice's* pitch, through a resonant lowpass that opens as it arrives,
+detuned by where it sits inside that slice — so two neighbours kept together beat against
+each other. It is in tune with the bed because it is the bed's pitch: the voice steps
+forward rather than arriving from somewhere else. Twelve at once is the cap; past that a
+click still marks, it just does not sound.
+
+Measured by rendering the same `Drone` into an `OfflineAudioContext` — 90 belt objects,
+RMS over the settled tail:
+
+| | RMS | peak |
+|---|---|---|
+| bed alone | −24.8 dBFS | 0.24 |
+| one kept | −22.9 | 0.40 |
+| four kept | −20.1 | 0.48 |
+| twelve kept | −16.1 | 0.73 |
+
+Mild and permanent at the bottom, invasive at the top, monotonic, and not clipping before
+the master compressor even acts. That compressor is there rather than a lower voice cap
+because the brief asks for it to be *able* to get invasive.
+
+**Sound runs at real time and nowhere else** (`AUDIO.maxTimeRate`). Above 1× the master
+ducks and the panel says `silent above 1×`; the button's state survives, because a
+look-ahead must not cost a press. Nothing in the audio path reads the clock for anything
+else — the belt does not move, so this is driven by membership and by where the camera is
+pointing, and by nothing besides.
+
+**Doppler will have to be exaggerated when the performers arrive.** A LEO object at
+7.5 km/s gives a fractional shift of 2.5e-5 — about **0.04 cents**, which is nothing. The
+reason radio amateurs hear it at all is that it is 2.5e-5 of a 145 MHz carrier: a 3.6 kHz
+slide in the beat note. Scaling it into the audio band is not a cheat, it is the same
+operation the metaphor was built on.
+
+**There is no purpose data in the pipeline**, so the softer-weather / bolder-telecom /
+bassier-military voicing cannot be built yet: `kind` is a name heuristic and CelesTrak's
+GP data carries no object type at all. CelesTrak does publish classified lists on its TLE
+pages, and parsing those into an optional catalogue field is the way in when it is wanted.
+Deferred on purpose, not forgotten.
+
 
 ## Deployment
 
@@ -632,9 +717,19 @@ Anything that computes range rate by hand must not repeat the naive version.
       satellite *is* on screen, how trails read, how density reads, whether the far side
       of the Earth is drawn at all. Appearance already lives in the vertex shader, fed
       blended direction, shadow and range; the `kind` byte is in the catalogue for it.
-- [ ] **Step 4 — sound.** Web Audio over the `SkyFrame` columns: pitch ← range rate,
-      amplitude ← elevation, pan ← azimuth, events on AOS/LOS. A global view sonifies into
-      mush; one observer's sky does not.
+- [ ] **Step 4 — sound.** Web Audio over the `SkyFrame` columns. A global view sonifies
+      into mush; one observer's sky does not. See *Sound: the drone first*.
+      ← *you are here*
+  - [x] **The drone.** The belt as a bass bed of nine panned slices, plus a defined
+        voice for every object kept. Head-relative stereo, ducked above 1×.
+  - [ ] **The performers.** Passes, sounding only when kept: pitch ← exaggerated range
+        rate, amplitude ← elevation, pan ← direction, events on AOS/LOS. Synthesised
+        first — a sample sounds fine badly mapped, which is how a bad mapping survives.
+  - [ ] **The interference.** Debris as a modulator rather than a voice: noise and
+        ring-mod whose depth on a performer rises as a fragment's angular separation
+        from it shrinks. Inaudible while nothing is kept.
+  - [ ] **HRTF.** `PannerNode` behind a flag, on the same direction vectors, once the
+        stereo mapping is known to be right.
 
 ## Conventions
 
