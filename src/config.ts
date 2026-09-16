@@ -270,8 +270,9 @@ function dimmed(hex: string, k: number): string {
  *   is touched. The row carries the grammar, not the panel's own idea of "info text".
  * - **`accent` is attention**, and it is amber for both lists because that is what the
  *   *ring* turns when you touch an object — anything not in the belt gets `uMarkColor`.
- *   A second highlight hue for debris would have to disagree with its own ring, and
- *   light blue in particular is already spoken for by the belt.
+ *   A second highlight hue for debris would have to disagree with its own ring. A
+ *   distinct blue for it was considered and deferred - not rejected, but any blue has
+ *   to survive sitting next to the belt's, and nothing needs it yet.
  *
  * `glyph` is the mark's shape, in the mark's colour: the legend, folded into the
  * heading, where it sits next to the thing it explains instead of underneath everything.

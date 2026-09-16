@@ -351,7 +351,8 @@ what is passing, what is wreckage, and the belt. `GROUP_LOOK` gives each one a g
 - **`accent` is attention, and only attention.** It is amber for *both* lists, because
   amber is what the ring turns when you touch an object — anything outside the belt gets
   `uMarkColor`. A second highlight hue for debris would have to disagree with its own
-  ring, and light blue in particular is already spoken for by the belt.
+  ring. A distinct blue for it was considered and **deferred, not rejected** — any blue
+  has to survive sitting beside the belt's, and nothing needs it yet.
 
 The glyph is the third piece: shape and hue together, which is the whole grammar in one
 character.

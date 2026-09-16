@@ -165,7 +165,9 @@ input[type="range"] {
 .group h2 {
   display: flex;
   gap: 5px;
-  align-items: baseline;
+  /* Centred, not baseline: a disc and a triangle sit low on a baseline, and next to
+     9px capitals that reads as the glyph having slipped rather than as alignment. */
+  align-items: center;
   margin: 0 0 3px;
   padding-bottom: 2px;
   border-bottom: 1px solid rgba(120, 160, 190, 0.14);
@@ -187,7 +189,10 @@ input[type="range"] {
  */
 .group h2 .gg {
   color: var(--tone);
-  font-size: 8px;
+  /* Large enough that the mark reads as the mark, not as punctuation. `line-height: 1`
+     keeps it from stretching the heading it sits in. */
+  font-size: 15px;
+  line-height: 1;
   letter-spacing: 0;
 }
 
@@ -258,7 +263,7 @@ input[type="range"] {
   position: absolute;
   top: 14px;
   right: 14px;
-  color: var(--ink-faint);
+  color: var(--ink);
   font-size: 10px;
   letter-spacing: 0.08em;
   text-align: right;
