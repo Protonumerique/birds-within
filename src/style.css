@@ -272,14 +272,14 @@ input[type="range"] {
 /* --- the belt -------------------------------------------------------------- */
 
 /*
- * One square per geostationary object, ordered by azimuth and filled column by column,
- * so left-to-right across the grid is left-to-right across the southern sky.
+ * One square per geostationary object, in azimuth order, filled left to right and
+ * wrapped - so the remainder lands on the bottom row instead of leaving a ragged
+ * column on the right.
  */
 .cgrid {
   display: grid;
   grid-template-columns: repeat(var(--cols), 1fr);
-  grid-template-rows: repeat(var(--rows), var(--cell));
-  grid-auto-flow: column;
+  grid-auto-rows: var(--cell);
   gap: var(--gap);
 }
 

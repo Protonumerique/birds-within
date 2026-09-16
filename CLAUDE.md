@@ -135,9 +135,9 @@ falls straight out of the geometry.
   *Colour and visual conventions*. Their ring is also **smaller** (`CHOIR`) and at a
   steady brightness rather than dimmed by elevation: they do not climb or descend, so
   dimming them by it would say something untrue.
-- **Exempt from `releaseBelowDeg`.** A good many sit under two degrees and stay there
-  forever; releasing them on that rule would make the low half of the belt impossible to
-  keep. They are let go only below the true horizon, which for them means never.
+- **Exempt from `releaseBelowDeg`** (5°): a good many sit under it forever, and that
+  rule would make the low half of the belt impossible to keep. They are let go at
+  `SKY.lowestVisibleDeg` instead — nothing holds a mark the sky is not drawing.
 - Their data lives in a **grid of squares** at the foot of the column, not a list —
   see *The panel*. Five hundred objects that never move are not a list.
 - `synthetic.bin` carries **240 invented belt objects** so all of this is exercisable
@@ -279,9 +279,19 @@ uniform; a tick arriving uploads into whichever of the two GPU slots is stale.
 - `src/sky-frame.ts` is **the one place** alt/az maps to scene space: +Y up, +X East,
   −Z North, so the camera's default forward looks North. The worker and the graticule
   both use it.
-- `SKY.showBelowHorizonDeg` is −90: everything is drawn, below-horizon objects dimmed. The
-  horizon cull applies to the CPU readers — the readout sorts only the ~6–9% that are up.
-  Whether below-horizon objects belong in the image at all is a Step 3 decision.
+- **`SKY.lowestVisibleDeg` is 2: the sky ends there.** Below it an object is not drawn,
+  not listed, not in the belt's grid, and a mark on it is let go — one floor, so the
+  panel can never name something the sky is not showing. Settled 2026-09-16; it used to
+  be −90, with the whole sphere drawn and the far side faintly present through the
+  ground. That produced a **discontinuity nobody designed**: the haze is opaque at 0°,
+  so an object at +1° is ~97% hazed away, but below 0° there is no haze at all and the
+  ground disc leaves an object at −1° at 28% of its brightness. Objects faded out as they
+  sank and then *brightened again* the moment they crossed, which reads as the floor
+  leaking rather than as a choice. Two degrees rather than zero because a point sprite is
+  16 px wide, and cutting at exactly 0° leaves half a sprite straddling the horizon line.
+  The cost, stated plainly: objects on the far side of the Earth are now **gone**, not
+  dimmed, and the ground's transparency no longer carries the meaning its comment once
+  claimed for the title.
 - **Haze** (`SKY.haze`): a sky-coloured band from the horizon to `topDeg`, opacity computed
   per pixel from elevation, so objects come into view gradually as they climb. It is
   colour-managed like the clear colour, so full haze is exactly empty sky, not a darker
@@ -382,12 +392,17 @@ scoped the ring to *listed* objects, and since the lists hold ten of a thousand,
 anything else silently did nothing at all.
 
 **The belt gets a grid, not a list.** One square per geostationary object above the
-horizon, **ordered by azimuth and filled column by column, so horizontal position in
-the grid is horizontal position in the sky** — the leftmost column is one end of the
-arc, the rightmost the other, and sweeping the pointer across the grid sweeps the
-southern sky in the same direction. An arbitrary order would have cost the same and
-meant nothing. The set barely changes (these objects never set), so the grid is rebuilt
-only when membership actually differs.
+floor, **in azimuth order, read left to right and wrapped** like text: the first square
+is one end of the arc, the last is the other, and neighbours in the grid are neighbours
+on the belt. An arbitrary order would have cost the same and meant nothing. The set
+barely changes (these objects never set), so the grid is rebuilt only when membership
+actually differs.
+
+It filled *column by column* at first, which made horizontal position in the grid equal
+horizontal position in the sky — a stronger mapping, but it left the remainder as a
+ragged part-column down the right-hand edge. Wrapping by rows puts the remainder on the
+bottom row, where a half-finished line is what every reader already expects. Adjacency
+survives the trade; only the global x = azimuth reading is given up.
 
 **No text in the grid.** One box above it fills while the pointer is on a square and is
 otherwise blank — five hundred objects cost five hundred squares and not one label,

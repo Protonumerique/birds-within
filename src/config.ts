@@ -167,12 +167,22 @@ export const SKY = {
   /** Radius of the dome in scene units. Arbitrary - the sky has no scale. */
   radius: 100,
   /**
-   * How far below the horizon to keep drawing, in degrees.
+   * The lowest elevation anything is drawn at. **The sky ends here** - below it an
+   * object is not drawn, not listed, not in the belt's grid, and a mark on it is let
+   * go. One floor, so the panel can never name something the sky is not showing.
    *
-   * -90 draws the whole sphere, so objects on the far side of the Earth stay
-   * present but heavily dimmed.
+   * It used to be -90: the whole sphere was drawn and the far side stayed faintly
+   * present through the ground. That produced a discontinuity nobody designed. The
+   * haze runs from `haze.topDeg` down to the horizon and is *opaque* at 0°, so an
+   * object at +1° is ~97% hazed away - but below 0° there is no haze at all, only the
+   * ground disc at 0.72, which leaves an object at -1° composited at 28% of its
+   * brightness. Things faded out as they sank and then **brightened again** the moment
+   * they crossed, which reads as the floor leaking rather than as a choice.
+   *
+   * Two degrees rather than zero, because a point sprite is 16 px wide: cutting at
+   * exactly 0° leaves half a sprite straddling the drawn horizon line.
    */
-  showBelowHorizonDeg: -90,
+  lowestVisibleDeg: 2,
   /**
    * Haze rising from the horizon: sky-coloured at the horizon, clear by `topDeg`, so
    * objects come into view gradually as they climb instead of popping over the edge.

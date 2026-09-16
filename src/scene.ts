@@ -362,7 +362,7 @@ export class SkyScene {
     uT: { value: 0 },
     uRadius: { value: SKY.radius },
     uPixelRatio: { value: 1 },
-    uSinLowest: { value: Math.sin(THREE.MathUtils.degToRad(SKY.showBelowHorizonDeg)) },
+    uSinLowest: { value: Math.sin(THREE.MathUtils.degToRad(SKY.lowestVisibleDeg)) },
     uColorLit: { value: COLOR_LIT },
     uColorEclipsed: { value: COLOR_ECLIPSED },
     uColorBelow: { value: COLOR_BELOW },
@@ -758,8 +758,9 @@ export class SkyScene {
       new THREE.MeshBasicMaterial({
         color: 0x070b10,
         transparent: true,
-        // Not opaque: objects on the far side of the Earth stay faintly present
-        // through the ground rather than being cut away. That is the title.
+        // Nothing is drawn below SKY.lowestVisibleDeg any more, so this no longer
+        // decides whether the far side shows through - it only darkens the ground so
+        // the horizon reads as an edge.
         opacity: 0.72,
         side: THREE.DoubleSide,
         depthWrite: false,

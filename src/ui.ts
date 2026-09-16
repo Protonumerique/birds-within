@@ -1,4 +1,4 @@
-import { OBSERVER, CLOCK, GROUP_LOOK, HIGHLIGHT, READOUT, type Dataset } from './config';
+import { OBSERVER, CLOCK, GROUP_LOOK, HIGHLIGHT, READOUT, SKY, type Dataset } from './config';
 import type { Clock } from './clock';
 import type { SkyFrame } from './sky-frame';
 import type { Selection } from './selection';
@@ -29,6 +29,8 @@ export interface HudSource {
 }
 
 const releaseBelow = (HIGHLIGHT.releaseBelowDeg * Math.PI) / 180;
+/** The floor the sky is drawn to. The panel uses the same one - see SKY.lowestVisibleDeg. */
+const lowestVisible = (SKY.lowestVisibleDeg * Math.PI) / 180;
 
 /**
  * The panel: one narrow column, pinned left, full height.
@@ -151,7 +153,7 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
         debris.length = 0;
         choirUp.length = 0;
         for (let i = 0; i < frame.count; i++) {
-          if (frame.range[i]! < 0 || frame.elevation[i]! <= 0) continue;
+          if (frame.range[i]! < 0 || frame.elevation[i]! <= lowestVisible) continue;
           if (isChoir(i)) choirUp.push(i);
           else if (isDebris(i)) debris.push(i);
           else passing.push(i);
@@ -165,7 +167,9 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
       // objects hold a fixed elevation forever and many sit under two degrees, so that
       // rule would make the low half of the arc impossible to keep at all.
       for (const i of selection.marked) {
-        const floor = isChoir(i) ? 0 : releaseBelow;
+        // The belt is exempt from the 5° rule - many of its objects sit under it
+        // forever - but not from the floor: nothing keeps a mark the sky is not drawing.
+        const floor = isChoir(i) ? lowestVisible : releaseBelow;
         if (frame.range[i]! < 0 || frame.elevation[i]! <= floor) selection.release(i);
       }
 
@@ -188,12 +192,17 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
       // common case is pointing at something that has no row at all, and hanging the
       // ring off the row was what silently took hover away from the whole sky.
       const hovered = selection.hovered;
-      if (hovered >= 0 && frame.elevation[hovered]! > 0 && ringed.indexOf(hovered) < 0) {
+      if (hovered >= 0 && frame.elevation[hovered]! > lowestVisible && ringed.indexOf(hovered) < 0) {
         ringed.push(hovered);
       }
 
       // Nothing kept: the track stays on whatever was highest until that one sets.
-      if (fallback < 0 || isChoir(fallback) || frame.range[fallback]! < 0 || frame.elevation[fallback]! <= 0) {
+      if (
+        fallback < 0 ||
+        isChoir(fallback) ||
+        frame.range[fallback]! < 0 ||
+        frame.elevation[fallback]! <= lowestVisible
+      ) {
         fallback = passing[0] ?? -1;
       }
     },

@@ -14,11 +14,16 @@ const compass = (azDeg: number) => POINTS[Math.round((((azDeg % 360) + 360) % 36
  * there is nothing to sort and nothing to update: the right shape for them is a
  * keyboard, not a table.
  *
- * **Squares are ordered by azimuth and filled column by column**, so horizontal
- * position in the grid is horizontal position in the sky - the leftmost column is one
- * end of the arc, the rightmost the other. Sweeping the pointer across the grid sweeps
- * the belt in the same direction, and a square lights the object it stands for. An
- * arbitrary order would have cost exactly the same and meant nothing.
+ * **Squares are in azimuth order, read left to right and wrapped** like text: the first
+ * square is one end of the arc, the last is the other, and neighbours in the grid are
+ * neighbours on the belt. An arbitrary order would have cost exactly the same and meant
+ * nothing.
+ *
+ * It filled column by column at first, which made *horizontal position* in the grid
+ * equal horizontal position in the sky - a stronger mapping, but it left the remainder
+ * as a ragged part-column down the right-hand edge. Wrapping by rows puts the remainder
+ * on the bottom row, where a half-finished line is what every reader already expects.
+ * Adjacency survives the trade; only the global x = azimuth reading is given up.
  *
  * No text lives in the grid. One box above it fills while the pointer is on a square
  * and is otherwise empty, which is how five hundred objects cost five hundred squares
@@ -108,8 +113,6 @@ export class ChoirGrid {
   }
 
   private build(): void {
-    const rows = Math.max(1, Math.ceil(this.cells.length / CHOIR_GRID.columns));
-    this.grid.style.setProperty('--rows', String(rows));
     this.grid.textContent = '';
     this.nodes = this.cells.map((_, n) => {
       const el = document.createElement('div');
