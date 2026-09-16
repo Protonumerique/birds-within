@@ -501,12 +501,14 @@ trails, sun position — reads from it. Mixing in a bare `new Date()` anywhere e
 scrubbed timeline silently desynchronises from what is drawn. `Clock.generation` counts
 discontinuities; anything that buffers ahead in scene time must flush when it changes.
 
-### Sound: the drone first
+### Sound
 
-Step 4, begun 2026-09-16. Only the belt sings so far. `src/audio.ts` owns the context and
-the master chain; `src/drone.ts` is the belt's bus and knows nothing about the rest. The
-performers (passes) and the debris interference arrive as siblings of `Drone` on the same
-bus, which is why the split is there before there is anything to put in it.
+Step 4, begun 2026-09-16. Two things play: the belt's drone, always, and a voice for each
+pass being kept. `src/audio.ts` owns the context and the master chain; `src/drone.ts` and
+`src/performers.ts` are buses on it and neither knows about the other. The debris
+interference joins them the same way, without either changing.
+
+#### Turning it on
 
 **Nothing exists until the button is pressed.** A browser will not let a page make a sound
 without a gesture, so "the drone is audible from the start" has to mean "from the first
@@ -516,6 +518,8 @@ sound on for pays nothing at all. The one control is `SOUND` / `MUTE`, under the
 controls, and it wears the belt's own blue while it is on. Once the fade out is inaudible
 the context is **suspended**: `setTargetAtTime` is asymptotic and never actually reaches
 zero, so a muted tab would otherwise run forty oscillators for its life.
+
+#### The drone: the belt
 
 **The bed is a bus, not a voice per object.** Five hundred oscillators is not a
 performance problem so much as an acoustic one: five hundred detuned sines are white
@@ -573,16 +577,105 @@ further than the voices, because a voice sits an octave up with a resonant edge 
 arrives clearly from well under the bed — cutting both equally would have made keeping an
 object *relatively* louder than it had been.
 
+#### The performers: passes, and only the ones kept
+
+Added 2026-09-16, `src/performers.ts`, a sibling of `Drone` on the same bus.
+
+**Nothing sounds until it is kept.** A thousand objects are above the horizon at any
+moment; sonifying what is merely *there* is the mush this piece exists to avoid. The
+click is the instrument. A voice arrives over `attackSeconds`, leaves over
+`releaseSeconds`, and is let go the moment its object sets or loses its position — the
+same release the ring and the row already obey.
+
+**Synthesised, and synthesised first.** The name comes from what radio amateurs call
+satellites, and the 2010 original looped birdsong over a stereo field. A recorded bird
+sounds good on its own, so it would sound fine badly panned and badly gated, and a wrong
+mapping would survive for months behind it. A swept sine is unforgiving, which is the
+useful property right now. Samples are a later decision — and 831 KB is the whole
+catalogue, so they are not a cheap one.
+
+**Three textures, from the one byte the catalogue actually has.** `kind` is a name
+heuristic and nothing more, but it separates the three things that are up there:
+
+- **bird** (payload) — phrases of two to five swept chirps, then a long gap. A sine.
+- **machine** (rocket body) — a spent stage is not a bird. Lower, a sawtooth, and
+  **regular** where the bird is not. The industrial chant under the birdsong.
+- **shard** (debris) — dry noise bursts through a narrow band. **Provisional**: debris is
+  meant to become interference *on* other voices rather than a voice of its own, but a
+  click that makes no sound reads as a broken click, and this previews the grain that
+  idea will use.
+
+**A given object always sings the same song.** Pitch, sweep direction, phrase length and
+gap all come from a hash of its index — the same `sin`-and-fract trick the point shader
+uses for the debris tumble. Keeping the same satellite twice sounds the same, and several
+kept at once drift apart instead of locking into one pulse, because their gaps differ.
+Pitches are quantised to a pentatonic over three octaves, so a handful kept together is a
+chord rather than a cluster.
+
+**Four mappings, and three of them are already the visual grammar:**
+
+| | from | measured across a pass |
+|---|---|---|
+| pitch | range rate, exaggerated | +650 → 0 → −650 cents |
+| level | elevation, on `HIGHLIGHT`'s own curve | 0.11 at 3° → 0.33 at 62° → 0.11 |
+| pan | direction · camera right | −0.85 (east) → 0 (south) → +0.85 (west) |
+| timbre | shadow | 5.4 kHz sunlit → 700 Hz in umbra |
+
+The level curve is `HIGHLIGHT.dimAtHorizon` and `fullBrightDeg` — literally the same
+numbers that dim the ring — so a voice swells and fades in exact step with the mark on
+screen. Shadow is the one column nothing else in the audio path reads, and the ear takes
+it better as colour than the eye takes it as brightness.
+
+**Everything is scheduled ahead.** Web Audio's clock is not the frame loop's, and a chirp
+started from a `requestAnimationFrame` callback arrives whenever the frame did. Each
+voice holds the context time of its next phrase and `update` writes every event inside
+`lookaheadSeconds`; frames may stutter, the song will not.
+
+**The envelope needs a hold, and this is worth knowing.** The first pass shaped each
+chirp as one exponential from full to silence across its whole length. That envelope
+spends almost all of its duration near zero: the voice measured **12 dB quieter than its
+peak suggested**, and a bird came out 25 dB under the drone — inaudible, while every
+individual number looked plausible. It was also simply wrong. A bird's chirp is a
+sustained whistle that sweeps, not a click. Attack, hold most of the duration, then
+release; how much is held is most of what separates the three textures.
+
+Balance, rendered offline against a 500-object belt, RMS over the settled tail:
+
+| | with the bed | alone | peak alone |
+|---|---|---|---|
+| bed alone | −28.5 dBFS | | 0.18 |
+| one bird | −27.4 | −33.8 | 0.12 |
+| one machine | −27.8 | −35.6 | 0.13 |
+| one shard | −28.2 | −39.7 | 0.21 |
+| eight kept, mixed | −23.1 | | 0.41 |
+
+A bird sits 5 dB under the bed in RMS and is still plainly the foreground: it is two to
+five octaves higher, where the ear is far more sensitive, so RMS across registers this
+far apart does not compare. The shard has the lowest RMS and the sharpest peaks, which is
+what a rattle is. `timbreGain` is **measured, not nominal** — bandpassed noise throws most
+of its energy away, so a shard needs several times a sine's gain to arrive at the same
+loudness.
+
+**It costs nothing measurable.** With a selection of eighteen held constant — six
+performers, twelve belt voices — frames ran p50 26.3 / p95 30.7 ms silent and 26.0 / 29.9
+sounding, on a software rasteriser. What *does* cost is the eighteen marks themselves:
+their tracks, rings and rows are about 4.6 ms. Attribute it to the right thing.
+
+#### Both buses
+
 **Sound runs at real time and nowhere else** (`AUDIO.maxTimeRate`). Above 1× the master
 ducks and the panel says `silent above 1×`; the button's state survives, because a
-look-ahead must not cost a press. Nothing in the audio path reads the clock for anything
-else — the belt does not move, so this is driven by membership and by where the camera is
-pointing, and by nothing besides.
+look-ahead must not cost a press.
 
-**Doppler will have to be exaggerated when the performers arrive.** A LEO object at
-7.5 km/s gives a fractional shift of 2.5e-5 — about **0.04 cents**, which is nothing. The
-reason radio amateurs hear it at all is that it is 2.5e-5 of a 145 MHz carrier: a 3.6 kHz
-slide in the beat note. Scaling it into the audio band is not a cheat, it is the same
+**Nothing in the audio path reads `Clock`.** The drone is driven by belt membership and
+by where the camera is pointing — those objects do not move. The performers are driven by
+the `SkyFrame` columns of whatever tick is on screen, and their events are scheduled on
+the audio context's own clock, which is why a stuttering frame does not stutter a song.
+
+**Doppler is exaggerated, and has to be.** A LEO object at 7.5 km/s gives a fractional
+shift of 2.5e-5 — about **0.04 cents**, which is nothing. The reason radio amateurs hear
+it at all is that it is 2.5e-5 of a 145 MHz carrier: a 3.6 kHz slide in the beat note.
+`dopplerCentsPerKmS` scales it into the audio band, which is not a cheat but the same
 operation the metaphor was built on.
 
 **There is no purpose data in the pipeline**, so the softer-weather / bolder-telecom /
@@ -733,9 +826,9 @@ Anything that computes range rate by hand must not repeat the naive version.
       ← *you are here*
   - [x] **The drone.** The belt as a bass bed of nine panned slices, plus a defined
         voice for every object kept. Head-relative stereo, ducked above 1×.
-  - [ ] **The performers.** Passes, sounding only when kept: pitch ← exaggerated range
-        rate, amplitude ← elevation, pan ← direction, events on AOS/LOS. Synthesised
-        first — a sample sounds fine badly mapped, which is how a bad mapping survives.
+  - [x] **The performers.** Passes, sounding only when kept: pitch ← exaggerated range
+        rate, level ← elevation, pan ← direction, timbre ← shadow. Three textures from
+        the `kind` byte — bird, machine, shard. Synthesised, deliberately first.
   - [ ] **The interference.** Debris as a modulator rather than a voice: noise and
         ring-mod whose depth on a performer rises as a fragment's angular separation
         from it shrinks. Inaudible while nothing is kept.

@@ -459,6 +459,103 @@ export const AUDIO = {
     /** Hard left and right are unpleasant on headphones; the field stops here. */
     panSpread: 0.85,
   },
+  /**
+   * The performers: passes, and only the ones being kept.
+   *
+   * The name of the piece comes from what radio amateurs call satellites - birds -
+   * and the 2010 original assigned looped birdsong to passes over a stereo field.
+   * This is that, synthesised. Synthesised **first**, deliberately: a recorded bird
+   * sounds good on its own, so it would sound fine badly panned and badly gated, and
+   * a wrong mapping would survive for months behind it. A swept sine is unforgiving,
+   * which is the useful property right now. Samples are a later decision, and the
+   * byte budget is an argument against them - the whole catalogue is 831 KB.
+   *
+   * **Nothing sounds until it is kept.** A thousand objects are above the horizon;
+   * sonifying what is merely *there* is the mush this piece exists to avoid. The
+   * click is the instrument.
+   *
+   * Three textures, from the one byte the catalogue actually has:
+   *
+   * - **bird** (payload): phrases of two to five swept chirps, then a gap. Each
+   *   object's pitch, sweep, phrase length and gap come from a hash of its index, so
+   *   a given satellite always sings the same song, and several kept at once drift
+   *   apart instead of locking into a pulse.
+   * - **machine** (rocket body): a spent upper stage is not a bird. Lower, a
+   *   sawtooth, and **regular** where the bird is not - the industrial chant under
+   *   the birdsong that the brief asks for.
+   * - **shard** (debris): dry noise bursts through a narrow band. Provisional. Debris
+   *   is meant to become interference *on* other voices rather than a voice of its
+   *   own, but a click that makes no sound reads as a broken click, and this previews
+   *   the grain that idea will use.
+   *
+   * Four mappings, and three of them are already the visual grammar:
+   *
+   * - **pitch <- range rate**, exaggerated. Literal Doppler is 0.04 cents - see the
+   *   note in CLAUDE.md - so it is scaled into the audio band the way a receiver
+   *   does it. A pass glides down through closest approach, which is the sound the
+   *   whole metaphor was built on.
+   * - **level <- elevation**, on `HIGHLIGHT`'s own curve. The voice swells and fades
+   *   in exact step with how the object's ring dims, because it is the same numbers.
+   * - **pan <- direction**, head-relative, exactly as the drone pans.
+   * - **timbre <- shadow.** A sunlit object is bright; one inside Earth's umbra is
+   *   muffled. The one axis here that the eye already reads as brightness, and the
+   *   ear reads better as colour.
+   */
+  performer: {
+    /** Kept passes that can sound at once. Past this a click still marks. */
+    maxVoices: 8,
+    /** Voice level before the elevation curve. */
+    gain: 0.33,
+    /**
+     * Relative levels. **Measured, not nominal** - these are whatever makes the three
+     * sit together, and they are not proportional to anything. Bandpassed noise throws
+     * most of its energy away, so a shard needs several times a sine's gain to reach
+     * the same loudness; a sawtooth through an open lowpass needs less.
+     */
+    timbreGain: { bird: 1, machine: 1, shard: 3.5 },
+    /** A kept object arrives and leaves over these, seconds. */
+    attackSeconds: 0.7,
+    releaseSeconds: 1.6,
+    /**
+     * Cents of pitch per km/s of range rate, against a literal 0.0017. A pass swings
+     * +/- 7 km/s either side of closest approach, so this is a glide of a fifth down
+     * through the middle of the pass.
+     */
+    dopplerCentsPerKmS: 100,
+    /** Base pitches: a just pentatonic from middle C, over three octaves. */
+    rootHz: 262,
+    ratios: [1, 9 / 8, 4 / 3, 3 / 2, 5 / 3],
+    octaves: 3,
+    /** How far ahead phrases are scheduled, seconds. Web Audio wants a lookahead. */
+    lookaheadSeconds: 0.35,
+    bird: {
+      /** Chirps in one phrase, inclusive. */
+      perPhrase: [2, 5],
+      chirpMs: [60, 170],
+      /** Silence between chirps inside a phrase. */
+      spacingMs: [35, 120],
+      /** Silence between phrases. Birds are not metronomes; this is the main variable. */
+      gapMs: [900, 2600],
+      /** How far a chirp sweeps, as a frequency ratio. Up or down, per object. */
+      sweep: [1.15, 1.9],
+      /** Lowpass in umbra and in sunlight. */
+      cutoffHz: [700, 5400],
+    },
+    machine: {
+      /** Lower than the birds, and it does not sweep. */
+      octaveDown: 2,
+      pulseMs: [110, 300],
+      gapMs: [190, 620],
+      cutoffHz: [320, 1900],
+    },
+    shard: {
+      burstMs: [25, 90],
+      gapMs: [90, 520],
+      /** Band centre, and the Q that makes it a rattle rather than a hiss. */
+      bandHz: [1100, 5200],
+      q: 4,
+    },
+  },
 };
 
 /** `?debug` shows frame timing and worker stats. Hidden otherwise - the piece has no chrome for it. */

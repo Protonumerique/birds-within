@@ -56,7 +56,7 @@ async function main() {
   const clock = new Clock();
   const scene = new SkyScene(canvas, stream.count);
   const selection = new Selection();
-  const audio = new AudioEngine();
+  const audio = new AudioEngine(stream.choir, stream.kind);
   scene.setClasses(stream.choir, stream.kind);
   const hud = createHud(hudRoot, clock, {
     names: stream.names,
@@ -181,14 +181,7 @@ async function main() {
     // it reads the heading the frame was just drawn with rather than the last one.
     // It returns immediately while sound is off, which is every page nobody presses
     // the button on.
-    audio.update(
-      pair?.from ?? null,
-      hud.belt(),
-      selection.marked,
-      (i) => stream.choir[i] === 1,
-      scene.heading,
-      clock.timeRate
-    );
+    audio.update(pair?.from ?? null, hud.belt(), selection.marked, scene.heading, clock.timeRate);
 
     debug?.frame(wall - lastWall, stream.getStats());
     lastWall = wall;

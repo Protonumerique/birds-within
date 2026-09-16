@@ -1,15 +1,16 @@
 import { AUDIO } from './config';
 import type { SkyFrame } from './sky-frame';
 import { Drone } from './drone';
+import { Performers } from './performers';
 
 /**
  * The sound engine: the audio context, the master chain, and whatever is currently
  * playing on it.
  *
- * Only the belt plays, for now. The performers - passes, clicked one at a time - and
- * the debris interference are the next two pieces of Step 4; they arrive as siblings
- * of `Drone` on the same bus, which is why this owns the context and the drone owns
- * none of it.
+ * Two things play: the belt's drone, always, and a voice for each pass being kept.
+ * They are siblings on one bus - `Drone` and `Performers` each own their own voices
+ * and neither owns the context, which is why the debris interference can join them
+ * later without either of them changing.
  *
  * **Nothing exists until the button is pressed.** A browser will not let a page make
  * a sound without a gesture, and there is no arguing with it, so "the drone is
@@ -21,12 +22,21 @@ export class AudioEngine {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private drone: Drone | null = null;
+  private performers: Performers | null = null;
   private on = false;
   private ducked = false;
   /** Pending suspend, so a quick MUTE-then-SOUND cannot strand the context asleep. */
   private sleep: ReturnType<typeof setTimeout> | null = null;
-  /** Belt objects the user is keeping, rebuilt per update. Reused, never reallocated. */
+  /** The selection, split per update into the two buses. Reused, never reallocated. */
   private beltMarked: number[] = [];
+  private passMarked: number[] = [];
+
+  /**
+   * `choir` and `kind` are the worker's per-object bytes. Which bus an object belongs
+   * to, and what it sounds like, are facts about the object rather than the caller's
+   * business, so the engine keeps them and does the splitting itself.
+   */
+  constructor(private choir: Uint8Array, private kind: Uint8Array) {}
 
   /** Whether the user has asked for sound, whatever the time rate is doing to it. */
   get enabled(): boolean {
@@ -73,18 +83,16 @@ export class AudioEngine {
    * so it returns before touching anything.
    *
    * `belt` is every geostationary object above the sky's floor and `marked` is the
-   * whole selection; the engine takes the intersection itself, because which objects
-   * the belt's bus is allowed to sound is the belt's business and not the caller's.
+   * whole selection, which the engine splits between the two buses itself.
    */
   update(
     frame: SkyFrame | null,
     belt: readonly number[],
     marked: ReadonlySet<number>,
-    isBelt: (index: number) => boolean,
     heading: number,
     timeRate: number
   ): void {
-    if (!this.on || !this.ctx || !this.drone) return;
+    if (!this.on || !this.ctx || !this.drone || !this.performers) return;
 
     // The clock runs faster than sound can mean anything: duck, do not stop. The
     // button's state has to survive a look-ahead, or every scrub would cost a press.
@@ -96,8 +104,10 @@ export class AudioEngine {
     if (shouldDuck || !frame) return;
 
     this.beltMarked.length = 0;
-    for (const i of marked) if (isBelt(i)) this.beltMarked.push(i);
+    this.passMarked.length = 0;
+    for (const i of marked) (this.choir[i] === 1 ? this.beltMarked : this.passMarked).push(i);
     this.drone.update(frame, belt, this.beltMarked, heading);
+    this.performers.update(frame, this.passMarked, heading);
   }
 
   private build(): void {
@@ -121,6 +131,7 @@ export class AudioEngine {
     this.ctx = ctx;
     this.master = master;
     this.drone = new Drone(ctx, master);
+    this.performers = new Performers(ctx, master, this.kind);
   }
 
   /** `seconds` is how long the move takes: a deliberate fade, or a quick duck. */
