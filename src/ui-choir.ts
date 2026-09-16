@@ -1,4 +1,4 @@
-import { CHOIR_GRID } from './config';
+import { CHOIR_GRID, GROUP_LOOK } from './config';
 import type { SkyFrame } from './sky-frame';
 import type { Selection } from './selection';
 
@@ -39,8 +39,10 @@ export class ChoirGrid {
   constructor(private names: string[], private selection: Selection) {
     this.element = document.createElement('section');
     this.element.className = 'group choir';
+    this.element.style.setProperty('--tone', GROUP_LOOK.belt.tone);
     this.element.innerHTML =
-      `<h2><span class="gt">Geostationary</span><span class="gn"></span></h2>` +
+      `<h2><span class="gg">${GROUP_LOOK.belt.glyph}</span>` +
+      `<span class="gt">Geostationary</span><span class="gn"></span></h2>` +
       `<div class="cbox"><span class="cn"></span><span class="cd"></span></div>` +
       `<div class="cgrid"></div>`;
     this.countEl = this.element.querySelector<HTMLElement>('.gn')!;

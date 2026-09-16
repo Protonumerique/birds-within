@@ -255,6 +255,37 @@ export const CHOIR = {
   color: PALETTE.geostationary,
 };
 
+/** A hex colour scaled toward black: how a mark drawn at reduced intensity reads. */
+function dimmed(hex: string, k: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  const ch = (shift: number) => Math.round(((n >> shift) & 255) * k);
+  return `#${[ch(16), ch(8), ch(0)].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/**
+ * How each group reads in the panel. Two colours, and they mean different things:
+ *
+ * - **`tone` is the colour the object already is on the sky.** It is what a row rests
+ *   at, so a name in the list and a mark in the sky are the same colour before anything
+ *   is touched. The row carries the grammar, not the panel's own idea of "info text".
+ * - **`accent` is attention**, and it is amber for both lists because that is what the
+ *   *ring* turns when you touch an object — anything not in the belt gets `uMarkColor`.
+ *   A second highlight hue for debris would have to disagree with its own ring, and
+ *   light blue in particular is already spoken for by the belt.
+ *
+ * `glyph` is the mark's shape, in the mark's colour: the legend, folded into the
+ * heading, where it sits next to the thing it explains instead of underneath everything.
+ */
+export const GROUP_LOOK = {
+  passing: { glyph: '\u25cf', tone: PALETTE.lit, accent: HIGHLIGHT.markColor },
+  debris: {
+    glyph: '\u25b2',
+    tone: dimmed(PALETTE.lit, KIND_LOOK.debris.intensity),
+    accent: HIGHLIGHT.markColor,
+  },
+  belt: { glyph: '\u25cf', tone: PALETTE.geostationary, accent: PALETTE.geostationary },
+};
+
 export const TRAIL = {
   /** Minutes of past track to draw. */
   pastMinutes: 35,

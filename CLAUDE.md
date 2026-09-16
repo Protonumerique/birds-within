@@ -126,8 +126,8 @@ falls straight out of the geometry.
 - **The worker computes it once at init** and ships a `choir` byte array in `ready`,
   beside `kind`. It has to happen there: the render thread transfers the catalogue away
   and never sees a mean motion.
-- **They are kept out of the readout entirely**, which is now *Passing now* and counts
-  only passes. They get **no track**, kept or not — 70 minutes of a geosynchronous orbit
+- **They are kept out of the lists entirely** — the readout's *Passing* and *Debris*
+  groups count only passes. They get **no track**, kept or not — 70 minutes of a geosynchronous orbit
   is a few degrees of wobble around a fixed point, a smudge where the object already is.
   They are **never the track's fallback** either, so keeping one does not take the
   ambient track away from the sky.
@@ -258,9 +258,11 @@ word is **geostationary**, which is what a reader knows. (Strictly the membershi
 is geo*synchronous* and takes in inclined and drifting belt objects too; the screen
 uses the common word on purpose.)
 
-**The legend names only what the eye has to tell apart:** sunlit, eclipsed,
-geostationary, debris. *Below horizon* was dropped — those objects are barely present
-in the image, and naming a thing you cannot really see costs more than it explains.
+**There is no legend any more.** It became the **glyph in each group's heading** —
+`● PASSING`, `▲ DEBRIS`, `● GEOSTATIONARY` — the mark's own shape in the mark's own
+colour, sitting beside the name of the thing it explains instead of in a list underneath
+everything. *Below horizon* and *eclipsed* are named nowhere: one is barely in the image
+and the other is a state, not a group.
 
 ### Rendering: two ticks per object, blended on the GPU
 
@@ -337,9 +339,22 @@ that do not know where they are. **Moving the whole panel to a strip along the b
 is a change to one CSS block, not a rewrite** — the layout choice is not locked in.
 
 **Three groups, because the sky holds three kinds of thing that do not compare:**
-what is passing, what is wreckage, and the belt. Each carries the accent its objects
-already wear on the sky — amber for passing, the shard's own light brown
-(`PALETTE.lit` at the debris intensity, `#80796b`) for debris, blue for the belt.
+what is passing, what is wreckage, and the belt. `GROUP_LOOK` gives each one a glyph and
+**two** colours, and the two mean different things:
+
+- **`tone` is the colour the object already is on the sky**, and it is what a row *rests*
+  at — warm white `#fff2d6` for passing, the shard's own light brown `#80796b`
+  (`PALETTE.lit` at the debris intensity), blue for the belt. A name in the list and a
+  mark overhead are therefore the same colour before anything is touched. Resting rows at
+  a neutral "info text" grey was a real regression: it made the list a table of strings
+  beside the sky rather than a reading of it.
+- **`accent` is attention, and only attention.** It is amber for *both* lists, because
+  amber is what the ring turns when you touch an object — anything outside the belt gets
+  `uMarkColor`. A second highlight hue for debris would have to disagree with its own
+  ring, and light blue in particular is already spoken for by the belt.
+
+The glyph is the third piece: shape and hue together, which is the whole grammar in one
+character.
 
 **A row is a name until you keep it.** Default rows sort themselves by elevation and
 show nothing else; they churn, and that is what they are for. Keeping one **opens** it:
@@ -379,7 +394,10 @@ which is the *No tags on the sky* rule applied to the panel. Clicking a square k
 object exactly as clicking it in the sky does; the grid is meant to become the belt's
 keyboard when the sound arrives.
 
-**The wording is deliberately thin.** A group heading is a word and a count. "showing
+**How to work it lives top right** (`.hints`), clear of the column and of the debug
+panel at the bottom, and never takes the pointer, so the sky behind it stays draggable.
+
+**The wording is deliberately thin.** A group heading is a glyph, a word and a count. "showing
 N", "N kept", "never rise, never set" are gone — they were the panel explaining itself,
 which is what a panel does when it has not decided what it is.
 

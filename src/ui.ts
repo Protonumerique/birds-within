@@ -1,4 +1,4 @@
-import { OBSERVER, CLOCK, HIGHLIGHT, KIND_LOOK, PALETTE, READOUT, type Dataset } from './config';
+import { OBSERVER, CLOCK, GROUP_LOOK, HIGHLIGHT, READOUT, type Dataset } from './config';
 import type { Clock } from './clock';
 import type { SkyFrame } from './sky-frame';
 import type { Selection } from './selection';
@@ -29,14 +29,6 @@ export interface HudSource {
 }
 
 const releaseBelow = (HIGHLIGHT.releaseBelowDeg * Math.PI) / 180;
-
-/** PALETTE.lit at the shard's intensity - the light brown a debris mark really is. */
-function shardColor(): string {
-  const n = parseInt(PALETTE.lit.replace('#', ''), 16);
-  const k = KIND_LOOK.debris.intensity;
-  const ch = (shift: number) => Math.round(((n >> shift) & 255) * k);
-  return `#${[ch(16), ch(8), ch(0)].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
-}
 
 /**
  * The panel: one narrow column, pinned left, full height.
@@ -81,6 +73,7 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
       <div class="spacer"></div>
       <div class="foot"></div>
     </div>
+    <div class="hints">drag to look · scroll to zoom · click to keep</div>
   `;
 
   const $ = <T extends HTMLElement>(id: string) => root.querySelector<T>(`#${id}`)!;
@@ -113,11 +106,10 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
   };
 
   // Three groups, because the sky holds three kinds of thing that do not compare.
-  // Each carries its own accent, which is the colour its objects already wear.
-  const passingGroup = new Group('Passing', READOUT.passingRows, HIGHLIGHT.markColor, names, selection);
-  // Debris wears the colour it actually has on the sky: the sunlit hue at the shard's
-  // own intensity, which is where the light brown comes from.
-  const debrisGroup = new Group('Debris', READOUT.debrisRows, shardColor(), names, selection);
+  // Each rests at the colour its objects already wear and shows the mark's own shape
+  // beside its name, so the legend lives where the thing it explains does.
+  const passingGroup = new Group('Passing', GROUP_LOOK.passing, READOUT.passingRows, names, selection);
+  const debrisGroup = new Group('Debris', GROUP_LOOK.debris, READOUT.debrisRows, names, selection);
   const choirGrid = new ChoirGrid(names, selection);
   root.querySelector('.lists')!.append(passingGroup.element, debrisGroup.element);
   root.querySelector('.foot')!.append(choirGrid.element);

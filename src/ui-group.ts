@@ -54,15 +54,20 @@ export class Group {
 
   constructor(
     title: string,
+    look: { glyph: string; tone: string; accent: string },
     private defaultRows: number,
-    accent: string,
     private names: string[],
     private selection: Selection
   ) {
-    this.rgb = channels(accent);
+    this.rgb = channels(look.accent);
     this.element = document.createElement('section');
     this.element.className = 'group';
-    this.element.innerHTML = `<h2><span class="gt"></span><span class="gn"></span></h2><div class="rows"></div>`;
+    // Two colours on the section: what the rows rest at, and what attention looks like.
+    this.element.style.setProperty('--tone', look.tone);
+    this.element.style.setProperty('--accent', look.accent);
+    this.element.innerHTML =
+      `<h2><span class="gg"></span><span class="gt"></span><span class="gn"></span></h2><div class="rows"></div>`;
+    this.element.querySelector<HTMLElement>('.gg')!.textContent = look.glyph;
     this.element.querySelector<HTMLElement>('.gt')!.textContent = title;
     this.rowsEl = this.element.querySelector<HTMLElement>('.rows')!;
     this.countEl = this.element.querySelector<HTMLElement>('.gn')!;
@@ -157,8 +162,9 @@ export class Group {
       row.el.classList.toggle('lit', !isOpen && i === hovered);
       row.name.textContent = this.names[i] ?? '—';
 
+      // A closed row drops its inline override and rests at the group's own colours.
       if (!isOpen) {
-        row.el.style.setProperty('--accent', `rgba(${this.rgb}, 1)`);
+        row.el.style.removeProperty('--accent');
         continue;
       }
       const alpha = i === hovered ? 1 : brightness(frame.elevation[i]!);
