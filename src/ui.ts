@@ -54,6 +54,7 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
   const asOf = source.generatedAt.toISOString().slice(0, 10);
 
   root.innerHTML = `
+    <div class="scrim"></div>
     <div class="col">
       <header>
         <h1>Birds Within</h1>

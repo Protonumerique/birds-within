@@ -258,10 +258,15 @@ word is **geostationary**, which is what a reader knows. (Strictly the membershi
 is geo*synchronous* and takes in inclined and drifting belt objects too; the screen
 uses the common word on purpose.)
 
-**There is no legend any more.** It became the **glyph in each group's heading** —
-`● PASSING`, `▲ DEBRIS`, `● GEOSTATIONARY` — the mark's own shape in the mark's own
-colour, sitting beside the name of the thing it explains instead of in a list underneath
-everything. *Below horizon* and *eclipsed* are named nowhere: one is barely in the image
+**There is no legend any more.** It became the **shape in each group's heading** —
+a disc for `PASSING`, a triangle for `DEBRIS`, a disc for `GEOSTATIONARY` — the mark's
+own form in the mark's own colour, sitting beside the name of the thing it explains
+instead of in a list underneath everything. They are **CSS boxes, not characters**:
+`●` and `▲` land wherever their font puts them inside the em box, so no alignment
+centres them against the capitals beside them and half the disc sits under the text
+line. Drawn, the element *is* the ink and centring it centres the mark — which is also
+what the sky does, drawing a round sprite and a triangle by hand rather than asking a
+font for either. *Below horizon* and *eclipsed* are named nowhere: one is barely in the image
 and the other is a state, not a group.
 
 ### Rendering: two ticks per object, blended on the GPU
@@ -412,6 +417,13 @@ keyboard when the sound arrives.
 
 **How to work it lives top right** (`.hints`), clear of the column and of the debug
 panel at the bottom, and never takes the pointer, so the sky behind it stays draggable.
+
+**A soft scrim sits under the column** (`.scrim`, `--scrim-alpha`). The panel is over the
+sky and the sky is full of moving lights: chase a satellite across the left of the frame
+and the names stop being readable. It is full height and hugs the left edge, so its only
+edge inside the image is the right one, and that is **feathered over `--scrim-fade`**
+rather than cut — a panel with a line around it would be a window, and this is not a
+window. It costs a permanently darker strip of sky, which is the trade.
 
 **The wording is deliberately thin.** A group heading is a glyph, a word and a count. "showing
 N", "N kept", "never rise, never set" are gone — they were the panel explaining itself,

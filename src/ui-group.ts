@@ -54,7 +54,7 @@ export class Group {
 
   constructor(
     title: string,
-    look: { glyph: string; tone: string; accent: string },
+    look: { shape: string; tone: string; accent: string },
     private defaultRows: number,
     private names: string[],
     private selection: Selection
@@ -67,7 +67,7 @@ export class Group {
     this.element.style.setProperty('--accent', look.accent);
     this.element.innerHTML =
       `<h2><span class="gg"></span><span class="gt"></span><span class="gn"></span></h2><div class="rows"></div>`;
-    this.element.querySelector<HTMLElement>('.gg')!.textContent = look.glyph;
+    this.element.querySelector<HTMLElement>('.gg')!.classList.add(look.shape);
     this.element.querySelector<HTMLElement>('.gt')!.textContent = title;
     this.rowsEl = this.element.querySelector<HTMLElement>('.rows')!;
     this.countEl = this.element.querySelector<HTMLElement>('.gn')!;

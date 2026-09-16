@@ -1,6 +1,9 @@
 :root {
   color-scheme: dark;
   --col-w: 272px;
+  /* The scrim behind the column - see .scrim. */
+  --scrim-alpha: 0.55;
+  --scrim-fade: 76px;
   --ink: #cfe0ec;
   --ink-dim: #6d8698;
   --ink-faint: #3d5566;
@@ -62,7 +65,33 @@ body {
   pointer-events: none;
 }
 
+/*
+ * A soft dark scrim under the column, because the panel sits over the sky and the sky
+ * is full of moving lights: chase a satellite across the left of the frame and the
+ * names stop being readable. Full height and hugging the left edge, so its only edge
+ * inside the image is the right one - and that one is feathered over `--scrim-fade`
+ * rather than cut, so the panel has no line around it.
+ *
+ * It costs a permanently darker strip of sky. `--scrim-alpha` is the dial.
+ */
+.scrim {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: calc(var(--col-w) + 14px + var(--scrim-fade));
+  background: linear-gradient(
+    to right,
+    rgb(0 0 0 / var(--scrim-alpha)) 0,
+    rgb(0 0 0 / var(--scrim-alpha)) calc(100% - var(--scrim-fade)),
+    rgb(0 0 0 / 0) 100%
+  );
+  pointer-events: none;
+}
+
 .col {
+  /* Positioned, so it paints above the scrim rather than under it. */
+  position: relative;
   pointer-events: auto;
   display: flex;
   flex-direction: column;
@@ -187,13 +216,25 @@ input[type="range"] {
  * sitting beside the name of the thing it explains rather than in a list underneath
  * everything. A round light for a satellite, a triangle for a shard.
  */
+/*
+ * A drawn shape, not a character. `●` and `▲` land wherever their font puts them
+ * inside the em box, so no flex alignment centres them against the capitals beside
+ * them - half the disc ends up below the text line. Here the element *is* the ink, so
+ * `align-items: center` on the heading centres the mark exactly.
+ */
 .group h2 .gg {
-  color: var(--tone);
-  /* Large enough that the mark reads as the mark, not as punctuation. `line-height: 1`
-     keeps it from stretching the heading it sits in. */
-  font-size: 15px;
-  line-height: 1;
-  letter-spacing: 0;
+  flex: none;
+  width: 9px;
+  height: 9px;
+  background: var(--tone);
+}
+
+.group h2 .gg.dot {
+  border-radius: 50%;
+}
+
+.group h2 .gg.triangle {
+  clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
 }
 
 .rows {

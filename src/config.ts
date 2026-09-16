@@ -284,18 +284,25 @@ function dimmed(hex: string, k: number): string {
  *   distinct blue for it was considered and deferred - not rejected, but any blue has
  *   to survive sitting next to the belt's, and nothing needs it yet.
  *
- * `glyph` is the mark's shape, in the mark's colour: the legend, folded into the
+ * `shape` is the mark's own form, in the mark's own colour: the legend, folded into the
  * heading, where it sits next to the thing it explains instead of underneath everything.
+ *
+ * A **shape, not a character.** `●` and `▲` are drawn wherever their font decides to
+ * put them inside the em box, so no amount of flex alignment centres them against the
+ * capitals beside them - half the disc ends up under the text line. These are CSS
+ * boxes instead: the element *is* the ink, so centring it centres the mark. It also
+ * matches what the sky does, which draws a round sprite and a triangle by hand rather
+ * than asking a font for either.
  */
 export const GROUP_LOOK = {
-  passing: { glyph: '\u25cf', tone: PALETTE.lit, accent: HIGHLIGHT.markColor },
+  passing: { shape: 'dot', tone: PALETTE.lit, accent: HIGHLIGHT.markColor },
   debris: {
-    glyph: '\u25b2',
+    shape: 'triangle',
     tone: dimmed(PALETTE.lit, KIND_LOOK.debris.intensity),
     accent: HIGHLIGHT.markColor,
   },
-  belt: { glyph: '\u25cf', tone: PALETTE.geostationary, accent: PALETTE.geostationary },
-};
+  belt: { shape: 'dot', tone: PALETTE.geostationary, accent: PALETTE.geostationary },
+} as const;
 
 export const TRAIL = {
   /** Minutes of past track to draw. */

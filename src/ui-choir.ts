@@ -46,7 +46,7 @@ export class ChoirGrid {
     this.element.className = 'group choir';
     this.element.style.setProperty('--tone', GROUP_LOOK.belt.tone);
     this.element.innerHTML =
-      `<h2><span class="gg">${GROUP_LOOK.belt.glyph}</span>` +
+      `<h2><span class="gg ${GROUP_LOOK.belt.shape}"></span>` +
       `<span class="gt">Geostationary</span><span class="gn"></span></h2>` +
       `<div class="cbox"><span class="cn"></span><span class="cd"></span></div>` +
       `<div class="cgrid"></div>`;
