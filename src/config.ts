@@ -415,8 +415,15 @@ export const AUDIO = {
     ratios: [1, 9 / 8, 4 / 3, 3 / 2, 5 / 3, 2, 9 / 4, 8 / 3, 3],
     /** The root, Hz. C1 - under the bottom of a bass guitar. */
     rootHz: 32.7,
-    /** One bed slice at full occupancy. Nine of these sum to the whole drone. */
-    bedGain: 0.085,
+    /**
+     * One bed slice at full occupancy. Nine of these sum to the whole drone.
+     *
+     * Lowered from 0.085 on 2026-09-16, after listening to it on the real sky rather
+     * than the synthetic one. It matters which: `synthetic` has 240 belt objects, so
+     * its slices sit at half occupancy and the bed is 4 dB quieter than `full`, where
+     * every slice saturates. The first tuning was done against the quiet one.
+     */
+    bedGain: 0.04,
     /** Members in a slice for it to reach full level. Below it the bed thins out. */
     fullAt: 20,
     /** The bed never falls below this fraction of its level while the belt is up. */
@@ -431,7 +438,13 @@ export const AUDIO = {
     breathDepth: 0.35,
     /** A kept object's voice sits this many octaves above its slice. */
     soloOctaves: 1,
-    soloGain: 0.17,
+    /**
+     * A kept voice, over and above the bed. Lowered from 0.17 with the bed, but by
+     * less: it sits an octave up with a resonant edge, so it arrives clearly at a
+     * level well under the bed's, and cutting both by the same amount would have made
+     * keeping an object louder in relative terms than it was before.
+     */
+    soloGain: 0.105,
     /** Spread across a slice, cents: neighbours kept together beat against each other. */
     soloDetuneCents: 14,
     /** The resonant lowpass that opens as a voice arrives. */

@@ -548,19 +548,30 @@ each other. It is in tune with the bed because it is the bed's pitch: the voice 
 forward rather than arriving from somewhere else. Twelve at once is the cap; past that a
 click still marks, it just does not sound.
 
-Measured by rendering the same `Drone` into an `OfflineAudioContext` — 90 belt objects,
-RMS over the settled tail:
+Measured by rendering the same `Drone` into an `OfflineAudioContext`, RMS over the
+settled tail. **Measure it at both belt sizes.** `synthetic` carries 240 objects, so its
+slices sit at half occupancy and its bed is 4 dB quieter than `full`, where every slice
+saturates — the first tuning was done against the quiet one and shipped a drone louder
+than intended on the real sky. 500 is what a listener actually hears:
 
-| | RMS | peak |
-|---|---|---|
-| bed alone | −24.8 dBFS | 0.24 |
-| one kept | −22.9 | 0.40 |
-| four kept | −20.1 | 0.48 |
-| twelve kept | −16.1 | 0.73 |
+| | 90 objects | | 500 objects | |
+|---|---|---|---|---|
+| | RMS | peak | RMS | peak |
+| bed alone | −31.4 dBFS | 0.11 | −27.3 dBFS | 0.18 |
+| one kept | −28.5 | 0.18 | −25.8 | 0.20 |
+| four kept | −24.4 | 0.28 | −22.3 | 0.38 |
+| twelve kept | −20.3 | 0.47 | −18.6 | 0.54 |
 
-Mild and permanent at the bottom, invasive at the top, monotonic, and not clipping before
-the master compressor even acts. That compressor is there rather than a lower voice cap
-because the brief asks for it to be *able* to get invasive.
+Mild and permanent at the bottom, invasive at the top — 8.7 dB between them on the real
+sky — monotonic, and nowhere near clipping before the master compressor even acts. That
+compressor is there rather than a lower voice cap because the brief asks for it to be
+*able* to get invasive.
+
+`bedGain` and `soloGain` came down from 0.085 and 0.17 on 2026-09-16, on listening: the
+opening was too present and the kept voices sat higher than they needed to. The bed fell
+further than the voices, because a voice sits an octave up with a resonant edge and
+arrives clearly from well under the bed — cutting both equally would have made keeping an
+object *relatively* louder than it had been.
 
 **Sound runs at real time and nowhere else** (`AUDIO.maxTimeRate`). Above 1× the master
 ducks and the panel says `silent above 1×`; the button's state survives, because a
