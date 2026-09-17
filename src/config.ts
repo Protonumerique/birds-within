@@ -51,6 +51,68 @@ export const DATASET: Dataset = datasetFromUrl();
 export const catalogUrl = (dataset: Dataset) => `${import.meta.env.BASE_URL}data/${dataset}.bin`;
 
 /**
+ * The first screen.
+ *
+ * The piece is meant to sit in a hero section on another page, where a visitor who
+ * scrolls past should cost nothing at all. So **nothing loads until LAUNCH is
+ * pressed**: `main.ts` renders this screen and imports the piece dynamically, which
+ * is what splits three.js, satellite.js, the worker and the 831 KB catalogue into a
+ * chunk that is never fetched by accident. A page nobody presses pays for the words
+ * and the drawing on this screen and for nothing else - the same bargain the sound
+ * already makes.
+ *
+ * It is also, incidentally, the gesture the sound has always needed. Nothing is
+ * started here: a hero section that makes a noise when someone scrolls past it is
+ * exactly what `armFromSelection` was written to avoid. The press only means "show me
+ * the sky".
+ *
+ * `?launch` skips it, for development and for a deep link that means to arrive
+ * already inside the piece.
+ *
+ * **The words are a placeholder and are meant to be rewritten.** They live here, in
+ * one place, rather than inside the markup that draws them.
+ */
+export const GATE = {
+  title: 'Birds Within',
+  tagline: 'the catalogue overhead, in realtime',
+  /**
+   * Very short, and it has one job: say what changed between 2010 and now. That
+   * change *is* the piece - see the top of CLAUDE.md - and it is the one thing a
+   * reader cannot get from looking at the sky, because they never saw the old one.
+   */
+  lede:
+    'Around 2010 a thousand or so satellites crossed the sky above any one place. ' +
+    'Today more than twenty thousand tracked objects do — payloads, spent stages, ' +
+    'and the wreckage of both. This is that sky as it is right now, from one point ' +
+    'on the ground.',
+  /** The one offer on the screen. */
+  launchLabel: 'LAUNCH',
+  /** What the press costs, said before it is pressed rather than after. */
+  loadingLabel: 'LAUNCHING…',
+  hint: 'drag to look · click to keep · press LISTEN for sound',
+  /** How long the screen takes to leave once the first frame is on the canvas. */
+  fadeMs: 700,
+  /**
+   * The drawing: a poster of the sky in the sky's own grammar, built in poster.ts
+   * from the same palette the piece draws with, so the two cannot drift apart.
+   *
+   * It is deliberately a *drawing* and not a screenshot. A screenshot would go stale
+   * the first time anything about the image changed, and a loading screen that shows
+   * a photograph of what is behind it reads as a substitute rather than as a cover.
+   */
+  poster: {
+    /** Passing objects. Enough that it reads as a crowd, few enough to stay a drawing. */
+    passing: 260,
+    /** Fragments, drawn as the shards they are on the sky. */
+    shards: 42,
+    /** The belt, as the fixed arc across the south it actually is. */
+    belt: 48,
+    /** Fixed, so the poster is the same drawing every time the page is opened. */
+    seed: 19,
+  },
+};
+
+/**
  * The readout, redesigned 2026-09-15 as a single narrow column.
  *
  * The piece lives in a canvas that is often small, so the panel had to stop being a
@@ -80,6 +142,12 @@ export const READOUT = {
    * and the list only tints. The group tracks this itself; see ui-group.ts.
    */
   hoverOpensRow: true,
+  /**
+   * How to work it, top right. Thin on purpose - the panel is not here to explain
+   * itself. Full screen adds `esc to leave` to this while it is on, and only then:
+   * a way out is worth saying when there is something to get out of.
+   */
+  hint: 'drag to look · scroll to zoom · click to keep',
 };
 
 /**

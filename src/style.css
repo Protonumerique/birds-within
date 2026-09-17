@@ -8,6 +8,12 @@
   --bar-w: 10px;
   --bar-gap: 6px;
   --scrim-fade: 76px;
+  /* The first screen's column. Wider than the panel's, because a sentence is. */
+  --gate-w: 430px;
+  /* Overwritten by gate.ts from GATE.fadeMs, so the two cannot disagree. */
+  --gate-fade: 700ms;
+  /* PALETTE.sky. The page's own background, and the first screen's. */
+  --sky: #05070a;
   --ink: #cfe0ec;
   --ink-dim: #6d8698;
   --ink-faint: #3d5566;
@@ -26,7 +32,7 @@ html,
 body {
   margin: 0;
   height: 100%;
-  background: #05070a;
+  background: var(--sky);
   color: var(--ink);
   font: 12px/1.5 var(--mono);
   overflow: hidden;
@@ -435,10 +441,28 @@ input[type="range"] {
   position: absolute;
   top: 14px;
   right: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
   color: var(--ink);
   font-size: 10px;
   letter-spacing: 0.08em;
   text-align: right;
+}
+
+/* The line stays untouchable so the sky behind it goes on dragging; the one control
+   up here takes the pointer and nothing else does. */
+.hints button {
+  pointer-events: auto;
+}
+
+/* On, and it says so in the same blue the belt wears - the only other control that
+   changes its own face is LISTEN, and it does it the same way. */
+#full.on {
+  background-color: rgba(138, 212, 255, 0.16);
+  border-color: rgba(138, 212, 255, 0.5);
+  color: var(--geo);
 }
 
 /* --- the belt -------------------------------------------------------------- */
@@ -527,9 +551,210 @@ input[type="range"] {
   letter-spacing: 0.06em;
 }
 
+/* --- the first screen ------------------------------------------------------- */
+
+/*
+ * What a visitor meets before the piece exists. Its layout is the panel's own - words
+ * in a column at the left, over a scrim feathered on its right edge, sky filling the
+ * rest - so the press does not swap one image for another: the poster becomes the
+ * thing it was a drawing of, and the column is already where the column will be.
+ *
+ * It sits over everything, including the canvas, and is removed once the first frame
+ * with a sky in it has been drawn. See gate.ts and main.ts.
+ */
+.gate {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  background: var(--sky);
+  transition: opacity var(--gate-fade) ease;
+}
+
+.gate.out {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* The drawing, filling the frame and anchored at the horizon - so a wide hero crops
+   the zenith rather than the thing the horizon gives the image its scale against. */
+.poster {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/*
+ * Everything in the sky drifts, very slowly. The belt is deliberately not in this
+ * group: those objects never rise and never set, and the poster says so by holding
+ * them still while the rest of the frame moves - the same contrast the piece trades on.
+ */
+.poster .drift {
+  animation: gate-drift 150s ease-in-out infinite alternate;
+}
+
+@keyframes gate-drift {
+  from {
+    transform: translate(0, 0);
+  }
+  to {
+    transform: translate(-26px, 10px);
+  }
+}
+
+/* A fragment turns at its own rate and phase, as it does on the sky - the duration and
+   the delay are per shard, written in by poster.ts. */
+.poster .tumble {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation-name: gate-tumble;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@keyframes gate-tumble {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* The panel's scrim, widened for a column that holds sentences rather than names. */
+.gate-scrim {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: calc(var(--gate-w) + 96px + var(--scrim-fade));
+  background: linear-gradient(
+    to right,
+    rgb(0 0 0 / 0.82) 0,
+    rgb(0 0 0 / 0.72) calc(100% - var(--scrim-fade)),
+    rgb(0 0 0 / 0) 100%
+  );
+  pointer-events: none;
+}
+
+.gate-copy {
+  position: relative;
+  margin: 0 24px 0 48px;
+  width: var(--gate-w);
+  max-width: calc(100vw - 72px);
+  /* A hero section is often short. The words scroll rather than being cut off. */
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 24px 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-faint) transparent;
+}
+
+.gate-title {
+  margin: 0;
+  font: 400 clamp(21px, 3.3vw, 36px) / 1.12 var(--mono);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.gate-tagline {
+  margin-top: 11px;
+  color: var(--ink-dim);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.gate-lede {
+  margin: 18px 0 0;
+  padding-top: 18px;
+  border-top: 1px solid rgba(120, 160, 190, 0.16);
+  font-size: 12.5px;
+  line-height: 1.75;
+  color: var(--ink);
+}
+
+/* The one offer on the screen, and it is the only thing here that is filled. */
+.gate-launch {
+  margin-top: 22px;
+  padding: 13px 28px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.26em;
+  background-color: rgba(207, 224, 236, 0.9);
+  border-color: rgba(207, 224, 236, 0.95);
+  color: #0a1016;
+}
+
+.gate-launch:hover {
+  background-color: var(--lit);
+  border-color: var(--lit);
+}
+
+/* Pressed and working. Not the global 0.5 fade, which reads as broken rather than busy. */
+.gate-launch:disabled {
+  opacity: 1;
+  background-color: rgba(207, 224, 236, 0.34);
+  border-color: rgba(207, 224, 236, 0.34);
+  color: #0a1016;
+  cursor: default;
+}
+
+/* Holds its line whether or not it has anything to say, so nothing below it jumps
+   when the press starts reporting progress. */
+.gate-status {
+  margin-top: 12px;
+  min-height: 15px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--ink-dim);
+}
+
+.gate-status.err {
+  color: #e2957f;
+}
+
+.gate-meta {
+  margin-top: 26px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.gate-hint {
+  margin-top: 5px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--ink-faint);
+}
+
+/* Nothing here is load-bearing, so it all goes. The drawing stays a drawing. */
+@media (prefers-reduced-motion: reduce) {
+  .poster .drift,
+  .poster .tumble {
+    animation: none;
+  }
+  .gate {
+    transition: none;
+  }
+}
+
 @media (max-width: 620px) {
   :root {
     --col-w: 208px;
+    --gate-w: 100%;
+  }
+  .gate-copy {
+    margin: 0 20px;
+  }
+  /* Nothing left to feather against: the words take the whole width, so the scrim
+     does too, and reads as a wash over the drawing rather than as a column on it. */
+  .gate-scrim {
+    width: 100%;
+    background: rgb(0 0 0 / 0.74);
   }
   .clock {
     font-size: 15px;

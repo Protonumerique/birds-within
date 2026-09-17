@@ -459,6 +459,98 @@ patch, which is the number worth having.
   scene disappears. `render` clamps pitch to ±89° itself rather than trusting whoever
   set it — the drag handler is not the only thing that does, debug snippets included.
 
+### The first screen
+
+Added 2026-09-18. The piece is meant to sit in a hero section on another page, and a
+visitor who scrolls past one should pay nothing for it. So `main.ts` is now almost
+nothing — it renders a title, a drawing, four sentences and a LAUNCH button — and
+**everything else is behind a dynamic `import('./piece')`**: three.js, satellite.js, the
+WASM propagator, the worker and the packed catalogue. `src/piece.ts` is the old `main`,
+`src/gate.ts` is the screen, `src/poster.ts` is the drawing.
+
+**Measured, on the production build: 8.7 KB before the press.** The page, the stylesheet
+and a 12.7 KB entry chunk (5.7 gzipped). The press then fetches the piece chunk — 617.8 KB,
+159.8 gzipped — the catalogue, the worker and the WASM build. Nothing else has ever been
+this cheap to not look at.
+
+**The trap in that, and it cost the whole saving before it was caught.** The button is
+focused on creation, so Enter works for anyone who never touches a pointer. Warming the
+chunk on `focus` — reasonable on its own, since tabbing to a button is intent — then made
+that focus load the piece, which is *loading it on page load* with nothing on screen to
+show for it. The measurement said 164 KB and the screen looked identical. The listener is
+now attached **after** the programmatic focus, so focus counts as intent only when
+something other than that line causes it. Check the number, not the behaviour: this
+failure is invisible.
+
+**It hands over at the first frame that has a sky in it.** `run` resolves from inside the
+frame loop, on the first render with a pair of ticks in it — not when the loop starts,
+which is a second or so earlier and would uncover an empty canvas. Anything that fails
+before then leaves the screen up with the error on it and LAUNCH pressable again; a
+missing catalogue in production is exactly that case.
+
+**It does not start the sound, on purpose.** The press is a real user gesture and could
+create the audio context — but a hero section that makes a noise when someone scrolls
+onto it is precisely what `armFromSelection` exists to avoid. LISTEN and keeping an
+object remain the two ways in. See *Turning it on*.
+
+**`?launch` skips it**, for development and for a link that means to arrive already
+inside the piece. Without the screen the loading text goes back to where the panel will
+be.
+
+#### The poster
+
+`src/poster.ts` builds it as an SVG string from `PALETTE`, `KIND_LOOK` and `HIGHLIGHT`,
+so the cover and the piece cannot drift apart. It obeys the same rules the sky does: no
+Earth geometry, hue for category and value for state, debris as a turning shard, and
+**not one character drawn on the sky**. Amber appears exactly once, on the one object
+something is paying attention to — which is what makes amber read as attention rather
+than as a property of the object.
+
+**The belt does not drift.** Everything else in the drawing moves, very slowly; the
+geostationary arc is left out of that group and holds still, which is the same contrast
+the piece itself trades on. A fragment turns at its own rate and phase from the same
+hash the point shader uses.
+
+**It is drawn, not screenshotted.** A screenshot goes stale the first time the image
+changes, and a cover showing a photograph of what is behind it reads as a substitute for
+the thing rather than as a way in to it.
+
+**The viewBox is anchored at the horizon** (`xMidYMax slice`), because a hero frame is
+wider than 16:9 and something has to be cropped: the zenith can go, the horizon cannot —
+it is what the image measures itself against. Hence the deliberately thin strip of ground
+at the bottom of the viewBox. What survives: a 16:9 frame shows all of it, a wide hero the
+bottom two thirds, a phone the full height and about a third of the width, centred. **The
+amber ring is placed inside that intersection rather than wherever the highest object
+happens to be** — the first version put it on the highest, and a 1600×620 hero cropped it
+away entirely while leaving its track visible, which reads as a stray orange line.
+
+### Full screen
+
+Added 2026-09-18, in `src/fullscreen.ts`. The button lives in the hints corner rather
+than in the controls block, because it changes the *frame* and not the image: it is not
+one of the piece's controls. `f` does the same thing from the keyboard, and does nothing
+while something is being typed into.
+
+**Escape is the browser's own, and there is nothing here to implement.** Every engine
+leaves full screen on Escape and says so the first time. What the code does is render
+from state — `fullscreenchange` repaints the label and the hint however the change
+happened, the button included — so an exit nobody here asked for cannot leave the panel
+claiming otherwise. The `esc to leave` hint is drawn only while there is something to get
+out of.
+
+**Embedded, it may simply not be allowed**, and `document.fullscreenEnabled` is exactly
+that answer: an iframe gets no full screen unless the embedding page says
+`allow="fullscreen"`. So the button is **not drawn at all** rather than drawn and broken.
+iPhone Safari never allows it for an element and answers the same way. A request that
+still rejects — a permission invisible from in here — stops the offer for the rest of the
+page rather than failing again.
+
+**Headless Chromium cannot exercise Escape.** A synthesised key event does not reach the
+browser-UI handler that exits full screen, so `page.keyboard.press('Escape')` leaves it
+on and looks like a bug in this code. The reachable proof is calling `exitFullscreen()`
+from the page — an exit this code did not initiate, which is what Escape is internally —
+and checking the label follows it. The button and `f` cover the rest.
+
 ### The panel
 
 Redesigned 2026-09-15. **One narrow column** (`READOUT.widthPx`, 272 px), pinned left,
@@ -1162,6 +1254,21 @@ gitignored.
   the API. That is common practice but **unproven here until day 60** — if the published
   elements ever go stale, check the Actions tab before anything else.
 
+### Embedding it
+
+The page is meant to be iframed into a hero section. Two things the embedding page has
+to do, both cheap and both invisible when missed:
+
+- **`allow="fullscreen"` on the iframe**, or `document.fullscreenEnabled` is false in
+  here and the FULL SCREEN button is not drawn at all. That is the honest behaviour, but
+  it looks like the feature was never built.
+- **Give it a real height.** The canvas fills whatever box it is given, and the panel is
+  a full-height column; under about 400 px the lists scroll rather than fitting, which is
+  handled but is not the image.
+
+`?launch` skips the first screen, `?catalog=active` drops the wreckage, and `?debug`
+turns on frame timing — see *The first screen* and *The catalogue*.
+
 ### The subdomain
 
 The site lives at **birds.protonumerique.net**, a DNS `CNAME` to
@@ -1289,6 +1396,11 @@ Anything that computes range rate by hand must not repeat the naive version.
 
 ## Conventions
 
+- **`main.ts`, and everything it imports, must stay free of three.js, satellite.js and
+  the catalogue.** Anything heavy belongs in `src/piece.ts` or behind it. The first
+  screen's whole point is that a page nobody presses costs 8.7 KB; one stray static
+  import puts 160 KB back, silently and with nothing on screen to show for it. Check the
+  entry chunk's size in `npm run build`'s output after touching the entry.
 - Observer location lives in `src/config.ts` and **must** match `OBS_*` in
   `scripts/reference.py`, or the validation compares different things.
 - Angles are radians internally; degrees only at the UI boundary.

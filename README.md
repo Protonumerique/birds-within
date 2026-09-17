@@ -25,7 +25,24 @@ pulls the real catalogue from CelesTrak and packs it into `public/data/active.bi
 included). Add `?catalog=full` to the URL for the larger set, and `?debug` for frame
 timing and worker stats.
 
-Drag to look around, scroll to zoom, click a row to draw that object's track.
+The page opens on a first screen — a title, a drawing of the sky and a LAUNCH button.
+Nothing heavy is fetched until that press: three.js, satellite.js, the propagation worker
+and the catalogue are all behind a dynamic import, so the piece can sit in a hero section
+on another page without costing a visitor who scrolls past it anything. `?launch` skips
+the screen.
+
+Drag to look around, scroll to zoom, click an object or a row to keep it. FULL SCREEN is
+in the top right, `f` does the same from the keyboard, and Escape leaves.
+
+## Embedding it
+
+```html
+<iframe src="https://birds.protonumerique.net/" allow="fullscreen"
+        style="width:100%;aspect-ratio:16/7;border:0"></iframe>
+```
+
+`allow="fullscreen"` is not optional: without it the browser refuses full screen to the
+frame and the button is hidden rather than drawn and broken.
 
 ## How the data works
 
@@ -101,8 +118,12 @@ src/
   scene.ts             three.js — dome, GPU-blended points, trails, look controls
   clock.ts             scene time (the single authority)
   ui.ts                overlay
+  fullscreen.ts        the full-screen toggle, and what to do when it is not allowed
+  gate.ts              the first screen
+  poster.ts            its drawing, built from the same palette the sky uses
   debug.ts             ?debug panel
-  main.ts              wiring and the frame loop
+  piece.ts             wiring and the frame loop — everything heavy hangs off this
+  main.ts              the entry: the first screen, and a dynamic import of the piece
 scripts/
   catalog-sources.mjs  which CelesTrak datasets, and why
   fetch-catalog.mjs    CelesTrak client — the only thing that talks to them

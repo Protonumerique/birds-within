@@ -2,6 +2,7 @@ import { OBSERVER, CLOCK, GROUP_LOOK, HIGHLIGHT, READOUT, SKY, type Dataset } fr
 import type { Clock } from './clock';
 import type { SkyFrame } from './sky-frame';
 import type { Selection } from './selection';
+import { createFullscreen } from './fullscreen';
 import { Group } from './ui-group';
 import { ChoirGrid } from './ui-choir';
 import type { AudioEngine } from './audio';
@@ -106,7 +107,10 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
       <div class="spacer"></div>
       <div class="foot"></div>
     </div>
-    <div class="hints">drag to look · scroll to zoom · click to keep</div>
+    <div class="hints">
+      <div class="hintline" id="hint"></div>
+      <button id="full" type="button" hidden>FULL SCREEN</button>
+    </div>
   `;
 
   const $ = <T extends HTMLElement>(id: string) => root.querySelector<T>(`#${id}`)!;
@@ -150,6 +154,25 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
       listenBtn.disabled = false;
     }
   };
+
+  // Full screen. Its own corner rather than the controls block, because it changes
+  // the frame and not the image - see fullscreen.ts. Escape is the browser's own way
+  // out; the hint for it is only drawn while there is something to get out of.
+  const fullBtn = $<HTMLButtonElement>('full');
+  const hintEl = $('hint');
+  const fullscreen = createFullscreen(document.documentElement);
+  fullBtn.hidden = !fullscreen.available;
+  fullBtn.onclick = () => void fullscreen.toggle();
+  // However it changed - the button, `f`, or Escape - the face is redrawn from state.
+  const paintFullscreen = () => {
+    fullBtn.hidden = !fullscreen.available;
+    const on = fullscreen.active;
+    fullBtn.textContent = on ? 'LEAVE FULL SCREEN' : 'FULL SCREEN';
+    fullBtn.classList.toggle('on', on);
+    hintEl.textContent = on ? `${READOUT.hint} · esc to leave` : READOUT.hint;
+  };
+  fullscreen.onchange = paintFullscreen;
+  paintFullscreen();
 
   let lastScrub = 0;
   scrub.oninput = () => {
