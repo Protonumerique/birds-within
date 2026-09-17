@@ -62,7 +62,15 @@ export class ChoirGrid {
       if (i >= 0) this.selection.setHovered(i);
     };
     this.grid.onpointerleave = () => this.selection.setHovered(-1);
-    this.grid.onclick = (e) => this.selection.toggle(this.indexAt(e.target));
+    // **`pointerdown`, not `click`.** A click needs press and release on the *same*
+    // element; on a cell this small a pointer that moves a pixel between them resolves
+    // to their common ancestor, the grid, and the press is silently dropped. It also
+    // closes the window in which a rebuild could swap the node out mid-gesture. There
+    // is nothing to drag in the panel, so there is nothing a press could mean instead.
+    this.grid.onpointerdown = (e) => {
+      if (e.button !== 0) return;
+      this.selection.toggle(this.indexAt(e.target));
+    };
   }
 
   private indexAt(target: EventTarget | null): number {

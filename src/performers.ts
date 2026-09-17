@@ -23,7 +23,14 @@ import type { SkyFrame } from './sky-frame';
  */
 
 const P = AUDIO.performer;
+const I = AUDIO.interference;
 const FULL_BRIGHT = (HIGHLIGHT.fullBrightDeg * Math.PI) / 180;
+/**
+ * Separation thresholds as cosines, so nearness is a dot product and never an `acos`.
+ * Note the sense: a *larger* cosine is a *smaller* angle.
+ */
+const NEAR_COS = Math.cos((I.nearDeg * Math.PI) / 180);
+const FAR_COS = Math.cos((I.farDeg * Math.PI) / 180);
 
 type Timbre = 'bird' | 'machine' | 'shard';
 
@@ -35,6 +42,7 @@ const hash = (index: number, salt: number) => {
   return x - Math.floor(x);
 };
 const pick = (range: readonly number[], t: number) => lerp(range[0]!, range[1]!, t);
+const smoothstep = (t: number) => t * t * (3 - 2 * t);
 
 /**
  * How loud a voice is for how high its object sits - `HIGHLIGHT`'s own curve, so the
@@ -50,6 +58,11 @@ interface Voice {
   /** Continuous, gated by `vca`. An oscillator, or looping noise for a shard. */
   osc: OscillatorNode | null;
   noise: AudioBufferSourceNode | null;
+  /** The shard's swish and pulse, and every other voice's interference wobble. */
+  lfos: OscillatorNode[];
+  /** How far a passing shard bends this voice's pitch, and chews its amplitude. */
+  warpPitch: GainNode | null;
+  warpAm: GainNode | null;
   /** The scheduled envelope: every chirp, pulse or burst is written onto this. */
   vca: GainNode;
   /** Lowpass, or a bandpass for a shard. Follows `shadow`. */
@@ -70,6 +83,8 @@ export class Performers {
   private voices = new Map<number, Voice>();
   private dying: Voice[] = [];
   private noiseBuffer: AudioBuffer | null = null;
+  /** Indices of the shards currently sounding. Rebuilt per update, never reallocated. */
+  private shards: number[] = [];
 
   constructor(private ctx: AudioContext, private out: AudioNode, private kind: Uint8Array) {}
 
@@ -84,6 +99,11 @@ export class Performers {
       this.voices.set(i, this.make(i, now));
     }
 
+    // Which shards are actually sounding. Only these deform anything - see
+    // AUDIO.interference for why it is the kept ones and not every fragment up there.
+    this.shards.length = 0;
+    for (const [i, v] of this.voices) if (v.timbre === 'shard') this.shards.push(i);
+
     for (const [i, v] of this.voices) {
       if (kept.indexOf(i) < 0 || frame.range[i]! < 0) {
         this.release(v, now);
@@ -91,6 +111,9 @@ export class Performers {
         continue;
       }
       this.steer(v, frame, i, rx, rz, now);
+      // A shard has no phrase and nothing to schedule: it is a band of noise that is
+      // simply there, swelling and sinking under its own LFOs.
+      if (v.timbre === 'shard') continue;
       // Write every event that falls inside the lookahead. A phrase is scheduled
       // whole, so this usually does nothing at all.
       let guard = 0;
@@ -126,25 +149,54 @@ export class Performers {
     const pan = clamp(frame.direction[i * 3]! * rx + frame.direction[i * 3 + 2]! * rz, -1, 1);
     v.pan.pan.setTargetAtTime(pan * AUDIO.drone.panSpread, now, 0.09);
 
+    if (v.timbre === 'shard') {
+      // A shard's band is swept by its own LFO around a fixed centre; there is nothing
+      // to steer. Shadow says nothing about a fragment of metal that emits nothing.
+      return;
+    }
+
     // Sunlit is bright, eclipsed is muffled. `shadow` is 0 in full sunlight and 1 in
     // the umbra, and it is the one column nothing else in the audio path reads.
-    const band = v.timbre === 'bird' ? P.bird.cutoffHz : v.timbre === 'machine' ? P.machine.cutoffHz : P.shard.bandHz;
-    const open = v.timbre === 'shard' ? 1 : 1 - clamp(frame.shadow[i]!, 0, 1);
-    v.filter.frequency.setTargetAtTime(pick(band, v.timbre === 'shard' ? hash(i, 7) : open), now, 0.4);
+    const band = v.timbre === 'bird' ? P.bird.cutoffHz : P.machine.cutoffHz;
+    v.filter.frequency.setTargetAtTime(pick(band, 1 - clamp(frame.shadow[i]!, 0, 1)), now, 0.4);
 
     // Doppler, exaggerated. Negative range rate is approaching, which shifts up.
-    if (v.osc) {
-      v.osc.detune.setTargetAtTime(-frame.rangeRate[i]! * P.dopplerCentsPerKmS, now, 0.12);
+    v.osc!.detune.setTargetAtTime(-frame.rangeRate[i]! * P.dopplerCentsPerKmS, now, 0.12);
+
+    // And whatever wreckage is passing close to it in the sky.
+    const near = this.nearestShard(frame, i);
+    v.warpPitch!.gain.setTargetAtTime(near * I.detuneCents, now, 0.3);
+    v.warpAm!.gain.setTargetAtTime(near * I.amDepth * gain, now, 0.3);
+  }
+
+  /**
+   * How hard the nearest sounding shard is deforming this voice: 1 when one sits
+   * within `nearDeg` of it in the sky, 0 beyond `farDeg`.
+   *
+   * A dot product of two unit directions is the cosine of the angle between them, so
+   * this is the same geometry the image shows and costs no trigonometry at all.
+   */
+  private nearestShard(frame: SkyFrame, i: number): number {
+    if (this.shards.length === 0) return 0;
+    const x = frame.direction[i * 3]!;
+    const y = frame.direction[i * 3 + 1]!;
+    const z = frame.direction[i * 3 + 2]!;
+    let best = 0;
+    for (const j of this.shards) {
+      const cos =
+        x * frame.direction[j * 3]! + y * frame.direction[j * 3 + 1]! + z * frame.direction[j * 3 + 2]!;
+      if (cos <= FAR_COS) continue;
+      const depth = smoothstep(clamp((cos - FAR_COS) / (NEAR_COS - FAR_COS), 0, 1));
+      if (depth > best) best = depth;
     }
+    return best;
   }
 
   // --- the songs -------------------------------------------------------------
 
   /** Writes one phrase from `at`, and answers when the next one should begin. */
   private schedule(v: Voice, at: number): number {
-    if (v.timbre === 'bird') return this.birdPhrase(v, at);
-    if (v.timbre === 'machine') return this.machinePulse(v, at);
-    return this.shardBurst(v, at);
+    return v.timbre === 'bird' ? this.birdPhrase(v, at) : this.machinePulse(v, at);
   }
 
   /**
@@ -183,14 +235,6 @@ export class Performers {
     v.osc!.frequency.setValueAtTime(v.baseHz, at);
     this.strike(v, at, dur, 0.03, 0.55);
     return at + dur + pick(P.machine.gapMs, hash(i, 6)) / 1000;
-  }
-
-  /** Dry noise through a narrow band. Provisional - see AUDIO.performer. */
-  private shardBurst(v: Voice, at: number): number {
-    const i = v.index;
-    const dur = pick(P.shard.burstMs, hash(i, 2 + v.phrase)) / 1000;
-    this.strike(v, at, dur, 0.002, 0.3);
-    return at + dur + pick(P.shard.gapMs, hash(i, 6 + v.phrase)) / 1000;
   }
 
   /**
@@ -234,11 +278,38 @@ export class Performers {
 
     let osc: OscillatorNode | null = null;
     let noise: AudioBufferSourceNode | null = null;
+    let warpPitch: GainNode | null = null;
+    let warpAm: GainNode | null = null;
+    const lfos: OscillatorNode[] = [];
     let baseHz = 0;
 
+    /** An LFO driving an AudioParam, at `depth` either side of whatever that param is. */
+    const modulate = (rateHz: number, depth: number, target: AudioParam): GainNode => {
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = rateHz;
+      // A quarter turn of phase per voice, so several shards never breathe in step.
+      const amount = ctx.createGain();
+      amount.gain.value = depth;
+      lfo.connect(amount);
+      amount.connect(target);
+      lfo.start(this.ctx.currentTime + hash(index, 31) * 2);
+      lfos.push(lfo);
+      return amount;
+    };
+
     if (timbre === 'shard') {
+      // Noise through a wide band that drifts, gated by nothing and breathing slowly:
+      // the swish and the pulse are both LFOs, so there is no event anywhere in it.
       filter.type = 'bandpass';
       filter.Q.value = P.shard.q;
+      const mid = (P.shard.bandHz[0]! + P.shard.bandHz[1]!) / 2;
+      const span = (P.shard.bandHz[1]! - P.shard.bandHz[0]!) / 2;
+      filter.frequency.value = mid;
+      modulate(pick(P.shard.swishHz, hash(index, 17)), span, filter.frequency);
+
+      vca.gain.value = 1 - P.shard.pulseDepth;
+      modulate(pick(P.shard.pulseHz, hash(index, 19)), P.shard.pulseDepth, vca.gain);
+
       noise = ctx.createBufferSource();
       noise.buffer = this.noise();
       noise.loop = true;
@@ -258,6 +329,13 @@ export class Performers {
       osc.frequency.value = baseHz;
       osc.connect(vca);
       osc.start();
+
+      // One wobble, two destinations, both at zero until a shard comes near: it bends
+      // the pitch and chews the amplitude at once, which is what reads as deformation
+      // rather than as vibrato or as tremolo.
+      const rate = pick(I.wobbleHz, hash(index, 21));
+      warpPitch = modulate(rate, 0, osc.detune);
+      warpAm = modulate(rate, 0, level.gain);
     }
 
     return {
@@ -265,6 +343,9 @@ export class Performers {
       timbre,
       osc,
       noise,
+      lfos,
+      warpPitch,
+      warpAm,
       vca,
       filter,
       level,
@@ -300,6 +381,12 @@ export class Performers {
     v.osc?.disconnect();
     v.noise?.stop();
     v.noise?.disconnect();
+    for (const lfo of v.lfos) {
+      lfo.stop();
+      lfo.disconnect();
+    }
+    v.warpPitch?.disconnect();
+    v.warpAm?.disconnect();
     v.vca.disconnect();
     v.filter.disconnect();
     v.level.disconnect();

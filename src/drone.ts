@@ -34,6 +34,24 @@ const SLICES = D.ratios.length;
 
 const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
 
+/**
+ * What fraction of `soloGain` each kept voice gets, given how many are kept.
+ *
+ * One voice alone was overpowering - it arrived at full strength over a bed tuned to
+ * sit back, so a single click jumped out of the image. The belt is a choir, and one
+ * singer at full voice is the wrong shape for it. Every voice, the first included,
+ * rises toward full as more are kept.
+ *
+ * It only ever attenuates: at `fullAt` the sum is exactly what that many voices cost
+ * before, and below it, less.
+ */
+function soloShare(count: number): number {
+  const { first, fullAt, curve } = D.soloRamp;
+  if (count <= 1) return first;
+  const t = clamp((count - 1) / (fullAt - 1), 0, 1);
+  return first + (1 - first) * t ** curve;
+}
+
 interface Bed {
   /** Voice level. The breath LFO is summed into this param, so it is never read back. */
   level: GainNode;
@@ -218,20 +236,26 @@ export class Drone {
     }
 
     for (const [i, voice] of this.solo) {
-      if (marked.indexOf(i) >= 0) {
-        voice.pan.pan.setTargetAtTime(
-          this.panOf(frame.direction[i * 3]!, frame.direction[i * 3 + 2]!, rx, rz),
-          now,
-          0.09
-        );
-        continue;
-      }
+      if (marked.indexOf(i) >= 0) continue;
       voice.gain.gain.cancelScheduledValues(now);
       voice.gain.gain.setTargetAtTime(0, now, D.releaseSeconds / 4);
       voice.filter.frequency.setTargetAtTime(D.soloCutoffHz / 6, now, D.releaseSeconds / 4);
       voice.endsAt = now + D.releaseSeconds;
       this.dying.push(voice);
       this.solo.delete(i);
+    }
+
+    // Every voice's level depends on how many are singing, so it is set here rather
+    // than once at birth: taking one away brings the rest down with it, exactly as
+    // adding one brought them up.
+    const share = D.soloGain * soloShare(this.solo.size);
+    for (const [i, voice] of this.solo) {
+      voice.gain.gain.setTargetAtTime(share, now, D.attackSeconds / 4);
+      voice.pan.pan.setTargetAtTime(
+        this.panOf(frame.direction[i * 3]!, frame.direction[i * 3 + 2]!, rx, rz),
+        now,
+        0.09
+      );
     }
 
     for (let n = this.dying.length - 1; n >= 0; n--) {
@@ -266,7 +290,7 @@ export class Drone {
     const oscs = [this.osc('sawtooth', freq, detune), this.osc('sine', freq / 2, detune)];
     for (const o of oscs) o.connect(filter);
 
-    gain.gain.setTargetAtTime(D.soloGain, now, D.attackSeconds / 4);
+    // Level is not set here - `tendSolos` sets every voice's from how many there are.
     filter.frequency.setTargetAtTime(D.soloCutoffHz, now, D.attackSeconds / 3);
 
     return { index, gain, filter, pan, oscs, endsAt: Infinity };

@@ -94,8 +94,16 @@ export const READOUT = {
  */
 export const CHOIR_GRID = {
   columns: 24,
-  /** Square height in CSS pixels; width comes from the column, so they are near-square. */
-  cellPx: 8,
+  /**
+   * The **hit box**, in CSS pixels. The visible square is this less `gapPx`, drawn
+   * inside it by padding, so the grid has no dead pixels between cells at all.
+   *
+   * It used to be the square itself, with a real CSS `gap` between them - and a click
+   * landing in a gap hit the grid rather than a cell and did nothing. On an 8 px
+   * target that is most of the time. See *The belt gets a grid* in CLAUDE.md.
+   */
+  cellPx: 10,
+  /** The visual gap, taken out of the hit box rather than added between them. */
   gapPx: 1,
 };
 
@@ -439,12 +447,34 @@ export const AUDIO = {
     /** A kept object's voice sits this many octaves above its slice. */
     soloOctaves: 1,
     /**
-     * A kept voice, over and above the bed. Lowered from 0.17 with the bed, but by
-     * less: it sits an octave up with a resonant edge, so it arrives clearly at a
-     * level well under the bed's, and cutting both by the same amount would have made
-     * keeping an object louder in relative terms than it was before.
+     * A kept voice at full strength, over and above the bed. Lowered from 0.17 with
+     * the bed, but by less: it sits an octave up with a resonant edge, so it arrives
+     * clearly at a level well under the bed's, and cutting both by the same amount
+     * would have made keeping an object louder in relative terms than it was before.
+     *
+     * **A voice only reaches this when the belt is being played as a chord.** See
+     * `soloRamp`.
      */
     soloGain: 0.105,
+    /**
+     * How much of `soloGain` each kept voice gets, as a function of how many are kept.
+     *
+     * One voice on its own was overpowering: it arrived at full strength over a bed
+     * deliberately tuned to sit back, so a single click jumped out of the image. The
+     * belt is a choir, and one singer stepping forward at full voice is the wrong
+     * shape for it. So the **first** voice enters at `first` of its level and every
+     * voice - the first one included - rises toward full as more are kept, reaching it
+     * at `fullAt`.
+     *
+     * **This only ever attenuates.** At `fullAt` voices the sum is exactly what that
+     * many voices cost before; below it, less. Keeping ten is unchanged, keeping one
+     * is 14 dB quieter, and the grid stops being a set of switches and becomes
+     * something that rewards playing it.
+     *
+     * `curve` under 1 makes the first few additions count for more than the last few,
+     * so going from one voice to three is a clear swell rather than a slow crawl.
+     */
+    soloRamp: { first: 0.2, fullAt: 10, curve: 0.7 },
     /** Spread across a slice, cents: neighbours kept together beat against each other. */
     soloDetuneCents: 14,
     /** The resonant lowpass that opens as a voice arrives. */
@@ -512,7 +542,7 @@ export const AUDIO = {
      * most of its energy away, so a shard needs several times a sine's gain to reach
      * the same loudness; a sawtooth through an open lowpass needs less.
      */
-    timbreGain: { bird: 1, machine: 1, shard: 3.5 },
+    timbreGain: { bird: 1, machine: 1, shard: 0.8 },
     /** A kept object arrives and leaves over these, seconds. */
     attackSeconds: 0.7,
     releaseSeconds: 1.6,
@@ -548,13 +578,48 @@ export const AUDIO = {
       gapMs: [190, 620],
       cutoffHz: [320, 1900],
     },
+    /**
+     * **Continuous, and eventless.** The first version fired short noise bursts, which
+     * was exactly wrong: a repeating transient is the most attention-getting thing a
+     * mix can contain, and debris is not asking for attention - it is contamination.
+     * There is no phrase, no gap and nothing to schedule. A shard is a band of noise
+     * that is simply *there*, swelling and sinking, brighter than the drone and quieter
+     * than a bird, and several of them are a wash rather than a rhythm.
+     */
     shard: {
-      burstMs: [25, 90],
-      gapMs: [90, 520],
-      /** Band centre, and the Q that makes it a rattle rather than a hiss. */
-      bandHz: [1100, 5200],
-      q: 4,
+      /** The band centre sweeps between these - the swish. */
+      bandHz: [900, 4200],
+      /** Wide. A hiss, not a rattle; the burst version used 4 and rang like a snare. */
+      q: 1.2,
+      /** How fast the band sweeps, per object. Slow enough to read as drift. */
+      swishHz: [0.05, 0.13],
+      /** How fast it breathes, and how deep. This is the pulsating part. */
+      pulseHz: [0.09, 0.27],
+      pulseDepth: 0.38,
     },
+  },
+  /**
+   * Debris deforming the voices it passes.
+   *
+   * The roadmap's version of this reads every fragment in the sky against every kept
+   * voice. This one only counts **kept** shards, which is cheaper and, more to the
+   * point, legible: keep a fragment near something you are listening to and hear it
+   * corrupt that voice. The wreckage becomes a thing you can aim.
+   *
+   * Depth follows angular separation in the sky, so it is the same geometry the image
+   * shows - a shard drifting across a bird bends it as it passes, and nothing else does.
+   */
+  interference: {
+    /** Full depth at or inside this separation, degrees. */
+    nearDeg: 4,
+    /** Nothing at all beyond this. */
+    farDeg: 25,
+    /** How far the wobble bends a voice at full depth. */
+    detuneCents: 140,
+    /** How deeply it chews the voice's amplitude at full depth. */
+    amDepth: 0.4,
+    /** Wobble rate per voice, Hz. Fast enough to be a deformation, not a vibrato. */
+    wobbleHz: [4, 9],
   },
 };
 

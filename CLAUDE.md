@@ -409,6 +409,23 @@ ragged part-column down the right-hand edge. Wrapping by rows puts the remainder
 bottom row, where a half-finished line is what every reader already expects. Adjacency
 survives the trade; only the global x = azimuth reading is given up.
 
+**Every pixel of the grid belongs to a cell**, and a press is taken on `pointerdown`.
+Both of those are fixes, found 2026-09-17 from "it misses clicks quite often". The cells
+were 8 px squares with a 1 px CSS `gap`, so **21% of the grid area was dead** — a press
+landing in a gap hit the grid, `closest('.cell')` answered nothing, and the click was
+silently dropped. And `click` needs press *and* release on the same element: on a target
+this small a hand that moves one pixel between them resolves to their common ancestor,
+the grid, and is dropped the same way. So `CHOIR_GRID.cellPx` is now the **hit box** and
+the square is drawn inside it by padding and `background-clip: content-box`, with no gap
+at all; and the press is `pointerdown`, which also closes the window in which a rebuild
+could swap the node out mid-gesture. There is nothing to drag in the panel, so there is
+nothing else a press could have meant. Measured after: 60 presses, 30 at cell centres and
+30 on the pixel that used to be gap, each with a pixel of travel — 60 hits.
+
+A consequence worth knowing: every state rule sets `background-color`, never
+`background`. The shorthand resets `background-clip` to `border-box` and fills the gap
+back in, so a hovered cell would silently grow by a pixel.
+
 **No text in the grid.** One box above it fills while the pointer is on a square and is
 otherwise blank — five hundred objects cost five hundred squares and not one label,
 which is the *No tags on the sky* rule applied to the panel. Clicking a square keeps the
@@ -552,24 +569,42 @@ each other. It is in tune with the bed because it is the bed's pitch: the voice 
 forward rather than arriving from somewhere else. Twelve at once is the cap; past that a
 click still marks, it just does not sound.
 
-Measured by rendering the same `Drone` into an `OfflineAudioContext`, RMS over the
-settled tail. **Measure it at both belt sizes.** `synthetic` carries 240 objects, so its
-slices sit at half occupancy and its bed is 4 dB quieter than `full`, where every slice
-saturates — the first tuning was done against the quiet one and shipped a drone louder
-than intended on the real sky. 500 is what a listener actually hears:
+**How loud a voice is depends on how many voices there are** (`soloRamp`, 2026-09-17).
+One on its own was overpowering: it arrived at full strength over a bed deliberately
+tuned to sit back, so a single click jumped out of the image. The belt is a choir, and
+one singer stepping forward at full voice is the wrong shape for it. So the first voice
+enters at a fifth of its level and every voice — including that first one — rises toward
+full as more are kept, reaching it at ten.
 
-| | 90 objects | | 500 objects | |
-|---|---|---|---|---|
-| | RMS | peak | RMS | peak |
-| bed alone | −31.4 dBFS | 0.11 | −27.3 dBFS | 0.18 |
-| one kept | −28.5 | 0.18 | −25.8 | 0.20 |
-| four kept | −24.4 | 0.28 | −22.3 | 0.38 |
-| twelve kept | −20.3 | 0.47 | −18.6 | 0.54 |
+**It only ever attenuates.** At ten voices the sum is exactly what ten cost before, and
+below that, less; keeping one is 14 dB quieter than it was. The level is therefore set in
+`tendSolos` on every update rather than once at birth, so *taking a voice away brings the
+rest down with it* as surely as adding one brought them up. The grid stops being a set of
+switches and becomes something that rewards playing it.
 
-Mild and permanent at the bottom, invasive at the top — 8.7 dB between them on the real
-sky — monotonic, and nowhere near clipping before the master compressor even acts. That
-compressor is there rather than a lower voice cap because the brief asks for it to be
-*able* to get invasive.
+Measured by rendering the same `Drone` into an `OfflineAudioContext`, 500 belt objects,
+RMS over the settled tail:
+
+| kept | share of `soloGain` | RMS | peak |
+|---|---|---|---|
+| none | — | −28.4 dBFS | 0.18 |
+| one | 0.20 | −28.2 | 0.18 |
+| two | 0.37 | −27.8 | 0.18 |
+| four | 0.57 | −25.2 | 0.27 |
+| seven | 0.80 | −22.7 | 0.33 |
+| ten | 1.00 | −20.5 | 0.43 |
+| twelve | 1.00 | −18.9 | 0.54 |
+
+Mild and permanent at the bottom — one voice is now barely above the bed — invasive at
+the top, monotonic, and nowhere near clipping before the master compressor even acts.
+That compressor is there rather than a lower voice cap because the brief asks for it to
+be *able* to get invasive.
+
+**Measure it at both belt sizes.** `synthetic` carries 240 objects, so its slices sit at
+half occupancy and its bed is 4 dB quieter than `full`, where every slice saturates — the
+first tuning was done against the quiet one and shipped a drone louder than intended on
+the real sky. Every figure above is the 500-object case, which is what a listener
+actually hears; at 90 they all fall by about 4 dB.
 
 `bedGain` and `soloGain` came down from 0.085 and 0.17 on 2026-09-16, on listening: the
 opening was too present and the kept voices sat higher than they needed to. The bed fell
@@ -600,10 +635,8 @@ heuristic and nothing more, but it separates the three things that are up there:
 - **bird** (payload) — phrases of two to five swept chirps, then a long gap. A sine.
 - **machine** (rocket body) — a spent stage is not a bird. Lower, a sawtooth, and
   **regular** where the bird is not. The industrial chant under the birdsong.
-- **shard** (debris) — dry noise bursts through a narrow band. **Provisional**: debris is
-  meant to become interference *on* other voices rather than a voice of its own, but a
-  click that makes no sound reads as a broken click, and this previews the grain that
-  idea will use.
+- **shard** (debris) — a band of noise that is simply *there*: no phrase, no gap, nothing
+  scheduled. See *The shard, and the interference* below.
 
 **A given object always sings the same song.** Pitch, sweep direction, phrase length and
 gap all come from a hash of its index — the same `sin`-and-fract trick the point shader
@@ -626,6 +659,48 @@ numbers that dim the ring — so a voice swells and fades in exact step with the
 screen. Shadow is the one column nothing else in the audio path reads, and the ear takes
 it better as colour than the eye takes it as brightness.
 
+**The shard, and the interference.** The first version fired short noise bursts, and that
+was exactly wrong: a repeating transient is the most attention-getting thing a mix can
+hold, and debris is not asking for attention — it is contamination. It read as
+interrupted and repetitive, which is what a rhythm is.
+
+A shard is now **continuous and eventless**. Noise through a wide bandpass whose centre
+drifts on one slow LFO — the swish — while a second breathes its amplitude. Brighter than
+the drone, quieter than a bird, and with nothing in it to count. One is radio hiss at the
+edge of the image; several sum into a wash rather than a pattern. Measured alone it is
+−40.9 dBFS with a peak of 0.07, against the burst version's −39.7 and **0.21**: the
+energy barely moved, but the transients are a third of what they were, and that is the
+whole of the difference.
+
+**And it deforms what it passes.** Each kept shard bends every pitched voice near it in
+the sky: one wobble per voice at 4–9 Hz, driving the oscillator's detune *and* its
+amplitude at once — which reads as deformation, where either alone would read as vibrato
+or as tremolo. Depth follows angular separation, full inside `nearDeg` (4°) and nothing
+beyond `farDeg` (25°), on a smoothstep between. It is a dot product of two unit
+directions — the cosine of the angle between them — so it is the same geometry the image
+shows and costs no trigonometry at all:
+
+| separation | wobble |
+|---|---|
+| 41° | 0 cents |
+| 21° | 29 |
+| 14° | 108 |
+| 8.5° | 137 |
+| under 4° | 140 |
+
+**Only *kept* shards interfere.** The roadmap's version reads every fragment in the sky
+against every voice, which is affordable but not legible: things would bend for reasons a
+listener cannot see. Counting the kept ones makes the wreckage something you can aim —
+keep a fragment near a bird you are listening to and hear it corrupt that bird. Widening
+it to the whole catalogue is still open, and is a one-line change to what
+`Performers.shards` is filled from.
+
+**A trap in that geometry, worth stating because it caught the test and not the code.**
+Two objects at the same elevation separated by 30° of *azimuth* are not 30° apart: at 45°
+elevation they are 21° apart, because `cos(sep) = sin²(el) + cos²(el)·cos(Δaz)`. A test
+that labels its columns by azimuth offset will read the interference curve as starting
+too early and look like an off-by-one in the thresholds.
+
 **Everything is scheduled ahead.** Web Audio's clock is not the frame loop's, and a chirp
 started from a `requestAnimationFrame` callback arrives whenever the frame did. Each
 voice holds the context time of its next phrase and `update` writes every event inside
@@ -646,15 +721,14 @@ Balance, rendered offline against a 500-object belt, RMS over the settled tail:
 | bed alone | −28.5 dBFS | | 0.18 |
 | one bird | −27.4 | −33.8 | 0.12 |
 | one machine | −27.8 | −35.6 | 0.13 |
-| one shard | −28.2 | −39.7 | 0.21 |
-| eight kept, mixed | −23.1 | | 0.41 |
+| one shard | −28.3 | −40.9 | 0.07 |
+| eight kept, mixed | −23.1 | | 0.42 |
 
 A bird sits 5 dB under the bed in RMS and is still plainly the foreground: it is two to
 five octaves higher, where the ear is far more sensitive, so RMS across registers this
-far apart does not compare. The shard has the lowest RMS and the sharpest peaks, which is
-what a rattle is. `timbreGain` is **measured, not nominal** — bandpassed noise throws most
-of its energy away, so a shard needs several times a sine's gain to arrive at the same
-loudness.
+far apart does not compare. The shard is the quietest thing in the mix and has no peaks to speak of, which is what a
+hiss is. `timbreGain` is **measured, not nominal** — bandpassed noise throws most of its
+energy away, so what a shard needs bears no relation to what a sine needs.
 
 **It costs nothing measurable.** With a selection of eighteen held constant — six
 performers, twelve belt voices — frames ran p50 26.3 / p95 30.7 ms silent and 26.0 / 29.9
@@ -683,6 +757,14 @@ bassier-military voicing cannot be built yet: `kind` is a name heuristic and Cel
 GP data carries no object type at all. CelesTrak does publish classified lists on its TLE
 pages, and parsing those into an optional catalogue field is the way in when it is wanted.
 Deferred on purpose, not forgotten.
+
+**The same table would give species**, which is the more interesting half of it. A
+family of satellites sharing a call — Starlink as geese, so that the megaconstellation is
+audible *as* a constellation and a name in the list has a sound you already recognise —
+needs nothing more than a name prefix, which every object already carries. It does not
+need SATCAT and it does not need purpose. Alongside it: rougher calls than the present
+whistle, on the vocabulary the metaphor already supplies — caw, honk, squawk, cackle.
+Both noted 2026-09-17 and deliberately not built yet.
 
 
 ## Deployment
@@ -829,9 +911,14 @@ Anything that computes range rate by hand must not repeat the naive version.
   - [x] **The performers.** Passes, sounding only when kept: pitch ← exaggerated range
         rate, level ← elevation, pan ← direction, timbre ← shadow. Three textures from
         the `kind` byte — bird, machine, shard. Synthesised, deliberately first.
-  - [ ] **The interference.** Debris as a modulator rather than a voice: noise and
-        ring-mod whose depth on a performer rises as a fragment's angular separation
-        from it shrinks. Inaudible while nothing is kept.
+  - [x] **The interference.** A kept shard is a continuous band of noise, and it bends
+        the pitch and amplitude of every voice near it in the sky, on a smoothstep over
+        angular separation. Counts kept shards, not every fragment — see above.
+  - [ ] **Bird species.** More aggressive calls — caw, honk, squawk, cackle — as rougher
+        timbres beside the present whistle, and **voices by family**: Starlink as geese,
+        so the megaconstellation is audible *as* a constellation. Needs a curated
+        name-prefix table, which is the same table the purpose voicing wants; see the
+        note at the end of this section. The strongest remaining idea in the sound.
   - [ ] **HRTF.** `PannerNode` behind a flag, on the same direction vectors, once the
         stereo mapping is known to be right.
 
