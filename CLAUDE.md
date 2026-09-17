@@ -503,6 +503,34 @@ which is the *No tags on the sky* rule applied to the panel. Clicking a square k
 object exactly as clicking it in the sky does; the grid is meant to become the belt's
 keyboard when the sound arrives.
 
+**The controls are one block, three rows.** PAUSE, NOW and the speed share the
+column's width between them; the scrub slider is the same width under it; LISTEN is the
+same width again. Revised 2026-09-17, when they read as "kind of lost" - they were
+short, squat and all the same weight, so nothing in the row said where to start.
+
+Two of them are now **filled rather than outlined**: the speed and LISTEN. Those are the
+offers; the rest of the row is a tint on the sky, and an offer should not look like a
+tint. The speed also carries a **drawn drop-down cue** - `appearance: none` took the
+native arrow away years ago and without one a select reads as a button that does nothing
+when pressed. LISTEN turns the belt's own blue while it is on, because the belt is what
+sings.
+
+**No control writes its own label.** PAUSE and LISTEN are both rendered from state in
+`update`. That is not tidiness: the sound can now start without its button being touched
+at all, so a label written inside the click would be a lie the moment that happened.
+
+**The lists scroll, and nothing else does.** They used to be clamped - each group
+`overflow: hidden`, so on a short window rows were cut off at a border with no sign that
+more existed, and the two groups took space from each other. Now the spacer gives up its
+slack first, then the belt's grid gives way and scrolls, and the lists keep a floor of
+84 px so they can never be squeezed to a single row. Measured at 900, 560 and 420 px
+tall: the grid stays on the floor with its 14 px margin at all three and the column never
+once overflows the window.
+
+The floor matters more than it looks. The belt's grid is four rows on the synthetic sky
+and **twenty-one on the real one** - five hundred squares - so a rule tuned against
+`synthetic` would hand a short window entirely to the grid. Check a layout change at both.
+
 **How to work it lives top right** (`.hints`), clear of the column and of the debug
 panel at the bottom, and never takes the pointer, so the sky behind it stays draggable.
 
@@ -598,12 +626,28 @@ interference joins them the same way, without either changing.
 
 #### Turning it on
 
-**Nothing exists until the button is pressed.** A browser will not let a page make a sound
-without a gesture, so "the drone is audible from the start" has to mean "from the first
-press" — there is no arguing with the policy. The context, the forty-odd oscillators and
-all of their cost are built inside that click and not before, so a page nobody turns the
-sound on for pays nothing at all. The one control is `SOUND` / `MUTE`, under the time
-controls, and it wears the belt's own blue while it is on. Once the fade out is inaudible
+**Nothing exists until a gesture.** A browser will not let a page make a sound without
+one, so "the drone is audible from the start" has to mean "from the first press" — there
+is no arguing with the policy. The context, the forty-odd oscillators and all of their
+cost are built inside that gesture and not before, so a page nobody turns the sound on
+for pays nothing at all.
+
+**There are two gestures, not one.** `LISTEN` / `SILENCE` under the time controls is the
+explicit one. The other is **keeping an object** — from the sky or from the belt's grid —
+which starts the sound by itself. Selecting something is the one gesture a first-time
+visitor is certain to make, and hearing the sky is the point of the piece, so the button
+should not be the only way in.
+
+That runs through `Selection.onMark`, a hook called when a click *takes* an object and
+never when it lets one go. It has to be a hook rather than a line in either caller: the
+context can only be built inside the gesture, the frame loop is not one, and both ways of
+keeping something already pass through `toggle` — so hanging it there is what stops the
+belt's grid from needing to know the sound exists.
+
+**Working the button turns that off.** `armFromSelection` does nothing once the person
+has pressed `LISTEN` or `SILENCE` themselves, either way. Someone who asks for silence and
+then clicks a satellite means to keep looking in silence, and having the sound come back
+would read as the button being broken. Once the fade out is inaudible
 the context is **suspended**: `setTargetAtTime` is asymptotic and never actually reaches
 zero, so a muted tab would otherwise run forty oscillators for its life.
 

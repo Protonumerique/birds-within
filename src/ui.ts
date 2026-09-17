@@ -71,15 +71,14 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
           <button id="pause">PAUSE</button>
           <button id="now">NOW</button>
           <select id="rate">${CLOCK.rates.map((r) => `<option value="${r}">${r}×</option>`).join('')}</select>
-          <span class="sub" id="scrubval"></span>
         </div>
         <div class="controls">
           <input id="scrub" type="range" min="-720" max="720" step="1" value="0" title="offset from now, minutes" />
         </div>
         <div class="controls">
-          <button id="sound">SOUND</button>
-          <span class="sub" id="soundnote"></span>
+          <button id="listen">LISTEN</button>
         </div>
+        <div class="sub" id="soundnote"></div>
       </header>
       <div class="lists"></div>
       <div class="spacer"></div>
@@ -93,35 +92,32 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
   const tlEl = $('tl');
   const pauseBtn = $<HTMLButtonElement>('pause');
   const scrub = $<HTMLInputElement>('scrub');
-  const scrubVal = $('scrubval');
 
-  pauseBtn.onclick = () => {
-    clock.togglePause();
-    pauseBtn.textContent = clock.isPaused ? 'PLAY' : 'PAUSE';
-  };
+  pauseBtn.onclick = () => clock.togglePause();
   $('now').onclick = () => {
     clock.resetToNow();
     scrub.value = '0';
     lastScrub = 0;
-    scrubVal.textContent = '';
   };
   $<HTMLSelectElement>('rate').onchange = (e) => {
     clock.timeRate = Number((e.target as HTMLSelectElement).value);
   };
 
-  // The one control the sound has. It is also the gesture that creates the audio
-  // context: a browser will not let a page make a sound without one, so "audible
-  // from the start" means from this press. Nothing is built until it happens.
-  const soundBtn = $<HTMLButtonElement>('sound');
+  // The sound's one control. It is also a gesture that can create the audio context -
+  // a browser will not let a page make a sound without one - but no longer the only
+  // one: keeping an object arms it too, from inside that click. See `armFromSelection`.
+  //
+  // Nothing here sets its own label. Both this and PAUSE are rendered from state in
+  // `update`, because the sound can now start without this button being touched and a
+  // label written at the click would be a lie the moment that happened.
+  const listenBtn = $<HTMLButtonElement>('listen');
   const soundNote = $('soundnote');
-  soundBtn.onclick = async () => {
-    soundBtn.disabled = true;
+  listenBtn.onclick = async () => {
+    listenBtn.disabled = true;
     try {
-      const on = await source.audio.toggle();
-      soundBtn.textContent = on ? 'MUTE' : 'SOUND';
-      soundBtn.classList.toggle('on', on);
+      await source.audio.toggle();
     } finally {
-      soundBtn.disabled = false;
+      listenBtn.disabled = false;
     }
   };
 
@@ -130,7 +126,6 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
     const minutes = Number(scrub.value);
     clock.nudge((minutes - lastScrub) * 60);
     lastScrub = minutes;
-    scrubVal.textContent = minutes ? `${minutes >= 0 ? '+' : ''}${minutes}m` : '';
   };
 
   // Three groups, because the sky holds three kinds of thing that do not compare.
@@ -171,7 +166,14 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
     update(date, frame) {
       const iso = date.toISOString();
       tEl.firstChild!.textContent = `${iso.slice(11, 19)} UTC`;
-      tlEl.textContent = `${iso.slice(0, 10)} · ${pad(date.getHours())}:${pad(date.getMinutes())} local`;
+      const offset = lastScrub ? `  ${lastScrub >= 0 ? '+' : ''}${lastScrub}m` : '';
+      tlEl.textContent = `${iso.slice(0, 10)} · ${pad(date.getHours())}:${pad(date.getMinutes())} local${offset}`;
+
+      // Every control's face comes from state, not from whatever set that state.
+      pauseBtn.textContent = clock.isPaused ? 'PLAY' : 'PAUSE';
+      const listening = source.audio.enabled;
+      listenBtn.textContent = listening ? 'SILENCE' : 'LISTEN';
+      listenBtn.classList.toggle('on', listening);
       // Said only while it is true, and never otherwise: the drone is ducked while
       // the clock runs fast, and a button that looks on while nothing is audible is
       // worse than no button. See AUDIO.maxTimeRate.

@@ -102,33 +102,85 @@ body {
   gap: 10px;
 }
 
-/* Takes the slack, so the grid below it is bottom-aligned. */
+/* Eats whatever is left over, and gives it all back before the lists start to
+   scroll - which is what keeps the grid on the floor at a tall window and off the
+   lists' way at a short one. */
 .spacer {
   flex: 1 1 auto;
-  min-height: 10px;
+  min-height: 0;
 }
 
+/* The lists scroll; nothing else does.
+   They used to be clamped - each group `overflow: hidden`, so on a short window rows
+   were simply cut off at a border with no sign that more existed, and the two groups
+   took space from each other. Now they keep their natural height, the spacer gives up
+   its slack first, and past that the whole block scrolls. The header stays put and the
+   belt's grid stays on the floor of the frame, which is the arrangement the panel was
+   designed around. */
 .lists {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  min-height: 0;
+  flex: 1 1 auto;
+  /* Never squeezed to nothing. The belt's grid is four rows on the synthetic sky and
+     twenty-one on the real one, so without a floor here a short window would hand the
+     whole column to the grid and leave the lists a single row. */
+  min-height: 84px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-faint) transparent;
 }
 
-/* Lists clip from the bottom rather than pushing the grid off a short window. */
+.lists::-webkit-scrollbar {
+  width: 6px;
+}
+
+.lists::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.lists::-webkit-scrollbar-thumb {
+  background: var(--ink-faint);
+  border-radius: 3px;
+}
+
 .lists .group {
   min-height: 0;
-  overflow: hidden;
 }
 
+/* The grid keeps its natural height and stays on the floor - until there is not
+   enough window for it, and then it gives way and scrolls rather than pushing itself
+   off the bottom. Five hundred squares are twenty-one rows, which is most of a short
+   laptop window on its own. */
 .foot {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-faint) transparent;
+}
+
+.foot::-webkit-scrollbar {
+  width: 6px;
+}
+
+.foot::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.foot::-webkit-scrollbar-thumb {
+  background: var(--ink-faint);
+  border-radius: 3px;
 }
 
 h1 {
-  margin: 0 0 2px;
-  font: 400 12px/1.2 var(--mono);
-  letter-spacing: 0.3em;
+  margin: 0 0 4px;
+  /* 1.7x the 12px it was. The tracking comes in a little at this size, or the title
+     runs past a 272px column. */
+  font: 400 20px/1.15 var(--mono);
+  letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--ink);
 }
@@ -137,6 +189,16 @@ h1 {
   color: var(--ink-dim);
   letter-spacing: 0.05em;
   font-size: 10px;
+}
+
+/* The note under LISTEN only exists while it has something to say; otherwise it would
+   hold a blank line open under the controls for the life of the page. */
+#soundnote:empty {
+  display: none;
+}
+
+#soundnote {
+  margin-top: 6px;
 }
 
 .clock {
@@ -157,8 +219,16 @@ h1 {
   display: flex;
   flex-wrap: nowrap;
   gap: 5px;
-  align-items: center;
+  align-items: stretch;
   margin-top: 8px;
+}
+
+/* Every control shares the column's full width, so a row of buttons measures the
+   same as the slider under it and the three rows read as one block. */
+.controls > button,
+.controls > select {
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 button,
@@ -170,10 +240,10 @@ select {
   font: inherit;
   font-size: 10px;
   letter-spacing: 0.08em;
-  padding: 4px 7px;
+  padding: 7px 8px;
   border-radius: 2px;
   cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease;
+  transition: background-color 120ms ease, border-color 120ms ease;
 }
 
 button:hover,
@@ -187,11 +257,43 @@ button:disabled {
   cursor: default;
 }
 
-/* The sound, while it is on. The belt's own blue, because the belt is what sings. */
-button.on {
-  color: var(--geo);
-  border-color: rgba(138, 212, 255, 0.45);
-  background: rgba(138, 212, 255, 0.1);
+/* The two controls that are offers rather than switches: the speed, and the way in
+   to the sound. Filled rather than outlined, so they read as the things to press -
+   the rest of the row is a tint on the sky and these are not. */
+#rate,
+#listen {
+  background-color: rgba(207, 224, 236, 0.86);
+  border-color: rgba(207, 224, 236, 0.9);
+  color: #0a1016;
+  font-weight: 600;
+}
+
+#rate:hover,
+#listen:hover {
+  background-color: rgba(227, 240, 250, 0.96);
+  border-color: rgba(227, 240, 250, 1);
+}
+
+/* A drop-down cue, drawn rather than native: `appearance: none` took the arrow away
+   and without one the speed reads as a button that does nothing when pressed. */
+#rate {
+  padding-right: 17px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M0 0h8L4 5z' fill='%230a1016'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  text-align: left;
+}
+
+/* Listening. The belt's own blue, because the belt is what sings. */
+#listen.on {
+  background-color: var(--geo);
+  border-color: var(--geo);
+  color: #04131c;
+}
+
+#listen.on:hover {
+  background-color: #a6dfff;
+  border-color: #a6dfff;
 }
 
 input[type="range"] {

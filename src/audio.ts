@@ -25,6 +25,14 @@ export class AudioEngine {
   private performers: Performers | null = null;
   private on = false;
   private ducked = false;
+  /**
+   * Whether the person has worked the button themselves, either way.
+   *
+   * Once they have, keeping an object stops starting the sound. Someone who presses
+   * SILENCE and then clicks a satellite means to keep looking in silence, and having
+   * the sound come back would read as the button not working.
+   */
+  private chosen = false;
   /** Pending suspend, so a quick MUTE-then-SOUND cannot strand the context asleep. */
   private sleep: ReturnType<typeof setTimeout> | null = null;
   /** The selection, split per update into the two buses. Reused, never reallocated. */
@@ -55,6 +63,7 @@ export class AudioEngine {
   async toggle(): Promise<boolean> {
     if (!this.ctx) this.build();
     const ctx = this.ctx!;
+    this.chosen = true;
     this.on = !this.on;
     if (this.sleep !== null) {
       clearTimeout(this.sleep);
@@ -76,6 +85,23 @@ export class AudioEngine {
       }, AUDIO.fadeSeconds * 2000);
     }
     return this.on;
+  }
+
+  /**
+   * Keeping an object starts the sound, for anyone who has not said otherwise.
+   *
+   * **Must be called from inside the click**, which is why `Selection.onMark` exists:
+   * a browser only lets a page build an AudioContext from a user gesture, and the
+   * frame loop is not one. Selecting something is the one gesture a first-time visitor
+   * is certain to make, and hearing the sky is the point of the piece - so it is the
+   * second way in, beside the button, rather than the button being the only one.
+   */
+  armFromSelection(): void {
+    if (this.on || this.chosen) return;
+    if (!this.ctx) this.build();
+    this.on = true;
+    if (this.ctx!.state !== 'running') void this.ctx!.resume();
+    this.applyMaster(AUDIO.fadeSeconds);
   }
 
   /**

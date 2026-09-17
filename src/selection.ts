@@ -20,6 +20,18 @@ export class Selection {
    */
   marksVersion = 0;
 
+  /**
+   * Called when a click *takes* an object, never when it lets one go.
+   *
+   * It exists so that keeping something can start the sound. That has to happen
+   * inside the click itself - a browser only allows an AudioContext to be created
+   * from a user gesture, and the frame loop is not one - and both ways of keeping
+   * something, the sky and the belt's grid, already come through `toggle`. Hanging it
+   * here rather than on either caller is what stops the grid needing to know the
+   * sound exists at all.
+   */
+  onMark: ((index: number) => void) | null = null;
+
   private hoveredIndex = -1;
   /** Marking order, most recent last: the newest mark is the one wearing the trail. */
   private order: number[] = [];
@@ -47,6 +59,7 @@ export class Selection {
     } else {
       this.marked.add(index);
       this.order.push(index);
+      this.onMark?.(index);
     }
     this.version++;
     this.marksVersion++;

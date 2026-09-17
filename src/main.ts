@@ -58,6 +58,9 @@ async function main() {
   const scene = new SkyScene(canvas, stream.count);
   const selection = new Selection();
   const audio = new AudioEngine(stream.choir, stream.kind, stream.family);
+  // Keeping anything - from the sky or from the belt's grid - starts the sound, unless
+  // the person has already worked the button themselves. See `armFromSelection`.
+  selection.onMark = () => audio.armFromSelection();
   scene.setClasses(stream.choir, stream.kind);
   const hud = createHud(hudRoot, clock, {
     names: stream.names,
