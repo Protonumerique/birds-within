@@ -457,19 +457,29 @@ const FAMILY_VOICE: Record<Family, 'none' | 'starlink' | 'iridium' | 'military'>
 export const GHOST = {
   /** Trails appear above this time rate, and fade in over the step above it. */
   fromRate: 1,
-  /** Copies behind each object. Each one is another draw of the points. */
-  count: 3,
-  /** How far back the furthest reaches, in tick intervals. */
-  spanTicks: 1.5,
-  /** Brightness of the first ghost, and what each one behind it keeps of the last. */
-  level: 0.45,
-  falloff: 0.6,
   /**
-   * A ghost's size against its object. Smaller reads as a trail rather than a queue
-   * of satellites, and it is also where the cost is: a point sprite is all fragment,
-   * so 0.66 makes a ghost well under half the work of the object it follows.
+   * Copies behind each object. Each one is another draw of the points.
+   *
+   * **Each is a stroke, not a dot**, and that is what decides the number. Three dots
+   * over a span this long read as beads on a string; a ghost instead sweeps its
+   * sprite along the step back to the ghost behind it, so four of them join into one
+   * tapering streak. Filling the same span with dots close enough to touch would have
+   * taken fifteen draws.
    */
-  size: 0.66,
+  count: 4,
+  /** How far back the furthest reaches, in tick intervals. */
+  spanTicks: 1.6,
+  /** Brightness of the first ghost, and what each one behind it keeps of the last. */
+  level: 0.5,
+  falloff: 0.66,
+  /**
+   * A ghost's width against its object. Smaller reads as a trail rather than a queue
+   * of satellites, and it is where most of the cost is: a point sprite is all
+   * fragment, and a swept one is a square of side `width + streak` for a capsule that
+   * only occupies a band across it. The streak is capped at 96 CSS px in the shader
+   * for the same reason - past that it is a smear, not a trail.
+   */
+  size: 0.6,
 };
 
 export const AUDIO = {
@@ -495,8 +505,17 @@ export const AUDIO = {
    * no way to tell a silenced piece from a broken one.
    */
   rateDuck: {
-    /** Level at `fullAt` and above, as a share of `masterGain`. 1x is always full. */
-    to: 0.55,
+    /**
+     * Level at `fullAt` and above, as a share of `masterGain`. 1x is always full.
+     *
+     * Cut from 0.55 to 0.30 when `rateDrive` arrived, and the reason is the ear, not
+     * the meter: the bed's centroid climbs from 58 Hz to 181 Hz, and equal-loudness
+     * puts the ear some 15 dB more sensitive there. Holding the same level would have
+     * made the hum arrive far louder than the drone it grew out of. -10.5 dB gives
+     * back about two thirds of that, which leaves the rise plainly audible without it
+     * taking the room.
+     */
+    to: 0.3,
     /** The rate the attenuation has fully arrived at. The top of the ladder. */
     fullAt: 100,
   },
@@ -512,9 +531,26 @@ export const AUDIO = {
    * across the field, because looking is not time passing.
    */
   paused: { level: 0.45 },
+  /**
+   * **The drone rises with the time rate**, added 2026-09-18.
+   *
+   * Attenuating was not enough: it told a listener the sound had not broken, and
+   * nothing else. This makes the clock itself audible - the bed runs up from its C1
+   * towards a hum as the sky speeds up, so a ramp is something you hear before you
+   * read the number. Cents at `rateDuck.fullAt`, on the same logarithmic reading of
+   * the ladder, and it is **the drone's alone**: the birds keep their register,
+   * because a satellite's own song is not what the clock is doing.
+   *
+   * There is a reasonable objection - the belt does not move, so why would it change
+   * with the rate? Because the bed is not the sound of five hundred objects, it is
+   * the sound of the sky they are the floor of, and that is what is running.
+   */
+  rateDrive: { cents: 1900 },
   /** Seconds to duck and unduck for the rate or a pause. Shorter than a deliberate fade. */
   duckSeconds: 0.7,
   drone: {
+    /** Seconds the transpose takes to arrive. Long: a rate change is a ramp, not a jump. */
+    rateGlideSeconds: 1.4,
     /**
      * The bed's pitches, low to high, **one voice per ratio** - the slice count is
      * this array's length, so the two can never disagree.

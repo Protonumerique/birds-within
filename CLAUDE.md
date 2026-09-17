@@ -382,6 +382,15 @@ uniform; a tick arriving uploads into whichever of the two GPU slots is stale.
   the sprite; at 100× it crosses the sky in forty seconds, and the question a time ramp
   raises — how fast is this actually going — has no answer in the image at all. The
   trail answers it, and adds a density in *time* beside the density in space.
+  - **Each ghost is a stroke, not a dot.** Three dots over a span this long read as
+    beads on a string — which is what shipped first, and what "quite dotty" named. A
+    ghost now *sweeps* its sprite along the step back to the ghost behind it, so
+    consecutive strokes abut exactly and four of them join into one tapering streak.
+    Filling the same span with dots close enough to touch would have taken fifteen
+    draws. The sweep is one function in the fragment shader — collapse the point onto
+    the segment before evaluating the shape — so a light becomes a rounded stroke and
+    a shard becomes a swept shard, with no second code path. It is very nearly free:
+    2.3× the ink (850 → 1,953 pixels) for 0.4 ms.
   - **Extra draws of the same points, not a screen effect**, and that is the whole
     design. A feedback buffer smears in screen space, so turning the camera would drag
     the entire sky into streaks — and the fix for that, clearing on camera motion, reads
@@ -402,12 +411,13 @@ uniform; a tick arriving uploads into whichever of the two GPU slots is stale.
   - Every ghost material **spreads the shared uniform block** and overrides three
     entries, so colour, size by range, the horizon test and the shard's own shape can
     never disagree with the object being followed.
-  - **The cost, stated honestly: p50 22.7 → 25.7 ms on a software rasteriser**, A/B/A'd
-    to rule out drift (23.5 / 26.2 / 24.2 / 26.1 for none / three / none / three), of
-    which about 0.8 ms is each extra draw rather than its fragments. That is swiftshader
-    at `synthetic` scale — 1,692 objects — and it is the one number in this file that
-    has **not** been checked on a real GPU or at 21k objects. `GHOST.count` is the dial:
-    set it to 0 and the draws disappear entirely.
+  - **The cost, stated honestly: p50 22.7 → 26.3 ms on a software rasteriser**, A/B/A'd
+    to rule out drift (22.7 / 26.3 / 24.5 / 27.7 for none / four / none / four), of
+    which about 0.8 ms is each extra draw rather than its fragments — the sweep itself
+    barely registers. That is swiftshader at `synthetic` scale — 1,692 objects — and it
+    is the one number in this file that has **not** been checked on a real GPU or at
+    21k objects. `GHOST.count` is the dial: set it to 0 and the draws disappear
+    entirely.
 - **Render order is a design decision**, set in `RENDER_ORDER`: points, tracks and rings
   under the haze so they emerge together; graticule and compass labels above it so the
   dome stays legible to the horizon.
@@ -441,7 +451,9 @@ patch, which is the number worth having.
   error, three.js logs it to the console and carries on, and the result is that *the
   entire points draw vanishes* — an empty sky with the rings still on it, which reads
   as a data problem, not a shader one. Pass the size down as a varying (`vSizePx`), as
-  both point and ring shaders now do.
+  both point and ring shaders now do. **Any** compile error in `POINT_FRAG` does this,
+  and the second one found here was `float half` — a reserved word in GLSL — so the
+  symptom is worth recognising: sky empty, rings intact, one line in the console.
 - **Looking at the zenith kills the camera.** At pitch 90° the view direction is
   parallel to the camera's up vector, `lookAt` cannot build a basis, and the whole
   scene disappears. `render` clamps pitch to ±89° itself rather than trusting whoever
@@ -550,6 +562,12 @@ tint. The speed also carries a **drawn drop-down cue** - `appearance: none` took
 native arrow away years ago and without one a select reads as a button that does nothing
 when pressed. LISTEN turns the belt's own blue while it is on, because the belt is what
 sings.
+
+**NOW is the way back, not just a jump.** Since 2026-09-18 it returns the clock to
+this instant, puts the rate back to 1× *and* lets a held clock go. One press should
+undo anything that reads as "where am I?", and a look-ahead left running at 100× is
+exactly that — the drone is humming, the sky is streaking and the panel says `stood
+back`, none of which a jump to now would have cleared on its own.
 
 **No control writes its own label.** PAUSE and LISTEN are both rendered from state in
 `update`. The note under them says `held` or `stood back` and never `silent`, because
@@ -1044,11 +1062,37 @@ detector reads the timbre, and the finding is the flat column: nothing the rate 
 introduces a jump that is not there at 1×. The level climbs to 60× because more of the
 pass is inside the window, then falls again as objects set and voices are let go.
 
-So the rate now attenuates instead: full at 1×, `rateDuck.to` (0.55) at 100×,
-logarithmic in between because the ladder is — measured live at 0.450, 0.349, 0.270,
-0.248 for 1/10/60/100×. The belt's bed stays audible at every rate, which also answers
-the thing a mute could not: a listener has no way to tell a silenced piece from a
-broken one.
+**The rate is heard as pitch, not as level** (`AUDIO.rateDrive`, added the same day).
+Attenuating alone answered only "the sound has not broken". Running the bed *up* makes
+the clock itself audible: `Drone.setRateCents` transposes every oscillator on that bus
+by up to +1900 cents at 100×, glided over `rateGlideSeconds`, and the bed climbs out of
+its sub-bass into a hum. Measured by spectral centroid over an offline render, 500 belt
+objects: **58 Hz at 1×, 112 at 10×, 165 at 60×, 181 at 100×** — a factor of 3.1, which
+is the 1900 cents.
+
+It is **the drone's alone**. The birds keep their register, because a satellite's own
+song is not what the clock is doing. There is a fair objection — the belt does not
+move, so why should it change with the rate? Because the bed is not the sound of five
+hundred objects; it is the sound of the sky they are the floor of, and that is what is
+running.
+
+**The transpose is an offset on a remembered base, never an overwrite.** Each
+oscillator's own `detune` is already spoken for — the bed's few cents of spread, a kept
+voice's place inside its slice — so `Drone.tuned` holds every node beside the detune it
+was born with. Stopped solos are spliced out of that list, or a page left playing all
+day would keep every dead voice in it; verified over three keep-and-release rounds,
+27 → 35 → 27.
+
+So the level attenuates *and* the pitch rises: full at 1×, `rateDuck.to` at 100×,
+logarithmic in between because the ladder is. That number **came down from 0.55 to
+0.30** when the transpose arrived, and the reason is the ear rather than the meter:
+equal-loudness puts hearing some 15 dB more sensitive at 181 Hz than at 58, so holding
+the old level would have made the hum arrive far louder than the drone it grew out of.
+−10.5 dB gives back about two thirds of that, leaving the rise plainly audible without
+it taking the room. Measured live at 0.450, 0.349, 0.270, 0.135 for 1/10/60/100×.
+
+The belt's bed stays audible at every rate, which also answers the thing a mute could
+not: a listener has no way to tell a silenced piece from a broken one.
 
 **Pause freezes the instrument; it does not silence it** (`AUDIO.paused`). The sound
 here is state plus events — where a thing is, how high, lit or eclipsed, and the

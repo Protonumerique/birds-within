@@ -116,12 +116,20 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
   const scrub = $<HTMLInputElement>('scrub');
 
   pauseBtn.onclick = () => clock.togglePause();
+  // NOW is the way back, not just a jump: it takes the clock to this instant, puts
+  // the rate back to 1x and lets a held clock go. Anything that reads as "where was
+  // I?" should be undone by one press, and a look-ahead left running at 100x is
+  // exactly that.
+  const rateSel = $<HTMLSelectElement>('rate');
   $('now').onclick = () => {
     clock.resetToNow();
+    clock.timeRate = 1;
+    rateSel.value = '1';
+    if (clock.isPaused) clock.togglePause();
     scrub.value = '0';
     lastScrub = 0;
   };
-  $<HTMLSelectElement>('rate').onchange = (e) => {
+  rateSel.onchange = (e) => {
     clock.timeRate = Number((e.target as HTMLSelectElement).value);
   };
 

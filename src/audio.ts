@@ -4,17 +4,18 @@ import { Drone } from './drone';
 import { Performers } from './performers';
 
 /**
- * How much of the master a given time rate is allowed, 1 at real time falling to
- * `AUDIO.rateDuck.to` at the top of the ladder.
+ * Where a time rate sits on the ladder, 0 at real time and 1 at the top.
  *
- * Logarithmic in the rate, because the ladder is: 1, 10, 60, 100 are four even steps
- * in the ear and four wildly uneven ones on a line.
+ * Logarithmic, because the ladder is: 1, 10, 60, 100 are four even steps in the ear
+ * and four wildly uneven ones on a line. Both things the rate does to the sound -
+ * standing the level back and running the drone up - read it.
  */
+function rateT(rate: number): number {
+  return rate <= 1 ? 0 : Math.min(1, Math.log(rate) / Math.log(AUDIO.rateDuck.fullAt));
+}
+
 function rateScale(rate: number): number {
-  const { to, fullAt } = AUDIO.rateDuck;
-  if (rate <= 1) return 1;
-  const t = Math.min(1, Math.log(rate) / Math.log(fullAt));
-  return 1 + (to - 1) * t;
+  return 1 + (AUDIO.rateDuck.to - 1) * rateT(rate);
 }
 
 /**
@@ -144,7 +145,12 @@ export class AudioEngine {
     // sky steps the sound back; a held one steps it further back and stops the
     // phrases. Both leave the belt's bed audible, which is what says the sound is
     // still there - a listener cannot tell silence from a fault.
-    const scale = paused ? AUDIO.paused.level : rateScale(Math.abs(timeRate));
+    const rate = Math.abs(timeRate);
+    const scale = paused ? AUDIO.paused.level : rateScale(rate);
+    // The clock made audible: the bed runs up towards a hum as the sky speeds up. A
+    // held clock keeps whatever transpose the rate asked for - the rate has not
+    // changed, only time has stopped - so pausing at 100x holds the hum.
+    this.drone.setRateCents(AUDIO.rateDrive.cents * rateT(rate));
     if (Math.abs(scale - this.scale) > 0.01) {
       this.scale = scale;
       this.applyMaster(AUDIO.duckSeconds);

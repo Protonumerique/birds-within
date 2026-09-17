@@ -211,6 +211,13 @@ const POINT_VERT = /* glsl */ `
   /** 1 on the object itself; less on each ghost behind it. See GHOST. */
   uniform float uGhostLevel;
   uniform float uGhostSize;
+  /**
+   * How far back along the blend this ghost's streak reaches, and the viewport in
+   * device pixels so the answer can be turned into a length on screen. Zero on the
+   * object itself, which is then a plain round sprite as before.
+   */
+  uniform float uGhostStreak;
+  uniform vec2 uViewport;
 
   varying float vAlpha;
   varying vec3 vColor;
@@ -222,6 +229,15 @@ const POINT_VERT = /* glsl */ `
   /** The sprite's size in device pixels. gl_PointSize is vertex-only - a fragment
       shader that reads it fails to compile, and the whole points draw disappears. */
   varying float vSizePx;
+  /** The streak's direction in sprite coordinates, and its length in device pixels. */
+  varying vec2 vStreak;
+  varying float vStreakPx;
+
+  /** Where a blended direction lands on screen, in device pixels. */
+  vec2 toScreen(vec3 dir) {
+    vec4 clip = projectionMatrix * modelViewMatrix * vec4(dir * uRadius, 1.0);
+    return (clip.xy / max(clip.w, 1e-6)) * 0.5 * uViewport;
+  }
 
   void main() {
     vec3 dir;
@@ -235,6 +251,8 @@ const POINT_VERT = /* glsl */ `
       vShard = 0.0;
       vSpin = vec2(1.0, 0.0);
       vSizePx = 0.0;
+      vStreak = vec2(1.0, 0.0);
+      vStreakPx = 0.0;
       return;
     }
 
@@ -254,6 +272,8 @@ const POINT_VERT = /* glsl */ `
       vShard = 0.0;
       vSpin = vec2(1.0, 0.0);
       vSizePx = 0.0;
+      vStreak = vec2(1.0, 0.0);
+      vStreakPx = 0.0;
       return;
     }
 
@@ -275,7 +295,31 @@ const POINT_VERT = /* glsl */ `
 
     // Nearer objects read as larger. Purely a depth cue - the dome has no scale.
     float nearness = clamp(1.0 - (range - 400.0) / 4000.0, 0.25, 1.0);
-    vSizePx = (above ? 16.0 : 8.0) * nearness * size * uPixelRatio * uGhostSize;
+    float dot16 = (above ? 16.0 : 8.0) * nearness * size * uPixelRatio * uGhostSize;
+
+    // A ghost is a streak, not a dot: it covers the gap back to the ghost behind it,
+    // so the trail joins up instead of reading as a row of beads. The span is worked
+    // out on screen rather than in the sky, because that is where the gap is - project
+    // both ends of this ghost's share of the chord and subtract.
+    vStreak = vec2(1.0, 0.0);
+    vStreakPx = 0.0;
+    vec2 here = toScreen(dir);
+    if (uGhostStreak != 0.0) {
+      vec3 back = mix(position, aDir1, uT + uGhostStreak);
+      if (dot(back, back) > 1e-12) {
+        vec2 delta = toScreen(normalize(back)) - here;
+        float len = length(delta);
+        if (len > 0.5) {
+          // gl_PointCoord runs downwards, clip space upwards.
+          vStreak = vec2(delta.x, -delta.y) / len;
+          vStreakPx = min(len, 96.0 * uPixelRatio);
+        }
+      }
+    }
+
+    // The sprite has to contain the capsule: a rectangle of L by w fits inside a
+    // square of side L + w at any rotation, so this is enough and no more.
+    vSizePx = dot16 + vStreakPx;
     gl_PointSize = vSizePx;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(dir * uRadius, 1.0);
   }
@@ -288,6 +332,22 @@ const POINT_FRAG = /* glsl */ `
   varying float vShard;
   varying vec2 vSpin;
   varying float vSizePx;
+  varying vec2 vStreak;
+  varying float vStreakPx;
+
+  /**
+   * Sweep a sprite along its streak: collapse the point onto the segment first and
+   * every shape below becomes its own capsule, drawn with the same code. A dot turns
+   * into a rounded stroke, a shard into a swept shard.
+   */
+  vec2 sweep(vec2 p) {
+    if (vStreakPx <= 0.0) return p;
+    float halfLen = 0.5 * vStreakPx / max(vSizePx, 1.0);
+    vec2 n = vec2(-vStreak.y, vStreak.x);
+    vec2 q = vec2(dot(p, vStreak), dot(p, n));
+    q.x = sign(q.x) * max(abs(q.x) - halfLen, 0.0);
+    return q.x * vStreak + q.y * n;
+  }
 
   /** iq's equilateral triangle, signed: negative inside. */
   float sdTriangle(vec2 p, float r) {
@@ -302,11 +362,11 @@ const POINT_FRAG = /* glsl */ `
   void main() {
     // Blending is additive, which multiplies rgb by alpha and adds: intensity
     // therefore belongs in rgb, and the alpha channel stays at 1.
-    vec2 d = gl_PointCoord - vec2(0.5);
+    vec2 d = sweep(gl_PointCoord - vec2(0.5));
 
     if (vShard > 0.5) {
       // Debris: a flat shard, turning. No core, no halo - it is not a light.
-      vec2 p = mat2(vSpin.x, -vSpin.y, vSpin.y, vSpin.x) * d;
+      vec2 p = mat2(vSpin.x, -vSpin.y, vSpin.y, vSpin.x) * d * (vSizePx / max(vSizePx - vStreakPx, 1.0));
       float t = sdTriangle(p, 0.40);
       // One-pixel edge, in sprite units, so it stays crisp at any size.
       float aa = 1.5 / max(vSizePx, 1.0);
@@ -316,8 +376,10 @@ const POINT_FRAG = /* glsl */ `
       return;
     }
 
-    // Soft round sprite with a hot core, so dense clusters still read as many.
-    float r = length(d) * 2.0;
+    // Soft round sprite with a hot core, so dense clusters still read as many. The
+    // radius is the DOT's width, not the sprite's - a streaked sprite is longer, and
+    // measuring against it would fatten the stroke as the trail grew.
+    float r = length(d) * 2.0 * vSizePx / max(vSizePx - vStreakPx, 1.0);
     if (r > 1.0) discard;
     float core = smoothstep(1.0, 0.0, r);
     float glow = pow(core, 2.5);
@@ -508,6 +570,9 @@ export class SkyScene {
     uT: { value: 0 },
     uGhostLevel: { value: 1 },
     uGhostSize: { value: 1 },
+    uGhostStreak: { value: 0 },
+    /** The drawing buffer in device pixels, for the ghosts' screen-space streak. */
+    uViewport: { value: new THREE.Vector2(1, 1) },
     uRadius: { value: SKY.radius },
     uPixelRatio: { value: 1 },
     uSinLowest: { value: Math.sin(THREE.MathUtils.degToRad(SKY.lowestVisibleDeg)) },
@@ -666,6 +731,7 @@ export class SkyScene {
             uT: { value: 0 },
             uGhostLevel: { value: GHOST.level * Math.pow(GHOST.falloff, k) },
             uGhostSize: { value: GHOST.size },
+            uGhostStreak: { value: 0 },
           },
           transparent: true,
           depthWrite: false,
@@ -841,6 +907,8 @@ export class SkyScene {
     for (let k = 0; k < this.ghosts.length; k++) {
       const ghost = this.ghosts[k]!;
       ghost.material.uniforms.uT!.value = now + this.ghostStep * (k + 1);
+      // Reach back one more step: this ghost's stroke ends where the next begins.
+      ghost.material.uniforms.uGhostStreak!.value = this.ghostStep;
       if (this.ghostStep === 0) ghost.visible = false;
     }
   }
@@ -1317,6 +1385,8 @@ export class SkyScene {
     const w = innerWidth;
     const h = innerHeight;
     this.renderer.setSize(w, h, false);
+    const ratio = this.renderer.getPixelRatio();
+    this.uniforms.uViewport.value.set(w * ratio, h * ratio);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.canvasRect = this.renderer.domElement.getBoundingClientRect();
@@ -1324,7 +1394,6 @@ export class SkyScene {
     this.trackMaterial.resolution.set(w, h);
     // The patch is a fixed square in CSS pixels; only a change of device pixel ratio
     // can resize it, so it is built once and kept.
-    const ratio = this.renderer.getPixelRatio();
     if (ratio !== this.patchPixelRatio) {
       this.patchPixelRatio = ratio;
       this.patch?.dispose();

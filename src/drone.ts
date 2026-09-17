@@ -84,6 +84,10 @@ export class Drone {
   private placeOf = new Map<number, number>();
   private members = 0;
   private lastRegroup = -Infinity;
+  /** Every oscillator on this bus and the detune it was born with. See `setRateCents`. */
+  private tuned: { node: OscillatorNode; base: number }[] = [];
+  /** The transpose the time rate is currently asking for, in cents. */
+  private rateCents = 0;
 
   constructor(private ctx: AudioContext, private out: AudioNode) {
     for (let k = 0; k < SLICES; k++) this.bed.push(this.makeBed(k));
@@ -171,9 +175,32 @@ export class Drone {
     const o = this.ctx.createOscillator();
     o.type = type;
     o.frequency.value = freq;
-    o.detune.value = detuneCents;
+    o.detune.value = detuneCents + this.rateCents;
     o.start();
+    // Its own detune is already spoken for - the bed's few cents of spread, a solo's
+    // place inside its slice - so the rate is carried as an offset on top of a
+    // remembered base, never by overwriting it.
+    this.tuned.push({ node: o, base: detuneCents });
     return o;
+  }
+
+  /**
+   * Transpose the whole bed, from the time rate. See AUDIO.rateDrive.
+   *
+   * The belt does not move, so nothing about *these objects* is faster - what is
+   * faster is the sky they are the floor of, and the drone is the one continuous
+   * voice in the piece that can carry a continuous quantity. Running it up towards a
+   * hum is the sound of the clock itself, and it is the answer to the question a mute
+   * could not answer: is this thing still on, and how fast is it going?
+   */
+  setRateCents(cents: number): void {
+    if (Math.abs(cents - this.rateCents) < 1) return;
+    this.rateCents = cents;
+    const now = this.ctx.currentTime;
+    for (const { node, base } of this.tuned) {
+      node.detune.cancelScheduledValues(now);
+      node.detune.setTargetAtTime(base + cents, now, D.rateGlideSeconds / 4);
+    }
   }
 
   /**
@@ -300,6 +327,10 @@ export class Drone {
     for (const o of voice.oscs) {
       o.stop();
       o.disconnect();
+      // Out of the transpose list too: a page left playing cycles through voices all
+      // day, and a list only ever appended to would keep every dead one.
+      const at = this.tuned.findIndex((t) => t.node === o);
+      if (at >= 0) this.tuned.splice(at, 1);
     }
     voice.filter.disconnect();
     voice.gain.disconnect();
