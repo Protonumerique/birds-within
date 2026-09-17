@@ -1,3 +1,5 @@
+import { FAMILY, type Family } from './catalog-format';
+
 /** Where the observer stands. Everything in this app is relative to this point. */
 export const OBSERVER = {
   name: 'Berlin',
@@ -391,6 +393,20 @@ export const CLOCK = {
 };
 
 /**
+ * Which voice each family sings with.
+ *
+ * Typed as a **total** map over `Family` rather than an array or a lookup with a
+ * fallback, so adding a family to `FAMILY` and forgetting to give it a voice is a
+ * compile error rather than a satellite that quietly sings the default.
+ */
+const FAMILY_VOICE: Record<Family, 'none' | 'starlink' | 'iridium' | 'military'> = {
+  [FAMILY.NONE]: 'none',
+  [FAMILY.STARLINK]: 'starlink',
+  [FAMILY.IRIDIUM]: 'iridium',
+  [FAMILY.MILITARY]: 'military',
+};
+
+/**
  * Sound - Step 4, beginning with the drone.
  *
  * The belt sings and nothing else does, yet. `src/drone.ts` builds the bed; the
@@ -577,19 +593,123 @@ export const AUDIO = {
     octaves: 3,
     /** How far ahead phrases are scheduled, seconds. Web Audio wants a lookahead. */
     lookaheadSeconds: 0.35,
-    bird: {
-      /** Chirps in one phrase, inclusive. */
-      perPhrase: [2, 5],
-      chirpMs: [60, 170],
-      /** Silence between chirps inside a phrase. */
-      spacingMs: [35, 120],
-      /** Silence between phrases. Birds are not metronomes; this is the main variable. */
-      gapMs: [900, 2600],
-      /** How far a chirp sweeps, as a frequency ratio. Up or down, per object. */
-      sweep: [1.15, 1.9],
-      /** Lowpass in umbra and in sunlight. */
-      cutoffHz: [700, 5400],
+    /**
+     * **Which bird a bird is.** The `family` byte the build packs picks one of these;
+     * anything untagged gets `none`, which is the whistle the piece started with.
+     * `kind` still decides the class - a Starlink rocket body is a machine and a
+     * Starlink fragment is a shard - so this only ever refines a payload.
+     *
+     * The point is the megaconstellations. Starlink is thousands of objects, and a
+     * name in the list ought to have a sound you already recognise before you read it;
+     * hearing a *skein* rather than a solo is the constellation becoming audible as a
+     * constellation. Everything else follows from wanting that to be legible: the
+     * families have to differ in register, timbre and **rhythm**, not just in pitch.
+     *
+     * Each voice is a full parameter set rather than a patch on a default, because a
+     * family that differs in one number is not a family.
+     */
+    voices: {
+      /** The default whistle: a songbird, sine, phrases of quick swept chirps. */
+      none: {
+        wave: 'sine' as OscillatorType,
+        octaveShift: 0,
+        q: 0.9,
+        perPhrase: [2, 5],
+        noteMs: [60, 170],
+        spacingMs: [35, 120],
+        gapMs: [900, 2600],
+        /** How far a note sweeps, as a frequency ratio, and how often it sweeps up. */
+        sweep: [1.15, 1.9],
+        rise: 0.5,
+        cutoffHz: [700, 5400],
+        /** Fraction of a note held before it releases - see `strike`. */
+        hold: 0.7,
+        attack: 0.006,
+        /** A parallel high-Q band that rings when the note is struck. 0 is off. */
+        ring: 0,
+        /** Soft clipping, for a voice that should sound forced rather than blown. */
+        drive: 0,
+        /**
+         * **Measured, and corrected for register.** These are not proportional to
+         * anything: the ear is roughly 6 dB less sensitive at 220 Hz than at 1 kHz and
+         * 8 dB less at 175, so the low families have to measure *hotter* than the
+         * songbird to sit level with it. Tuning them by RMS alone buried the geese.
+         */
+        gain: 1,
+      },
+      /**
+       * **Starlink: geese.** Long nasal honks that fall slightly, one or two at a time,
+       * with real silence between - so a dozen kept at once interleave into a skein
+       * instead of a chord. Low, because the whole point is that it is not a songbird.
+       */
+      starlink: {
+        wave: 'sawtooth' as OscillatorType,
+        octaveShift: -1,
+        q: 3.2,
+        perPhrase: [1, 2],
+        noteMs: [180, 380],
+        spacingMs: [120, 260],
+        gapMs: [1400, 3600],
+        sweep: [1.02, 1.16],
+        rise: 0.15,
+        cutoffHz: [500, 2200],
+        hold: 0.55,
+        attack: 0.05,
+        ring: 0,
+        drive: 0.35,
+        gain: 1.35,
+      },
+      /**
+       * **Iridium: starlings.** Metallic chatter - many very short notes, wide sweeps,
+       * and a high-Q band ringing behind each one. Iridium is the constellation whose
+       * flares people used to plan evenings around, and a ringing, rattling voice is
+       * the one that says *metal* rather than *bird*. Not peepy: the ring carries it.
+       */
+      iridium: {
+        wave: 'square' as OscillatorType,
+        octaveShift: 1,
+        q: 1.2,
+        perPhrase: [4, 9],
+        noteMs: [25, 70],
+        spacingMs: [18, 55],
+        gapMs: [700, 1900],
+        sweep: [1.3, 2.6],
+        rise: 0.5,
+        cutoffHz: [1200, 7000],
+        hold: 0.35,
+        attack: 0.002,
+        ring: 0.6,
+        drive: 0.15,
+        gain: 0.55,
+      },
+      /**
+       * **Military and radar: big squawking birds.** Low, harsh and slow, and every
+       * note *falls* - a squawk drops, it does not lift. Long gaps, so one of these
+       * under a field of songbirds is a presence rather than a texture.
+       */
+      military: {
+        wave: 'sawtooth' as OscillatorType,
+        octaveShift: -2,
+        q: 5,
+        perPhrase: [1, 3],
+        noteMs: [220, 520],
+        spacingMs: [180, 420],
+        gapMs: [1800, 4200],
+        sweep: [1.35, 2.2],
+        rise: 0.04,
+        cutoffHz: [320, 1500],
+        hold: 0.7,
+        attack: 0.02,
+        ring: 0.2,
+        drive: 0.6,
+        gain: 0.8,
+      },
     },
+    /** Which voice each `FAMILY` value sings with. See FAMILY_VOICE. */
+    familyVoice: FAMILY_VOICE,
+    /** The inharmonic multiple the ring sits at, and how sharp it is. Bell, not tone. */
+    ringRatio: 2.76,
+    ringQ: 20,
     machine: {
       /** Lower than the birds, and it does not sweep. */
       octaveDown: 2,

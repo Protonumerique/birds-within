@@ -75,8 +75,9 @@ it would use.
 
 **Packed.** `src/catalog-format.ts` is a columnar little-endian binary: a column per
 field, angles ×1e4 and eccentricity / mean motion ×1e8 as int32, the drag terms as
-float64, names in a UTF-8 blob, plus a `kind` byte (debris / rocket body / other) read
-from the name — a heuristic, but enough to read density composition. The encoder checks
+float64, names in a UTF-8 blob, a `kind` byte (debris / rocket body / other) read from
+the name — a heuristic, but enough to read density composition — and since **format
+version 2** a `family` byte, which is not a heuristic: see *Families* under **Sound**. The encoder checks
 that every scaled value round-trips **bit-exactly** and falls back to float64 per field if
 one does not, recording the choice in the header. Columnar beats row layout because whole
 constellation shells share values; measured on `active`: JSON 1,030 KB gzipped, row
@@ -826,6 +827,72 @@ performers, twelve belt voices — frames ran p50 26.3 / p95 30.7 ms silent and 
 sounding, on a software rasteriser. What *does* cost is the eighteen marks themselves:
 their tracks, rings and rows are about 4.6 ms. Attribute it to the right thing.
 
+#### Families: which bird a bird is
+
+Added 2026-09-17. `STARLINK` sings as geese, `IRIDIUM` as starlings, and anything
+CelesTrak files under `military` or `radar` as something big and squawking. Everything
+else keeps the whistle the piece started with. The byte is decided by the **build** and
+packed; the browser only reads it.
+
+**Join on the catalog number, not the name.** This is the whole design decision. Every
+GP record carries `NORAD_CAT_ID`, and so does the packed catalogue — it is the sort key.
+CelesTrak publishes the hard cases as *groups*, so membership is theirs to define and
+ours to read: fetch `GROUP=military`, take its catalog numbers, join. Name matching was
+the obvious idea and is the worse one, and the fixture test shows exactly why — our
+catalogue calls 55841 `COSMOS 2553` and the military list calls it `COSMOS-2553`, and
+39232 is `USA 245` against `USA-245 (KH-11)`. A name join tags neither; a number join
+tags both, and goes on working when an object is renamed.
+
+**Names are still right for the megaconstellations, and only for them.** Every Starlink
+is `STARLINK-####` and every Iridium `IRIDIUM ###` — the convention is absolute, so the
+rule costs nothing and cannot drift. Fetching `GROUP=starlink` instead would make it the
+largest download in the pipeline, four times a day, to learn something the name already
+says. So a family is a name pattern, a set of groups, or both; first match wins, and
+`scripts/catalog-sources.mjs` is the only place that knows any of it.
+
+The two group lists are `tagOnly` sources: fetched the same timid way, **not** unioned
+into the catalogue. They are payloads `active` already has, and what is wanted is the
+list of numbers. Two more small requests per cycle against a budget of 100 MB a day.
+
+**`kind` still decides what an object is.** A Starlink rocket body is a machine and a
+Starlink fragment is a shard; the family only chooses which bird a *bird* is. That
+ordering is what keeps the wreckage grammar intact.
+
+The voices, in `AUDIO.performer.voices` — each a full parameter set rather than a patch
+on a default, because a family that differs in one number is not a family:
+
+| | wave | register | rhythm | ring |
+|---|---|---|---|---|
+| none | sine | — | 2–5 quick swept chirps | — |
+| starlink | sawtooth, driven | −1 octave | 1–2 long falling honks, long gaps | — |
+| iridium | square | +1 octave | 4–9 very short notes, wide sweeps | 2.76× base, Q 20 |
+| military | sawtooth, driven hard | −2 octaves | 1–3 slow falling squawks | 2.76× base, Q 20 |
+
+Measured alone, mid-pass at 45°: none −38.2 dBFS, starlink −35.1, iridium −36.9,
+military −32.6; all four at once −29.2, peak 0.385. **Those are corrected for register,
+not levelled by RMS.** The ear is roughly 6 dB less sensitive at 220 Hz than at 1 kHz and
+8 dB less at 175, so the low families have to *measure* hotter to sit level. Tuning them
+by RMS alone buried the geese 5.5 dB under the songbirds.
+
+**`FAMILY_VOICE` is a total map over `Family`**, not an array or a lookup with a
+fallback, so adding a family and forgetting to give it a voice is a compile error rather
+than a satellite that quietly sings the default.
+
+**How to verify the join without CelesTrak.** This environment cannot reach
+celestrak.org, and in general nothing should be fetched casually — their terms are
+enforced. So the join is tested against a fixture: write a fake `.catalog-cache/` with a
+handful of records whose names deliberately disagree between the catalogue and the group
+lists, run `pack-catalog.mjs`, and assert each object's family. That covers precedence
+too — `STARLINK-30000` appears in the military list and must still come out Starlink. The
+real per-family counts appear in `check:catalog`'s output on the next CI run, which is
+also the gate: all families empty on `full` fails the deploy, a thin one does not,
+because an untagged object sings the default voice and that is not wrong.
+
+`synthetic.bin` carries the families too — its Starlink and Iridium shells are named so
+the *name* rules match them by exactly the path production takes, at the real altitudes
+and inclinations. The military shell is tagged explicitly, which it has to be: there is
+no group list offline, and that is a stand-in for the join rather than a second rule.
+
 #### Both buses
 
 **Sound runs at real time and nowhere else** (`AUDIO.maxTimeRate`). Above 1× the master
@@ -843,19 +910,13 @@ it at all is that it is 2.5e-5 of a 145 MHz carrier: a 3.6 kHz slide in the beat
 `dopplerCentsPerKmS` scales it into the audio band, which is not a cheat but the same
 operation the metaphor was built on.
 
-**There is no purpose data in the pipeline**, so the softer-weather / bolder-telecom /
-bassier-military voicing cannot be built yet: `kind` is a name heuristic and CelesTrak's
-GP data carries no object type at all. CelesTrak does publish classified lists on its TLE
-pages, and parsing those into an optional catalogue field is the way in when it is wanted.
-Deferred on purpose, not forgotten.
-
-**The same table would give species**, which is the more interesting half of it. A
-family of satellites sharing a call — Starlink as geese, so that the megaconstellation is
-audible *as* a constellation and a name in the list has a sound you already recognise —
-needs nothing more than a name prefix, which every object already carries. It does not
-need SATCAT and it does not need purpose. Alongside it: rougher calls than the present
-whistle, on the vocabulary the metaphor already supplies — caw, honk, squawk, cackle.
-Both noted 2026-09-17 and deliberately not built yet.
+**Purpose is still not in the pipeline**, and the family table is how it would arrive
+when it is wanted. The softer-weather / bolder-telecom voicing needs no new mechanism
+now: CelesTrak publishes `weather`, `intelsat`, `ses` and the navigation constellations
+as groups, so each is a row in `FAMILIES` and a voice in `AUDIO.performer.voices`. What
+it costs is one more small fetch per group per cycle. `kind` remains a name heuristic and
+GP data still carries no object type at all; the families go around that rather than
+through it.
 
 
 ## Deployment
@@ -1005,11 +1066,13 @@ Anything that computes range rate by hand must not repeat the naive version.
   - [x] **The interference.** A kept shard is a continuous band of noise; it bends the
         pitch, amplitude and colour of every voice within 45° of it, and tears a small
         disc of the picture around itself. Counts kept shards, not every fragment.
-  - [ ] **Bird species.** More aggressive calls — caw, honk, squawk, cackle — as rougher
-        timbres beside the present whistle, and **voices by family**: Starlink as geese,
-        so the megaconstellation is audible *as* a constellation. Needs a curated
-        name-prefix table, which is the same table the purpose voicing wants; see the
-        note at the end of this section. The strongest remaining idea in the sound.
+  - [x] **Bird species.** Starlink as geese, Iridium as ringing starlings, military and
+        radar as heavy squawks, everything else the original whistle. Tagged at build
+        time and packed as a byte — by a join on catalog number against CelesTrak's own
+        group lists, by name only for the megaconstellations. See *Families*.
+  - [ ] **More of them.** Weather, telecoms and the navigation constellations are each
+        a row in `FAMILIES` and a voice, now that the mechanism exists. And a wider
+        vocabulary of calls than the four here — caw, cackle, the rest of it.
   - [ ] **HRTF.** `PannerNode` behind a flag, on the same direction vectors, once the
         stereo mapping is known to be right.
 
@@ -1030,7 +1093,10 @@ Anything that computes range rate by hand must not repeat the naive version.
   2 hours, so running it repeatedly is safe — do not work around that.
 - `public/data/synthetic.bin` **is** committed. `npm run make:synthetic` regenerates it:
   deterministic, drag-free so it never decays, and **not real objects**. It exists so a
-  fresh clone runs offline; nothing may be concluded from it.
+  fresh clone runs offline; nothing may be concluded from it. **Any change to
+  `catalog-format.ts` that bumps `FORMAT_VERSION` has to regenerate it in the same
+  commit** - `active.bin` and `full.bin` are rebuilt by every deploy and cannot go
+  stale, but this one is in git and a browser refuses a version it does not read.
 - The readout lists only the highest few of each group above the horizon, refreshed at
   4 Hz. At catalogue scale there is no listing the whole thing, and rebuilding rows every
   frame is wasted DOM work. Passing, debris and the belt are three separate groups — see

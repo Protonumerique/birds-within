@@ -108,6 +108,8 @@ export type FromWorker =
       names: string[];
       kind: Uint8Array;
       /** 1 where the object is in the geosynchronous belt - see isGeosynchronous. */
+      /** Voice family per object, decided by the build. See FAMILY. */
+      family: Uint8Array;
       choir: Uint8Array;
       /** Element sets SGP4 rejected at init - decayed or corrupt. */
       dropped: number;

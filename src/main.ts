@@ -57,7 +57,7 @@ async function main() {
   const clock = new Clock();
   const scene = new SkyScene(canvas, stream.count);
   const selection = new Selection();
-  const audio = new AudioEngine(stream.choir, stream.kind);
+  const audio = new AudioEngine(stream.choir, stream.kind, stream.family);
   scene.setClasses(stream.choir, stream.kind);
   const hud = createHud(hudRoot, clock, {
     names: stream.names,

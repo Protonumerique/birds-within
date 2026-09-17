@@ -36,7 +36,7 @@ export class AudioEngine {
    * to, and what it sounds like, are facts about the object rather than the caller's
    * business, so the engine keeps them and does the splitting itself.
    */
-  constructor(private choir: Uint8Array, private kind: Uint8Array) {}
+  constructor(private choir: Uint8Array, private kind: Uint8Array, private family: Uint8Array) {}
 
   /** Whether the user has asked for sound, whatever the time rate is doing to it. */
   get enabled(): boolean {
@@ -131,7 +131,7 @@ export class AudioEngine {
     this.ctx = ctx;
     this.master = master;
     this.drone = new Drone(ctx, master);
-    this.performers = new Performers(ctx, master, this.kind);
+    this.performers = new Performers(ctx, master, this.kind, this.family);
   }
 
   /** `seconds` is how long the move takes: a deliberate fade, or a quick duck. */

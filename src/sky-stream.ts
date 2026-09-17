@@ -55,6 +55,8 @@ export class SkyStream {
   readonly count: number;
   readonly names: string[];
   readonly kind: Uint8Array;
+  /** Which family of birds each object sings with. See FAMILY in catalog-format.ts. */
+  readonly family: Uint8Array;
   /** 1 where the object is in the geosynchronous belt: the choir, which never sets. */
   readonly choir: Uint8Array;
   readonly dropped: number;
@@ -91,6 +93,7 @@ export class SkyStream {
     this.count = ready.count;
     this.names = ready.names;
     this.kind = ready.kind;
+    this.family = ready.family;
     this.choir = ready.choir;
     this.dropped = ready.dropped;
     this.generatedAt = new Date(ready.generatedAt);

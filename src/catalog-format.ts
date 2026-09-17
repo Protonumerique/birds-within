@@ -41,12 +41,13 @@
  *       f64 x N     epoch, ms since 1970
  *       per FIELD   i32 x N or f64 x N, per the field mask
  *       u8  x N     kind, see KIND
+ *       u8  x N     family, see FAMILY
  *       u32 x N+1   name offsets into the blob
  *       u8  x names UTF-8 names
  */
 
 export const MAGIC = 0x54435742; // 'BWCT' read as a little-endian u32
-export const FORMAT_VERSION = 1;
+export const FORMAT_VERSION = 2;
 const HEADER_BYTES = 32;
 
 /** The OMM fields json2satrec reads, plus the name. */
@@ -63,6 +64,17 @@ export interface OmmElements {
   BSTAR: number;
   MEAN_MOTION_DOT: number;
   MEAN_MOTION_DDOT: number;
+}
+
+/**
+ * What the packer hands in: the elements, plus the tags it worked out.
+ *
+ * `OmmElements` stays exactly what `json2satrec` reads, so a tag can never leak into
+ * a satrec. Anything the build decides about an object rides alongside instead.
+ */
+export interface PackedRecord extends OmmElements {
+  /** Voice family, decided at build time. See FAMILY, and scripts/catalog-sources.mjs. */
+  FAMILY?: number;
 }
 
 type NumericField = Exclude<keyof OmmElements, 'OBJECT_NAME' | 'NORAD_CAT_ID' | 'EPOCH'>;
@@ -89,6 +101,21 @@ const FIELDS: readonly (readonly [NumericField, number])[] = [
  * classification: an unnamed fragment reads as OTHER.
  */
 export const KIND = { OTHER: 0, ROCKET_BODY: 1, DEBRIS: 2 } as const;
+
+/**
+ * Which family of birds an object sings with. **Nothing here is guessed at runtime** -
+ * the byte is decided by the build and packed, so the browser only reads it.
+ *
+ * Unlike `kind`, this is *not* a name heuristic across the board. Most of it is a join
+ * on NORAD catalog number against CelesTrak's own published group lists, which is
+ * exact; only the megaconstellations are taken from the name, where the convention is
+ * absolute and the group file would be the biggest download in the pipeline. The rules
+ * live in scripts/catalog-sources.mjs, which is the only place that knows them.
+ *
+ * Adding a family is a row in that table and a voice in AUDIO.performer.voices.
+ */
+export const FAMILY = { NONE: 0, STARLINK: 1, IRIDIUM: 2, MILITARY: 3 } as const;
+export type Family = (typeof FAMILY)[keyof typeof FAMILY];
 export type Kind = (typeof KIND)[keyof typeof KIND];
 
 export function kindFromName(name: string): Kind {
@@ -142,6 +169,8 @@ export interface PackedCatalog {
   catnr: Uint32Array;
   epochMs: Float64Array;
   kind: Uint8Array;
+  /** Voice family per object, decided by the build. See FAMILY. */
+  family: Uint8Array;
   names: string[];
   /** Rebuild the OMM object json2satrec wants for object i. */
   elementsAt(i: number): OmmElements;
@@ -155,7 +184,7 @@ function assertLittleEndian() {
   }
 }
 
-export function encodeCatalog(input: readonly OmmElements[], generatedAt: Date): ArrayBuffer {
+export function encodeCatalog(input: readonly PackedRecord[], generatedAt: Date): ArrayBuffer {
   assertLittleEndian();
   const records = input.slice().sort((a, b) => a.NORAD_CAT_ID - b.NORAD_CAT_ID);
   const n = records.length;
@@ -185,7 +214,8 @@ export function encodeCatalog(input: readonly OmmElements[], generatedAt: Date):
     4 * n,
     8 * n,
     ...FIELDS.map((_, bit) => (mask & (1 << bit) ? 4 : 8) * n),
-    n,
+    n, // kind
+    n, // family
     4 * (n + 1),
     namesSize,
   ];
@@ -235,6 +265,11 @@ export function encodeCatalog(input: readonly OmmElements[], generatedAt: Date):
 
   const kind = section((at) => new Uint8Array(buf, at, n));
   records.forEach((r, i) => (kind[i] = kindFromName(r.OBJECT_NAME)));
+
+  // Rides on the record rather than being derived here: most of it comes from a join
+  // against CelesTrak's group lists, which this file cannot see and must not import.
+  const family = section((at) => new Uint8Array(buf, at, n));
+  records.forEach((r, i) => (family[i] = r.FAMILY ?? FAMILY.NONE));
 
   const offsets = section((at) => new Uint32Array(buf, at, n + 1));
   const names = section((at) => new Uint8Array(buf, at, namesSize));
@@ -314,6 +349,7 @@ export function decodeCatalog(input: ArrayBuffer | Uint8Array): PackedCatalog {
     return { key, divisor: scaled ? scale : 1, col };
   });
   const kind = section((at) => new Uint8Array(buf, at, n));
+  const family = section((at) => new Uint8Array(buf, at, n));
   const offsets = section((at) => new Uint32Array(buf, at, n + 1));
   const nameBlob = section((at) => new Uint8Array(buf, at, namesSize));
 
@@ -332,6 +368,7 @@ export function decodeCatalog(input: ArrayBuffer | Uint8Array): PackedCatalog {
     catnr,
     epochMs,
     kind,
+    family,
     names,
     elementsAt(i) {
       const out = {

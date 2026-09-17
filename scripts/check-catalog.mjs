@@ -12,7 +12,7 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { json2satrec } from 'satellite.js';
-import { decodeCatalog, KIND } from '../src/catalog-format.ts';
+import { FAMILY, decodeCatalog, KIND } from '../src/catalog-format.ts';
 import { CACHE_DIR, DATASETS, ROOT } from './catalog-sources.mjs';
 
 /** 16,563 on 2026-09-13. Far fewer means a truncated or partial download. */
@@ -50,12 +50,32 @@ async function check(name) {
     else kinds.other++;
   }
 
+  // Families are cosmetic - an untagged object sings the default voice - so a thin
+  // one is reported and not fatal. All of them empty means the mechanism broke, and
+  // that is worth stopping for. Checked on `full` only; `active` is a subset of it.
+  const families = new Map();
+  for (const f of cat.family) families.set(f, (families.get(f) ?? 0) + 1);
+  const tagged = cat.count - (families.get(FAMILY.NONE) ?? 0);
+  const byFamily = [...families]
+    .filter(([f]) => f !== FAMILY.NONE)
+    .sort((a, b) => b[1] - a[1])
+    .map(([f, n]) => `${n} in family ${f}`)
+    .join(', ');
+
   const ageDays = (Date.now() - cat.generatedAt.getTime()) / 86_400_000;
   console.log(
     `  ${name.padEnd(9)}${String(cat.count).padStart(7)} objects  ` +
       `${kinds.debris} debris / ${kinds.rocket} rocket bodies / ${kinds.other} other  ` +
-      `SGP4 init errors ${initErrors}  elements ${ageDays.toFixed(1)} days old`
+      `SGP4 init errors ${initErrors}  elements ${ageDays.toFixed(1)} days old\n` +
+      `  ${' '.repeat(9)}${byFamily || 'no families tagged'}`
   );
+
+  if (name === 'full' && tagged === 0) {
+    failures.push(
+      'full.bin has no object in any family - the tagging in scripts/catalog-sources.mjs ' +
+        'reached nothing, so every bird would sing the same voice'
+    );
+  }
 
   if (initErrors / cat.count > MAX_INIT_ERROR_RATE) {
     failures.push(`${name}: ${initErrors} of ${cat.count} element sets fail SGP4 init`);

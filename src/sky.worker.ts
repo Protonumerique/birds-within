@@ -92,6 +92,7 @@ async function init(bytes: ArrayBuffer, geodetic: GeodeticObserver) {
   const satrecs: SatRec[] = [];
   const names: string[] = [];
   const kinds: number[] = [];
+  const families: number[] = [];
   const choirs: number[] = [];
   let dropped = 0;
   for (let i = 0; i < packed.count; i++) {
@@ -104,6 +105,7 @@ async function init(bytes: ArrayBuffer, geodetic: GeodeticObserver) {
     satrecs.push(satrec);
     names.push(packed.names[i]!);
     kinds.push(packed.kind[i]!);
+    families.push(packed.family[i]!);
     // Read from the elements, here, because this is the only place they exist: the
     // render thread transfers the catalogue away and never sees a mean motion.
     choirs.push(isGeosynchronous(elements) ? 1 : 0);
@@ -124,6 +126,7 @@ async function init(bytes: ArrayBuffer, geodetic: GeodeticObserver) {
   sky = { satrecs, runtime, propagator, observer, observerEcf: geodeticToEcf(observer) };
 
   const kind = Uint8Array.from(kinds);
+  const family = Uint8Array.from(families);
   const choir = Uint8Array.from(choirs);
   post(
     {
@@ -131,12 +134,13 @@ async function init(bytes: ArrayBuffer, geodetic: GeodeticObserver) {
       count: satrecs.length,
       names,
       kind,
+      family,
       choir,
       dropped,
       generatedAt: packed.generatedAt.getTime(),
       initMs: performance.now() - started,
     },
-    [kind.buffer, choir.buffer]
+    [kind.buffer, family.buffer, choir.buffer]
   );
 }
 

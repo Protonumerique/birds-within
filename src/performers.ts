@@ -1,5 +1,5 @@
 import { AUDIO, HIGHLIGHT, INTERFERENCE } from './config';
-import { KIND } from './catalog-format';
+import { FAMILY, KIND, type Family } from './catalog-format';
 import type { SkyFrame } from './sky-frame';
 
 /**
@@ -33,6 +33,8 @@ const NEAR_COS = Math.cos((I.nearDeg * Math.PI) / 180);
 const FAR_COS = Math.cos((I.farDeg * Math.PI) / 180);
 
 type Timbre = 'bird' | 'machine' | 'shard';
+/** One family's whole parameter set - see AUDIO.performer.voices. */
+type BirdVoice = (typeof P.voices)['none'];
 
 const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -60,6 +62,10 @@ interface Voice {
   noise: AudioBufferSourceNode | null;
   /** The shard's swish and pulse, and every other voice's interference wobble. */
   lfos: OscillatorNode[];
+  /** Which family this bird sings with, or null for a machine or a shard. */
+  look: BirdVoice | null;
+  /** The high-Q band that rings behind each note, where a family asks for one. */
+  ring: BiquadFilterNode | null;
   /** How far a passing shard bends this voice's pitch, amplitude and colour. */
   warpPitch: GainNode | null;
   warpAm: GainNode | null;
@@ -86,8 +92,35 @@ export class Performers {
   private noiseBuffer: AudioBuffer | null = null;
   /** Indices of the shards currently sounding. Rebuilt per update, never reallocated. */
   private shards: number[] = [];
+  /** Soft-clip curves, one per distinct drive amount, built once. */
+  private curves = new Map<number, Float32Array<ArrayBuffer>>();
+  /** Every shaper made, so `dispose` can let them go with the rest. */
+  private shapers: WaveShaperNode[] = [];
 
-  constructor(private ctx: AudioContext, private out: AudioNode, private kind: Uint8Array) {}
+  constructor(
+    private ctx: AudioContext,
+    private out: AudioNode,
+    private kind: Uint8Array,
+    private family: Uint8Array
+  ) {}
+
+  /**
+   * A soft-clip curve, cached per amount. `0` is never asked for - a voice with no
+   * drive is wired straight through rather than through an identity shaper.
+   */
+  private driveCurve(amount: number): Float32Array<ArrayBuffer> {
+    const cached = this.curves.get(amount);
+    if (cached) return cached;
+    const n = 1024;
+    const curve = new Float32Array(n);
+    const k = amount * 40;
+    for (let i = 0; i < n; i++) {
+      const x = (i * 2) / (n - 1) - 1;
+      curve[i] = ((1 + k) * x) / (1 + k * Math.abs(x));
+    }
+    this.curves.set(amount, curve);
+    return curve;
+  }
 
   /** `kept` is every marked object that is not in the belt. */
   update(frame: SkyFrame, kept: readonly number[], heading: number): void {
@@ -135,13 +168,16 @@ export class Performers {
     for (const v of [...this.voices.values(), ...this.dying]) this.stop(v);
     this.voices.clear();
     this.dying.length = 0;
+    for (const shaper of this.shapers) shaper.disconnect();
+    this.shapers.length = 0;
   }
 
   // --- per frame -------------------------------------------------------------
 
   /** Everything continuous: level from elevation, pan from direction, colour from shadow. */
   private steer(v: Voice, frame: SkyFrame, i: number, rx: number, rz: number, now: number): void {
-    const gain = P.gain * P.timbreGain[v.timbre] * byElevation(frame.elevation[i]!);
+    const gain =
+      P.gain * P.timbreGain[v.timbre] * (v.look?.gain ?? 1) * byElevation(frame.elevation[i]!);
     // The same ramp does two jobs: the voice's arrival, since `level` starts at zero,
     // and its swell as the object climbs. Elevation changes slowly enough that one
     // time constant covers both.
@@ -158,7 +194,7 @@ export class Performers {
 
     // Sunlit is bright, eclipsed is muffled. `shadow` is 0 in full sunlight and 1 in
     // the umbra, and it is the one column nothing else in the audio path reads.
-    const band = v.timbre === 'bird' ? P.bird.cutoffHz : P.machine.cutoffHz;
+    const band = v.look ? v.look.cutoffHz : P.machine.cutoffHz;
     const cutoff = pick(band, 1 - clamp(frame.shadow[i]!, 0, 1));
     v.filter.frequency.setTargetAtTime(cutoff, now, 0.4);
 
@@ -211,12 +247,14 @@ export class Performers {
    */
   private birdPhrase(v: Voice, at: number): number {
     const i = v.index;
-    const n = Math.round(pick(P.bird.perPhrase, hash(i, 1)));
-    const chirp = pick(P.bird.chirpMs, hash(i, 2)) / 1000;
-    const spacing = pick(P.bird.spacingMs, hash(i, 3)) / 1000;
-    const sweep = pick(P.bird.sweep, hash(i, 4));
-    // Half the birds sweep up and half down, decided once per object.
-    const rising = hash(i, 5) < 0.5;
+    const look = v.look!;
+    const n = Math.round(pick(look.perPhrase, hash(i, 1)));
+    const chirp = pick(look.noteMs, hash(i, 2)) / 1000;
+    const spacing = pick(look.spacingMs, hash(i, 3)) / 1000;
+    const sweep = pick(look.sweep, hash(i, 4));
+    // Which way a note sweeps is the family's business: a songbird goes either way,
+    // a goose falls a little, a squawk falls hard.
+    const rising = hash(i, 5) < look.rise;
     const from = rising ? v.baseHz / sweep : v.baseHz * sweep;
     const to = rising ? v.baseHz * sweep : v.baseHz / sweep;
 
@@ -227,10 +265,10 @@ export class Performers {
       const dur = chirp * jitter;
       v.osc!.frequency.setValueAtTime(from, t);
       v.osc!.frequency.exponentialRampToValueAtTime(to, t + dur);
-      this.strike(v, t, dur, 0.006, 0.7);
+      this.strike(v, t, dur, look.attack, look.hold);
       t += dur + spacing * jitter;
     }
-    return t + pick(P.bird.gapMs, hash(i, 6)) / 1000;
+    return t + pick(look.gapMs, hash(i, 6)) / 1000;
   }
 
   /** A spent stage is not a bird: lower, duller and regular, which is the point. */
@@ -286,8 +324,14 @@ export class Performers {
     let warpPitch: GainNode | null = null;
     let warpAm: GainNode | null = null;
     let warpCut: GainNode | null = null;
+    let ring: BiquadFilterNode | null = null;
     const lfos: OscillatorNode[] = [];
     let baseHz = 0;
+
+    // A payload's family only refines a bird. A machine and a shard are what `kind`
+    // says they are whatever constellation they were launched with.
+    const look: BirdVoice | null =
+      timbre === 'bird' ? P.voices[P.familyVoice[(this.family[index] ?? FAMILY.NONE) as Family]] : null;
 
     /** An LFO driving an AudioParam, at `depth` either side of whatever that param is. */
     const modulate = (rateHz: number, depth: number, target: AudioParam): GainNode => {
@@ -323,18 +367,44 @@ export class Performers {
       noise.start();
     } else {
       filter.type = 'lowpass';
-      filter.Q.value = 0.9;
+      filter.Q.value = look ? look.q : 0.9;
       // Pitch from the object's own hash, quantised to a pentatonic so several kept
       // at once are a chord rather than a cluster.
       const ratio = P.ratios[Math.floor(hash(index, 0) * P.ratios.length) % P.ratios.length]!;
       const octave = Math.floor(hash(index, 9) * P.octaves);
       baseHz = P.rootHz * ratio * 2 ** octave;
       if (timbre === 'machine') baseHz /= 2 ** P.machine.octaveDown;
+      else if (look) baseHz *= 2 ** look.octaveShift;
       osc = ctx.createOscillator();
-      osc.type = timbre === 'machine' ? 'sawtooth' : 'sine';
+      osc.type = look ? look.wave : 'sawtooth';
       osc.frequency.value = baseHz;
-      osc.connect(vca);
       osc.start();
+
+      // Soft clipping, where a family should sound forced rather than blown. It sits
+      // before the envelope so the drive is constant and only the level moves.
+      if (look && look.drive > 0) {
+        const shaper = ctx.createWaveShaper();
+        shaper.curve = this.driveCurve(look.drive);
+        osc.connect(shaper);
+        shaper.connect(vca);
+        this.shapers.push(shaper);
+      } else {
+        osc.connect(vca);
+      }
+
+      // And a high-Q band alongside the lowpass, struck by the same envelope: what
+      // makes a voice ring like metal rather than simply sound like an oscillator.
+      if (look && look.ring > 0) {
+        ring = ctx.createBiquadFilter();
+        ring.type = 'bandpass';
+        ring.Q.value = P.ringQ;
+        ring.frequency.value = baseHz * P.ringRatio;
+        const ringLevel = ctx.createGain();
+        ringLevel.gain.value = look.ring;
+        vca.connect(ring);
+        ring.connect(ringLevel);
+        ringLevel.connect(level);
+      }
 
       // One wobble, three destinations, all at zero until a shard comes near: it bends
       // the pitch, chews the amplitude and drags the filter at once, which is what
@@ -351,6 +421,8 @@ export class Performers {
       osc,
       noise,
       lfos,
+      look,
+      ring,
       warpPitch,
       warpAm,
       warpCut,
@@ -393,6 +465,7 @@ export class Performers {
       lfo.stop();
       lfo.disconnect();
     }
+    v.ring?.disconnect();
     v.warpPitch?.disconnect();
     v.warpAm?.disconnect();
     v.warpCut?.disconnect();

@@ -21,8 +21,8 @@
 
 import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { encodeCatalog } from '../src/catalog-format.ts';
-import { ROOT } from './catalog-sources.mjs';
+import { FAMILY, encodeCatalog } from '../src/catalog-format.ts';
+import { ROOT, familyOf } from './catalog-sources.mjs';
 
 const MU = 398600.4418; // km^3/s^2
 const R_EARTH = 6378.137; // km
@@ -49,19 +49,31 @@ const fixed = (x, digits) => Number(x.toFixed(digits));
 /** Revolutions per day for a circular orbit at this altitude. */
 const meanMotion = (altitudeKm) => 86400 / (2 * Math.PI * Math.sqrt((R_EARTH + altitudeKm) ** 3 / MU));
 
-// count, altitude km, inclination deg, name
+/**
+ * count, altitude km, inclination deg, name, family.
+ *
+ * **The names are not decoration.** Two of these shells are named so that the family
+ * rules in catalog-sources.mjs match them by exactly the path production takes, which
+ * is the only way the voices are exercisable offline - the same principle that put a
+ * synthetic belt in this file. The altitudes and inclinations are the real ones for
+ * those constellations, so the shells look like what they are pretending to be.
+ *
+ * The military family is the exception, and has to be: it is a join against a group
+ * list CelesTrak publishes, and there is no group list offline. Those records are
+ * tagged **explicitly** here, which is a stand-in for the join and not a second rule.
+ */
 const SHELLS = [
-  [700, 550, 53.0, 'SHELL-A'], // dense low-inclination shell
-  [250, 570, 70.0, 'SHELL-B'],
-  [200, 1200, 87.9, 'SHELL-C'], // near-polar
-  [150, 800, 98.6, 'SSO'], // sun-synchronous
-  [200, null, null, 'SYNTH DEB'], // broad spread; named so kindFromName reads it as debris
+  [700, 550, 53.0, 'STARLINK', null], // the real Starlink shell, tagged by name
+  [250, 780, 86.4, 'IRIDIUM', null], // the real Iridium shell, tagged by name
+  [200, 1200, 87.9, 'COSMOS', FAMILY.MILITARY], // near-polar; stands in for the group join
+  [150, 800, 98.6, 'SSO', null], // sun-synchronous, untagged: the default whistle
+  [200, null, null, 'SYNTH DEB', null], // broad spread; named so kindFromName reads it as debris
 ];
 
 const records = [];
 let catnr = 90000;
 
-for (const [count, altitude, inclination, label] of SHELLS) {
+for (const [count, altitude, inclination, label, family] of SHELLS) {
   // Walker-like: spread planes in RAAN, spread objects within each plane.
   const planes = Math.max(1, Math.round(Math.sqrt(count)));
   const perPlane = Math.max(1, Math.floor(count / planes));
@@ -73,8 +85,10 @@ for (const [count, altitude, inclination, label] of SHELLS) {
       const inc = inclination ?? uniform(0, 105);
 
       records.push({
-        OBJECT_NAME: `${label} ${catnr}`,
+        OBJECT_NAME: `${label}-${catnr}`,
         NORAD_CAT_ID: catnr,
+        // By name where production would match by name, explicitly where it would join.
+        FAMILY: family ?? familyOf(`${label}-${catnr}`, catnr, () => false),
         EPOCH: EPOCH.toISOString(),
         INCLINATION: fixed(inc, 4),
         RA_OF_ASC_NODE: fixed(wrap360((p / planes) * 360 + uniform(-1.5, 1.5)), 4) % 360,
