@@ -893,6 +893,20 @@ the *name* rules match them by exactly the path production takes, at the real al
 and inclinations. The military shell is tagged explicitly, which it has to be: there is
 no group list offline, and that is a stand-in for the join rather than a second rule.
 
+**And there is a third scale to test at.** The fixture proves the join; `synthetic`
+exercises the runtime; neither is 20,000 objects. Writing a **full-scale stand-in**
+straight into `.catalog-cache/` - a plausible composition of names, with group lists that
+spell the same objects differently - and packing it through the real pipeline gets the
+rest: `check:catalog` passed on 19,785 invented objects, worker init 546 ms, tick 15.2 ms
+with a queue of 4 ready and 0 in flight, and every family carried through to a distinct
+voice in the browser. What it cannot tell you is anything about the *sky*: the
+composition that comes out is the composition you put in. Delete the cache afterwards, or
+the next local `fetch:catalog` will see fresh metadata and pack the invention.
+
+One case only scale shows: `IRIDIUM 33 DEB` fragments match the Iridium *name* rule, so
+110 of them carry `FAMILY.IRIDIUM` while `kind` still says debris - and they sound as
+shards, because kind decides the class. That is the rule working, not a mis-tag.
+
 #### Both buses
 
 **Sound runs at real time and nowhere else** (`AUDIO.maxTimeRate`). Above 1× the master
@@ -1119,6 +1133,8 @@ intact in any fork; pointing browsers straight at CelesTrak earns 403s and an IP
 npm install
 npm run dev              # localhost:5173 - the synthetic sky until you fetch; add ?debug
 npm run fetch:catalog    # CelesTrak -> .catalog-cache/ -> public/data/{active,full}.bin
+                         # in Claude Code on the web this needs celestrak.org added to the
+                         # environment's network egress allowlist, or every fetch 403s
 npm run check:catalog    # sanity + exact round trip of the packed catalogues
 npm run validate         # four roads to a position, against the Python reference
 npm run bench            # WASM vs JS at catalogue scale
