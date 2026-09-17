@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
-import { CHOIR, HIGHLIGHT, KIND_LOOK, PALETTE, SKY, TRAIL } from './config';
+import { CHOIR, HIGHLIGHT, INTERFERENCE, KIND_LOOK, PALETTE, SKY, TRAIL } from './config';
 import { NO_POSITION, directionFromAltAz, type SkyFrame } from './sky-frame';
 import type { FramePair } from './sky-stream';
 import { pickNearest } from './picking';
@@ -62,6 +62,82 @@ const BLEND_GLSL = /* glsl */ `
   }
 `;
 
+/**
+ * Wreckage breaking up the marks around it.
+ *
+ * A kept shard shoves every mark near it sideways by whole screen pixels. **The
+ * trigger is angular and the displacement is not**: whether a mark is affected comes
+ * from the dot product of two unit directions - the cosine of the true separation in
+ * the sky, the same number the sound uses - while how far it jumps is in pixels, which
+ * is where a glitch belongs. A pixel *threshold* would have meant zooming out set the
+ * whole sky shaking and zooming in cured it.
+ *
+ * **The offset is quantised in time.** A mark that jumps to a new place fourteen times
+ * a second reads as a signal breaking up; one that slides between places reads as a
+ * wobble. Glitch is discrete, so the hash is taken on `floor(time * rate)` and holds
+ * until the next step. A fifth of the steps kick much harder than the rest, which is
+ * what stops it settling into texture.
+ *
+ * Shared by the points and the rings so a ring is displaced with its object rather
+ * than left behind it. Picking is deliberately *not* displaced: it reads where the
+ * object is, not where the glitch threw it, and at five pixels against an eighteen
+ * pixel pick radius that is never the difference between hitting and missing.
+ */
+const WARP_GLSL = /* glsl */ `
+  uniform vec3 uWarpDir[${INTERFERENCE.maxSources}];
+  uniform int uWarpCount;
+  uniform float uWarpNearCos;
+  uniform float uWarpFarCos;
+  /** x = pixels at full depth, y = steps per second. */
+  uniform vec2 uWarpLook;
+  /** x = how often a step kicks harder, y = by how much. */
+  uniform vec2 uWarpSpike;
+  /** How far the mark's brightness drops out at full depth. */
+  uniform float uWarpFlicker;
+  uniform vec2 uResolution;
+
+  float warpDepth(vec3 dir) {
+    float best = 0.0;
+    for (int k = 0; k < ${INTERFERENCE.maxSources}; k++) {
+      if (k >= uWarpCount) break;
+      // A larger cosine is a smaller angle. Note the sense of both comparisons.
+      float c = dot(dir, uWarpDir[k]);
+      if (c <= uWarpFarCos) continue;
+      float t = clamp((c - uWarpFarCos) / (uWarpNearCos - uWarpFarCos), 0.0, 1.0);
+      best = max(best, t * t * (3.0 - 2.0 * t));
+    }
+    return best;
+  }
+
+  /** Shove a clip-space position sideways by whole pixels, held for one step. */
+  vec4 warpOffset(vec4 clip, float depth, float seed, float time) {
+    if (depth <= 0.0) return clip;
+    float tick = floor(time * uWarpLook.y);
+    float h1 = fract(sin(seed * 12.9898 + tick * 78.2330) * 43758.5453);
+    float h2 = fract(sin(seed * 39.3468 + tick * 11.1357) * 24634.6345);
+    float h3 = fract(sin(seed * 7.12340 + tick * 41.8790) * 15731.7430);
+    float kick = h3 < uWarpSpike.x ? uWarpSpike.y : 1.0;
+    vec2 px = (vec2(h1, h2) - 0.5) * 2.0 * uWarpLook.x * depth * kick;
+    // Clip space is NDC times w, and one pixel is 2/resolution of NDC.
+    clip.xy += px * 2.0 / uResolution * clip.w;
+    return clip;
+  }
+
+  /**
+   * And the mark's brightness breaks up with its position.
+   *
+   * Displacement alone reads as the sky shaking; a mark that also drops out and
+   * flares reads as a *signal* failing, which is the thing being said. It holds for
+   * the same step as the offset, from a different hash, so the two never agree.
+   */
+  float warpFlicker(float depth, float seed, float time) {
+    if (depth <= 0.0) return 1.0;
+    float tick = floor(time * uWarpLook.y);
+    float h = fract(sin(seed * 27.6183 + tick * 63.4477) * 31719.4913);
+    return mix(1.0, mix(1.0 - uWarpFlicker, 1.0 + uWarpFlicker * 0.5, h), depth);
+  }
+`;
+
 /** A track's last few degrees above the horizon, dissolving to nothing at it. */
 function fade(y: number, top: number): number {
   const t = Math.min(Math.max(y / top, 0), 1);
@@ -83,6 +159,7 @@ const HIDE_GLSL = /* glsl */ `gl_Position = vec4(2.0, 2.0, 2.0, 1.0); gl_PointSi
  */
 const POINT_VERT = /* glsl */ `
   ${BLEND_GLSL}
+  ${WARP_GLSL}
 
   attribute float aChoir;
   attribute float aKind;
@@ -148,6 +225,11 @@ const POINT_VERT = /* glsl */ `
     vSizePx = (above ? 16.0 : 8.0) * nearness * size * uPixelRatio;
     gl_PointSize = vSizePx;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(dir * uRadius, 1.0);
+
+    // Wreckage nearby breaks the mark up: it jumps, and it drops out.
+    float warp = warpDepth(dir);
+    gl_Position = warpOffset(gl_Position, warp, aIndex, uTime);
+    vAlpha = clamp(vAlpha * warpFlicker(warp, aIndex, uTime), 0.0, 1.0);
   }
 `;
 
@@ -210,6 +292,9 @@ const POINT_FRAG = /* glsl */ `
  */
 const RING_VERT = /* glsl */ `
   ${BLEND_GLSL}
+  ${WARP_GLSL}
+
+  uniform float uTime;
 
   attribute float aIndex;
   attribute float aMark;
@@ -265,6 +350,10 @@ const RING_VERT = /* glsl */ `
     vSizePx = (choir ? uChoirPx : uRingPx) * (hovered ? uHoverScale : 1.0) * uPixelRatio;
     gl_PointSize = vSizePx;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(dir * uRadius, 1.0);
+    // The same displacement as the point, so a ring is never left behind its object.
+    float warp = warpDepth(dir);
+    gl_Position = warpOffset(gl_Position, warp, aIndex, uTime);
+    vAlpha = clamp(vAlpha * warpFlicker(warp, aIndex, uTime), 0.0, 1.0);
   }
 `;
 
@@ -383,6 +472,24 @@ export class SkyScene {
      * rotation rate in the elements to be faithful to anyway.
      */
     uTime: { value: 0 },
+
+    // Wreckage breaking up the marks around it - see WARP_GLSL. The directions are
+    // the kept shards, blended on the CPU exactly as the shader blends everything
+    // else; there are at most a handful, and a vertex cannot read another's position.
+    uWarpDir: {
+      value: Array.from({ length: INTERFERENCE.maxSources }, () => new THREE.Vector3(0, -1, 0)),
+    },
+    uWarpCount: { value: 0 },
+    uWarpNearCos: { value: Math.cos(THREE.MathUtils.degToRad(INTERFERENCE.nearDeg)) },
+    uWarpFarCos: { value: Math.cos(THREE.MathUtils.degToRad(INTERFERENCE.farDeg)) },
+    uWarpLook: {
+      value: new THREE.Vector2(INTERFERENCE.sight.pixels, INTERFERENCE.sight.stepsPerSecond),
+    },
+    uWarpSpike: {
+      value: new THREE.Vector2(INTERFERENCE.sight.spikeChance, INTERFERENCE.sight.spikeScale),
+    },
+    uWarpFlicker: { value: INTERFERENCE.sight.flicker },
+    uResolution: { value: new THREE.Vector2(1, 1) },
   };
 
   private highlightIndex: THREE.BufferAttribute;
@@ -511,6 +618,16 @@ export class SkyScene {
       uHoverScale: { value: HIGHLIGHT.hoverScale },
       uDimAtHorizon: { value: HIGHLIGHT.dimAtHorizon },
       uFullBright: { value: THREE.MathUtils.degToRad(HIGHLIGHT.fullBrightDeg) },
+      // Shared objects, not copies: the rings glitch with the points by construction.
+      uTime: this.uniforms.uTime,
+      uWarpDir: this.uniforms.uWarpDir,
+      uWarpCount: this.uniforms.uWarpCount,
+      uWarpNearCos: this.uniforms.uWarpNearCos,
+      uWarpFarCos: this.uniforms.uWarpFarCos,
+      uWarpLook: this.uniforms.uWarpLook,
+      uWarpSpike: this.uniforms.uWarpSpike,
+      uWarpFlicker: this.uniforms.uWarpFlicker,
+      uResolution: this.uniforms.uResolution,
     };
     this.rings = new THREE.Points(
       ringsGeom,
@@ -634,6 +751,33 @@ export class SkyScene {
     }
     this.choirAttribute.needsUpdate = true;
     this.kindAttribute.needsUpdate = true;
+  }
+
+  /**
+   * The kept shards, which break up every mark near them. Called every frame with
+   * whatever is being kept; an empty list costs one integer.
+   *
+   * Their directions are blended here rather than read from a tick, because the glitch
+   * has to sit where the object is *drawn* - and a vertex shader cannot read another
+   * vertex's position, so the handful of sources have to arrive as uniforms.
+   */
+  setWarpSources(pair: FramePair, indices: readonly number[]): void {
+    const dirs = this.uniforms.uWarpDir.value;
+    const { from, to, t } = pair;
+    let n = 0;
+    for (const i of indices) {
+      if (n >= dirs.length) break;
+      if (from.range[i]! < 0 || to.range[i]! < 0) continue;
+      const k = i * 3;
+      const x = from.direction[k]! + (to.direction[k]! - from.direction[k]!) * t;
+      const y = from.direction[k + 1]! + (to.direction[k + 1]! - from.direction[k + 1]!) * t;
+      const z = from.direction[k + 2]! + (to.direction[k + 2]! - from.direction[k + 2]!) * t;
+      const len = Math.hypot(x, y, z);
+      if (len < 1e-6) continue;
+      dirs[n]!.set(x / len, y / len, z / len);
+      n++;
+    }
+    this.uniforms.uWarpCount.value = n;
   }
 
   /** The object under the pointer, or -1. One uniform: a sweep uploads nothing. */
@@ -974,7 +1118,8 @@ export class SkyScene {
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.canvasRect = this.renderer.domElement.getBoundingClientRect();
-    // Pixel-width lines need to know how large a pixel is.
+    // Pixel-width lines need to know how large a pixel is, and so does the glitch.
     this.trackMaterial.resolution.set(w, h);
+    this.uniforms.uResolution.value.set(w, h);
   }
 }

@@ -1,4 +1,4 @@
-import { AUDIO, HIGHLIGHT } from './config';
+import { AUDIO, HIGHLIGHT, INTERFERENCE } from './config';
 import { KIND } from './catalog-format';
 import type { SkyFrame } from './sky-frame';
 
@@ -23,7 +23,7 @@ import type { SkyFrame } from './sky-frame';
  */
 
 const P = AUDIO.performer;
-const I = AUDIO.interference;
+const I = INTERFERENCE;
 const FULL_BRIGHT = (HIGHLIGHT.fullBrightDeg * Math.PI) / 180;
 /**
  * Separation thresholds as cosines, so nearness is a dot product and never an `acos`.
@@ -60,9 +60,10 @@ interface Voice {
   noise: AudioBufferSourceNode | null;
   /** The shard's swish and pulse, and every other voice's interference wobble. */
   lfos: OscillatorNode[];
-  /** How far a passing shard bends this voice's pitch, and chews its amplitude. */
+  /** How far a passing shard bends this voice's pitch, amplitude and colour. */
   warpPitch: GainNode | null;
   warpAm: GainNode | null;
+  warpCut: GainNode | null;
   /** The scheduled envelope: every chirp, pulse or burst is written onto this. */
   vca: GainNode;
   /** Lowpass, or a bandpass for a shard. Follows `shadow`. */
@@ -100,7 +101,7 @@ export class Performers {
     }
 
     // Which shards are actually sounding. Only these deform anything - see
-    // AUDIO.interference for why it is the kept ones and not every fragment up there.
+    // INTERFERENCE for why it is the kept ones and not every fragment up there.
     this.shards.length = 0;
     for (const [i, v] of this.voices) if (v.timbre === 'shard') this.shards.push(i);
 
@@ -158,15 +159,19 @@ export class Performers {
     // Sunlit is bright, eclipsed is muffled. `shadow` is 0 in full sunlight and 1 in
     // the umbra, and it is the one column nothing else in the audio path reads.
     const band = v.timbre === 'bird' ? P.bird.cutoffHz : P.machine.cutoffHz;
-    v.filter.frequency.setTargetAtTime(pick(band, 1 - clamp(frame.shadow[i]!, 0, 1)), now, 0.4);
+    const cutoff = pick(band, 1 - clamp(frame.shadow[i]!, 0, 1));
+    v.filter.frequency.setTargetAtTime(cutoff, now, 0.4);
 
     // Doppler, exaggerated. Negative range rate is approaching, which shifts up.
     v.osc!.detune.setTargetAtTime(-frame.rangeRate[i]! * P.dopplerCentsPerKmS, now, 0.12);
 
-    // And whatever wreckage is passing close to it in the sky.
+    // And whatever wreckage is passing close to it in the sky. One wobble, three
+    // destinations: pitch, amplitude and colour bending together is what reads as
+    // damage - any one of them alone reads as vibrato, tremolo or a filter sweep.
     const near = this.nearestShard(frame, i);
-    v.warpPitch!.gain.setTargetAtTime(near * I.detuneCents, now, 0.3);
-    v.warpAm!.gain.setTargetAtTime(near * I.amDepth * gain, now, 0.3);
+    v.warpPitch!.gain.setTargetAtTime(near * I.sound.detuneCents, now, 0.3);
+    v.warpAm!.gain.setTargetAtTime(near * I.sound.amDepth * gain, now, 0.3);
+    v.warpCut!.gain.setTargetAtTime(near * I.sound.cutoffDepth * cutoff, now, 0.3);
   }
 
   /**
@@ -280,6 +285,7 @@ export class Performers {
     let noise: AudioBufferSourceNode | null = null;
     let warpPitch: GainNode | null = null;
     let warpAm: GainNode | null = null;
+    let warpCut: GainNode | null = null;
     const lfos: OscillatorNode[] = [];
     let baseHz = 0;
 
@@ -330,12 +336,13 @@ export class Performers {
       osc.connect(vca);
       osc.start();
 
-      // One wobble, two destinations, both at zero until a shard comes near: it bends
-      // the pitch and chews the amplitude at once, which is what reads as deformation
-      // rather than as vibrato or as tremolo.
-      const rate = pick(I.wobbleHz, hash(index, 21));
+      // One wobble, three destinations, all at zero until a shard comes near: it bends
+      // the pitch, chews the amplitude and drags the filter at once, which is what
+      // reads as deformation rather than as vibrato, tremolo or a sweep.
+      const rate = pick(I.sound.wobbleHz, hash(index, 21));
       warpPitch = modulate(rate, 0, osc.detune);
       warpAm = modulate(rate, 0, level.gain);
+      warpCut = modulate(rate, 0, filter.frequency);
     }
 
     return {
@@ -346,6 +353,7 @@ export class Performers {
       lfos,
       warpPitch,
       warpAm,
+      warpCut,
       vca,
       filter,
       level,
@@ -387,6 +395,7 @@ export class Performers {
     }
     v.warpPitch?.disconnect();
     v.warpAm?.disconnect();
+    v.warpCut?.disconnect();
     v.vca.disconnect();
     v.filter.disconnect();
     v.level.disconnect();

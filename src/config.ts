@@ -598,30 +598,70 @@ export const AUDIO = {
       pulseDepth: 0.38,
     },
   },
-  /**
-   * Debris deforming the voices it passes.
-   *
-   * The roadmap's version of this reads every fragment in the sky against every kept
-   * voice. This one only counts **kept** shards, which is cheaper and, more to the
-   * point, legible: keep a fragment near something you are listening to and hear it
-   * corrupt that voice. The wreckage becomes a thing you can aim.
-   *
-   * Depth follows angular separation in the sky, so it is the same geometry the image
-   * shows - a shard drifting across a bird bends it as it passes, and nothing else does.
-   */
-  interference: {
-    /** Full depth at or inside this separation, degrees. */
-    nearDeg: 4,
-    /** Nothing at all beyond this. */
-    farDeg: 25,
-    /** How far the wobble bends a voice at full depth. */
-    detuneCents: 140,
-    /** How deeply it chews the voice's amplitude at full depth. */
-    amDepth: 0.4,
-    /** Wobble rate per voice, Hz. Fast enough to be a deformation, not a vibrato. */
-    wobbleHz: [4, 9],
-  },
 };
+
 
 /** `?debug` shows frame timing and worker stats. Hidden otherwise - the piece has no chrome for it. */
 export const DEBUG = new URLSearchParams(location.search).has('debug');
+
+/**
+ * Debris deforming what it passes - in the ear and in the eye, off one geometry.
+ *
+ * **"Close" is an angle, not a pixel count.** Depth comes from the dot product of two
+ * unit direction vectors, which is the cosine of the true separation between them in
+ * the observer's sky. That *is* the simple version: at a fixed field of view, angular
+ * separation and pixel distance are the same ordering. The difference is zoom - a
+ * pixel threshold would make zooming out set everything interfering and zooming in
+ * cure it, which reads as a bug rather than as a sky. The *displacement* is in screen
+ * pixels, which is where a glitch belongs; only the trigger is angular.
+ *
+ * **One threshold, two senses.** `nearDeg` and `farDeg` are shared, so the fragment
+ * that bends a bird's pitch is the fragment visibly shaking it. That correspondence is
+ * the whole point: the sound explains the image and the image explains the sound.
+ *
+ * Only **kept** shards do this. Reading every fragment against every voice is cheap
+ * enough, but things would bend for reasons a listener cannot see; counting the kept
+ * ones makes the wreckage something you can aim.
+ */
+export const INTERFERENCE = {
+  /** Full depth at or inside this separation, degrees. */
+  nearDeg: 12,
+  /** Nothing at all beyond this. Wide, because a near miss is rare and this has to
+   *  happen often enough to be part of the piece rather than a curiosity. */
+  farDeg: 45,
+  /** Kept shards that can deform at once. Also the shader's array size. */
+  maxSources: 4,
+  /** What it does to a voice. */
+  sound: {
+    /** How far the wobble bends the pitch at full depth. Over a tone and a half. */
+    detuneCents: 320,
+    /** How deeply it chews the amplitude. */
+    amDepth: 0.7,
+    /** And how far it drags the lowpass, as a fraction of wherever that already is. */
+    cutoffDepth: 0.55,
+    /** Wobble rate per voice, Hz. Fast enough to be damage, not vibrato. */
+    wobbleHz: [4, 9],
+  },
+  /** What it does to a mark. */
+  sight: {
+    /** Displacement at full depth, CSS pixels. A mark is 16 px, so this is half of one. */
+    pixels: 9,
+    /**
+     * Steps per second. The offset is **quantised in time** rather than smoothly
+     * animated: a mark that jumps to a new place fourteen times a second reads as a
+     * signal breaking up, and one that slides reads as a wobble. Glitch is discrete.
+     */
+    stepsPerSecond: 14,
+    /** How often a step kicks much harder than the rest, and by how much. */
+    spikeChance: 0.2,
+    spikeScale: 3,
+    /**
+     * And how far the mark's brightness drops out at full depth.
+     *
+     * Displacement alone reads as the sky shaking. A mark that also drops out and
+     * flares reads as a *signal* failing, which is the thing being said - and it is
+     * what makes the effect legible at all on an object only a few pixels across.
+     */
+    flicker: 0.85,
+  },
+};

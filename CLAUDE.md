@@ -326,9 +326,40 @@ uniform; a tick arriving uploads into whichever of the two GPU slots is stale.
   `refreshSeconds`: a track is a few hundred JS propagations on the same worker thread
   the frame ticks come from, and frames matter more. At 100× the tracks lag a little,
   which is right — at that rate a 70-minute track crosses the sky in forty seconds.
+- **Wreckage breaking up the marks** (`WARP_GLSL`, `INTERFERENCE.sight`): every mark
+  within `farDeg` of a *kept* shard jumps by whole screen pixels and flickers, on the
+  same angular falloff that bends its voice — what you hear bending is what you see
+  shaking. Up to 9 px at full depth, with a fifth of the steps kicking three times
+  harder.
+  - **The offset is quantised in time**, on `floor(uTime * stepsPerSecond)` at 14 Hz. A
+    mark that jumps to a new place fourteen times a second reads as a signal breaking
+    up; one that slides between places reads as a wobble. Glitch is discrete.
+  - **Brightness breaks up too**, and that is what makes it legible. Displacement alone
+    on a sprite a few pixels across reads as the sky shaking; a mark that also drops out
+    and flares reads as a *signal* failing, which is the thing being said.
+  - The sources arrive as a **uniform array of at most `maxSources` directions**, blended
+    on the CPU exactly as the shader blends everything else, because a vertex cannot read
+    another vertex's position. `main` refills it every frame from the kept debris; an
+    empty list costs one integer.
+  - Points and rings run the same chunk, so a ring is displaced *with* its object rather
+    than left behind it. **Picking is deliberately not displaced** — it reads where the
+    object is, not where the glitch threw it, and 9 px against an 18 px pick radius is
+    never the difference between hitting and missing.
 - **Render order is a design decision**, set in `RENDER_ORDER`: points, tracks and rings
   under the haze so they emerge together; graticule and compass labels above it so the
   dome stays legible to the horizon.
+
+**Measuring a small visual effect needs a visible one first.** The glitch above was
+built, shipped and then could not be found: two screenshots 140 ms apart differed by
+~700 pixels whether it was on or off. Three separate benches all failed, and each failure
+was instructive — the graticule is most of the lit pixels and never moves, so a whole
+frame's mean position barely shifts even when the marks move 120 px; `main` refills
+`uWarpCount` every frame, so a value poked in from the console is gone before the next
+draw; and a software rasteriser's edge dithering gives a noise floor of several hundred
+changed pixels, which is the same order as one shard's worth of ink. What settled it in
+one run was **painting the quantity into the output**: `vColor = mix(vColor, red, warp)`,
+then counting red pixels. 0 with nothing kept, 100 with one shard. If a value is hard to
+measure from the outside, draw it.
 
 **Two traps, both of which look like something else entirely:**
 
@@ -672,28 +703,47 @@ edge of the image; several sum into a wash rather than a pattern. Measured alone
 energy barely moved, but the transients are a third of what they were, and that is the
 whole of the difference.
 
-**And it deforms what it passes.** Each kept shard bends every pitched voice near it in
-the sky: one wobble per voice at 4–9 Hz, driving the oscillator's detune *and* its
-amplitude at once — which reads as deformation, where either alone would read as vibrato
-or as tremolo. Depth follows angular separation, full inside `nearDeg` (4°) and nothing
-beyond `farDeg` (25°), on a smoothstep between. It is a dot product of two unit
-directions — the cosine of the angle between them — so it is the same geometry the image
-shows and costs no trigonometry at all:
+**And it deforms what it passes**, in both senses at once. All of it lives in
+`INTERFERENCE`, which is deliberately *not* inside `AUDIO`: the sound and the image are
+two readings of one geometry, and the constants that decide them have to be the same
+constants or they would drift apart.
 
-| separation | wobble |
-|---|---|
-| 41° | 0 cents |
-| 21° | 29 |
-| 14° | 108 |
-| 8.5° | 137 |
-| under 4° | 140 |
+**"Close" is an angle, not a pixel count.** Depth is the dot product of the two objects'
+unit direction vectors — the cosine of their true separation in the observer's sky — on a
+smoothstep from `farDeg` (45°) in to `nearDeg` (12°). That *is* the simple version: at a
+fixed field of view, angular separation and pixel distance are the same ordering. The
+difference is zoom, and a pixel threshold would have meant zooming out set the whole sky
+interfering and zooming in cured it — which reads as a bug rather than as a sky. The
+*displacement* is in screen pixels, which is where a glitch belongs; only the trigger is
+angular. No trigonometry anywhere: it is one dot product per object per source.
 
-**Only *kept* shards interfere.** The roadmap's version reads every fragment in the sky
-against every voice, which is affordable but not legible: things would bend for reasons a
-listener cannot see. Counting the kept ones makes the wreckage something you can aim —
-keep a fragment near a bird you are listening to and hear it corrupt that bird. Widening
-it to the whole catalogue is still open, and is a one-line change to what
-`Performers.shards` is filled from.
+| separation | pitch | displacement |
+|---|---|---|
+| 45° | 0 cents | 0 px |
+| 40° | 39 | 1.1 |
+| 30° | 201 | 5.7 |
+| 21° | 297 | 8.4 |
+| 12° and closer | 320 | 9.0 |
+
+**In the ear:** one wobble per voice at 4–9 Hz driving three destinations at once — the
+oscillator's detune, its amplitude, and its lowpass cutoff. Any one alone reads as
+vibrato, tremolo or a sweep; together they read as damage. At full depth that is 320
+cents, over a tone and a half of bend.
+
+**In the eye:** every mark near a kept shard jumps by whole screen pixels and its
+brightness breaks up — see *Wreckage breaking up the marks* under **Rendering**.
+
+The first version of this was too quiet to notice, for a reason worth keeping: `farDeg`
+was 25° and `nearDeg` 4°, and a near miss that close simply does not happen often. Two
+kept birds that read **0 cents** of bend for a whole session read **303 and 225** at 45°.
+Reach was the problem, not depth.
+
+**Only *kept* shards interfere.** Reading every fragment in the sky against every voice
+is affordable but not legible: things would bend for reasons a listener cannot see.
+Counting the kept ones makes the wreckage something you can aim — keep a fragment beside
+a bird you are listening to and hear it, and see it, corrupt that bird. Widening it to
+the whole catalogue is still open, and is a one-line change to what `Performers.shards`
+is filled from.
 
 **A trap in that geometry, worth stating because it caught the test and not the code.**
 Two objects at the same elevation separated by 30° of *azimuth* are not 30° apart: at 45°
@@ -911,9 +961,10 @@ Anything that computes range rate by hand must not repeat the naive version.
   - [x] **The performers.** Passes, sounding only when kept: pitch ← exaggerated range
         rate, level ← elevation, pan ← direction, timbre ← shadow. Three textures from
         the `kind` byte — bird, machine, shard. Synthesised, deliberately first.
-  - [x] **The interference.** A kept shard is a continuous band of noise, and it bends
-        the pitch and amplitude of every voice near it in the sky, on a smoothstep over
-        angular separation. Counts kept shards, not every fragment — see above.
+  - [x] **The interference.** A kept shard is a continuous band of noise; it bends the
+        pitch, amplitude and colour of every voice near it, and jolts and flickers every
+        *mark* near it, off one angular falloff shared by both. Counts kept shards, not
+        every fragment — see above.
   - [ ] **Bird species.** More aggressive calls — caw, honk, squawk, cackle — as rougher
         timbres beside the present whistle, and **voices by family**: Starlink as geese,
         so the megaconstellation is audible *as* a constellation. Needs a curated

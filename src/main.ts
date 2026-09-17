@@ -4,6 +4,7 @@ import * as THREE from 'three';
 
 import { DATASET, DEBUG, HIGHLIGHT, OBSERVER, TRAIL, catalogUrl, type Dataset } from './config';
 import { fetchCatalog, type FetchedCatalog } from './catalog';
+import { KIND } from './catalog-format';
 import { geodeticObserver } from './sky-frame';
 import { SkyStream, type FramePair } from './sky-stream';
 import { SkyScene } from './scene';
@@ -83,6 +84,7 @@ async function main() {
 
   const trails = new Trails(stream);
   const tracked: number[] = [];
+  const warping: number[] = [];
   const drawn: { directions: Float32Array; color: THREE.Color }[] = [];
   let lastTrailVersion = -1;
   let lastMarksVersion = -1;
@@ -161,6 +163,14 @@ async function main() {
       if (fallback >= 0 && stream.choir[fallback] !== 1) tracked.push(fallback);
     }
     trails.update(tracked, now);
+
+    // The kept wreckage, which breaks up every mark near it in the sky - the same
+    // fragments that deform the voices, off the same angle. See WARP_GLSL.
+    if (pair) {
+      warping.length = 0;
+      for (const i of selection.marked) if (stream.kind[i] === KIND.DEBRIS) warping.push(i);
+      scene.setWarpSources(pair, warping);
+    }
 
     // Rebuild the geometry only when a track lands or is dropped, or when a mark
     // changes one's colour - never on hover, which fires as fast as the pointer moves.
