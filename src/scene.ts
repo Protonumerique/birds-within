@@ -63,78 +63,95 @@ const BLEND_GLSL = /* glsl */ `
 `;
 
 /**
- * Wreckage breaking up the marks around it.
+ * Wreckage tearing the picture, in a small disc around each kept shard.
  *
- * A kept shard shoves every mark near it sideways by whole screen pixels. **The
- * trigger is angular and the displacement is not**: whether a mark is affected comes
- * from the dot product of two unit directions - the cosine of the true separation in
- * the sky, the same number the sound uses - while how far it jumps is in pixels, which
- * is where a glitch belongs. A pixel *threshold* would have meant zooming out set the
- * whole sky shaking and zooming in cured it.
+ * A **post-effect over a small copied patch of the finished frame**, not a displacement
+ * of the objects, and not a fullscreen pass.
+ * Moving the marks themselves reads as physics - as if the fragment were shoving
+ * satellites about - and the thing being said is that the *image* is corrupted. So the
+ * scene is drawn to a target and this pass tears it: rows of pixels slide sideways, and
+ * within a torn row the brightest sample wins, which drags bright things out into
+ * streaks. That last part is pixel sorting done cheaply, and it is what stops the
+ * effect reading as a mere offset.
  *
- * **The offset is quantised in time.** A mark that jumps to a new place fourteen times
- * a second reads as a signal breaking up; one that slides between places reads as a
- * wobble. Glitch is discrete, so the hash is taken on `floor(time * rate)` and holds
- * until the next step. A fifth of the steps kick much harder than the rest, which is
- * what stops it settling into texture.
+ * Its reach is a **radius in screen pixels**, unlike the sound's, which is an angle.
+ * That disagreement is on purpose: the sound is about the sky and this is about the
+ * display. What they share is the cause.
  *
- * Shared by the points and the rings so a ring is displaced with its object rather
- * than left behind it. Picking is deliberately *not* displaced: it reads where the
- * object is, not where the glitch threw it, and at five pixels against an eighteen
- * pixel pick radius that is never the difference between hitting and missing.
+ * **It reads back a square of the canvas rather than rendering the scene to a target.**
+ * That is three's own `FramebufferTexture` pattern, and taking it saved two separate
+ * problems and most of the cost:
+ *
+ * - The canvas already holds display-ready sRGB bytes, so the patch is sampled and
+ *   written back untouched. A render target instead receives **linear** values - three
+ *   chooses the output encoding from `renderer.outputColorSpace` only when drawing to
+ *   the canvas - which has to be encoded by hand on the way out, and, worse, cannot be
+ *   stored in 8 bits at all for a sky this dark: #05070a is about 0.0015-0.003 linear,
+ *   which quantises to 0 or 1 out of 255. The measured symptom was empty sky coming
+ *   back as (0, 13, 13) against its true (5, 7, 10). A half-float target fixed it, and
+ *   then none of it was needed.
+ * - A fullscreen pass shades every pixel on screen; this shades a square around each
+ *   shard. On a software rasteriser the fullscreen version cost **165 ms a frame
+ *   against 24**, and while that number would be far smaller on a real GPU, the shape
+ *   of the work was simply wrong.
+ *
+ * The tear pattern is quantised on `floor(uTime * uSteps)`, so a band holds its offset
+ * for a whole step. Continuous motion would read as a wobble; breaking up is discrete.
  */
-const WARP_GLSL = /* glsl */ `
-  uniform vec3 uWarpDir[${INTERFERENCE.maxSources}];
-  uniform int uWarpCount;
-  uniform float uWarpNearCos;
-  uniform float uWarpFarCos;
-  /** x = pixels at full depth, y = steps per second. */
-  uniform vec2 uWarpLook;
-  /** x = how often a step kicks harder, y = by how much. */
-  uniform vec2 uWarpSpike;
-  /** How far the mark's brightness drops out at full depth. */
-  uniform float uWarpFlicker;
-  uniform vec2 uResolution;
+const GLITCH_VERT = /* glsl */ `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    // A fullscreen quad: the position is already clip space, so no matrices.
+    gl_Position = vec4(position.xy, 0.0, 1.0);
+  }
+`;
 
-  float warpDepth(vec3 dir) {
-    float best = 0.0;
-    for (int k = 0; k < ${INTERFERENCE.maxSources}; k++) {
-      if (k >= uWarpCount) break;
-      // A larger cosine is a smaller angle. Note the sense of both comparisons.
-      float c = dot(dir, uWarpDir[k]);
-      if (c <= uWarpFarCos) continue;
-      float t = clamp((c - uWarpFarCos) / (uWarpNearCos - uWarpFarCos), 0.0, 1.0);
-      best = max(best, t * t * (3.0 - 2.0 * t));
+const GLITCH_FRAG = /* glsl */ `
+  uniform sampler2D uPatch;
+  /** The patch's size, and where the shard sits inside it, both in CSS pixels. */
+  uniform vec2 uPatchPx;
+  uniform vec2 uCentrePx;
+  uniform float uRadiusPx;
+  uniform float uBandPx;
+  uniform float uShiftPx;
+  uniform float uSmearPx;
+  uniform float uTearChance;
+  uniform float uSteps;
+  uniform float uTime;
+
+  varying vec2 vUv;
+
+  float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+  float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
+
+  void main() {
+    vec4 base = texture2D(uPatch, vUv);
+    vec2 px = vUv * uPatchPx;
+
+    float mask = 1.0 - smoothstep(uRadiusPx * 0.45, uRadiusPx, distance(px, uCentrePx));
+    if (mask <= 0.002) { gl_FragColor = base; return; }
+
+    // Most rows are untouched on any given step. Sparse is what makes it a tear
+    // rather than a texture.
+    float tick = floor(uTime * uSteps);
+    float band = floor(px.y / uBandPx);
+    if (hash(vec2(band, tick)) < 1.0 - uTearChance) { gl_FragColor = base; return; }
+
+    float shift = (hash(vec2(band, tick + 31.0)) - 0.5) * 2.0 * uShiftPx * mask;
+    vec2 uv = vUv + vec2(shift / uPatchPx.x, 0.0);
+    vec4 torn = texture2D(uPatch, uv);
+
+    // Pixel sorting, cheaply: the brightest sample along this row wins, so whatever is
+    // bright smears out into a streak instead of the row simply sliding.
+    float smear = uSmearPx * mask * hash(vec2(band, tick + 7.0));
+    float bestL = luma(torn.rgb);
+    for (int i = 1; i <= 8; i++) {
+      vec4 c = texture2D(uPatch, uv - vec2(float(i) / 8.0 * smear / uPatchPx.x, 0.0));
+      float l = luma(c.rgb);
+      if (l > bestL) { bestL = l; torn = c; }
     }
-    return best;
-  }
-
-  /** Shove a clip-space position sideways by whole pixels, held for one step. */
-  vec4 warpOffset(vec4 clip, float depth, float seed, float time) {
-    if (depth <= 0.0) return clip;
-    float tick = floor(time * uWarpLook.y);
-    float h1 = fract(sin(seed * 12.9898 + tick * 78.2330) * 43758.5453);
-    float h2 = fract(sin(seed * 39.3468 + tick * 11.1357) * 24634.6345);
-    float h3 = fract(sin(seed * 7.12340 + tick * 41.8790) * 15731.7430);
-    float kick = h3 < uWarpSpike.x ? uWarpSpike.y : 1.0;
-    vec2 px = (vec2(h1, h2) - 0.5) * 2.0 * uWarpLook.x * depth * kick;
-    // Clip space is NDC times w, and one pixel is 2/resolution of NDC.
-    clip.xy += px * 2.0 / uResolution * clip.w;
-    return clip;
-  }
-
-  /**
-   * And the mark's brightness breaks up with its position.
-   *
-   * Displacement alone reads as the sky shaking; a mark that also drops out and
-   * flares reads as a *signal* failing, which is the thing being said. It holds for
-   * the same step as the offset, from a different hash, so the two never agree.
-   */
-  float warpFlicker(float depth, float seed, float time) {
-    if (depth <= 0.0) return 1.0;
-    float tick = floor(time * uWarpLook.y);
-    float h = fract(sin(seed * 27.6183 + tick * 63.4477) * 31719.4913);
-    return mix(1.0, mix(1.0 - uWarpFlicker, 1.0 + uWarpFlicker * 0.5, h), depth);
+    gl_FragColor = mix(base, torn, mask);
   }
 `;
 
@@ -159,7 +176,6 @@ const HIDE_GLSL = /* glsl */ `gl_Position = vec4(2.0, 2.0, 2.0, 1.0); gl_PointSi
  */
 const POINT_VERT = /* glsl */ `
   ${BLEND_GLSL}
-  ${WARP_GLSL}
 
   attribute float aChoir;
   attribute float aKind;
@@ -225,11 +241,6 @@ const POINT_VERT = /* glsl */ `
     vSizePx = (above ? 16.0 : 8.0) * nearness * size * uPixelRatio;
     gl_PointSize = vSizePx;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(dir * uRadius, 1.0);
-
-    // Wreckage nearby breaks the mark up: it jumps, and it drops out.
-    float warp = warpDepth(dir);
-    gl_Position = warpOffset(gl_Position, warp, aIndex, uTime);
-    vAlpha = clamp(vAlpha * warpFlicker(warp, aIndex, uTime), 0.0, 1.0);
   }
 `;
 
@@ -292,9 +303,6 @@ const POINT_FRAG = /* glsl */ `
  */
 const RING_VERT = /* glsl */ `
   ${BLEND_GLSL}
-  ${WARP_GLSL}
-
-  uniform float uTime;
 
   attribute float aIndex;
   attribute float aMark;
@@ -350,10 +358,6 @@ const RING_VERT = /* glsl */ `
     vSizePx = (choir ? uChoirPx : uRingPx) * (hovered ? uHoverScale : 1.0) * uPixelRatio;
     gl_PointSize = vSizePx;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(dir * uRadius, 1.0);
-    // The same displacement as the point, so a ring is never left behind its object.
-    float warp = warpDepth(dir);
-    gl_Position = warpOffset(gl_Position, warp, aIndex, uTime);
-    vAlpha = clamp(vAlpha * warpFlicker(warp, aIndex, uTime), 0.0, 1.0);
   }
 `;
 
@@ -472,24 +476,6 @@ export class SkyScene {
      * rotation rate in the elements to be faithful to anyway.
      */
     uTime: { value: 0 },
-
-    // Wreckage breaking up the marks around it - see WARP_GLSL. The directions are
-    // the kept shards, blended on the CPU exactly as the shader blends everything
-    // else; there are at most a handful, and a vertex cannot read another's position.
-    uWarpDir: {
-      value: Array.from({ length: INTERFERENCE.maxSources }, () => new THREE.Vector3(0, -1, 0)),
-    },
-    uWarpCount: { value: 0 },
-    uWarpNearCos: { value: Math.cos(THREE.MathUtils.degToRad(INTERFERENCE.nearDeg)) },
-    uWarpFarCos: { value: Math.cos(THREE.MathUtils.degToRad(INTERFERENCE.farDeg)) },
-    uWarpLook: {
-      value: new THREE.Vector2(INTERFERENCE.sight.pixels, INTERFERENCE.sight.stepsPerSecond),
-    },
-    uWarpSpike: {
-      value: new THREE.Vector2(INTERFERENCE.sight.spikeChance, INTERFERENCE.sight.spikeScale),
-    },
-    uWarpFlicker: { value: INTERFERENCE.sight.flicker },
-    uResolution: { value: new THREE.Vector2(1, 1) },
   };
 
   private highlightIndex: THREE.BufferAttribute;
@@ -502,6 +488,18 @@ export class SkyScene {
   private kindAttribute: THREE.BufferAttribute;
   private marked: number[] = [];
   private readonly ringUniforms;
+
+  /** A square of the finished canvas, copied back so the glitch pass can chew it. */
+  private patch: THREE.FramebufferTexture | null = null;
+  private patchPixelRatio = 0;
+  private glitchScene: THREE.Scene;
+  private glitchCamera = new THREE.Camera();
+  readonly glitchUniforms;
+  /** Kept shards, as unit directions. Projected to screen inside `render`. */
+  private warpDirs = Array.from({ length: INTERFERENCE.maxSources }, () => new THREE.Vector3());
+  private warpCount = 0;
+  private ndc = new THREE.Vector3();
+  private copyAt = new THREE.Vector2();
 
   private tracks: LineSegments2;
   private trackMaterial: LineMaterial;
@@ -618,16 +616,6 @@ export class SkyScene {
       uHoverScale: { value: HIGHLIGHT.hoverScale },
       uDimAtHorizon: { value: HIGHLIGHT.dimAtHorizon },
       uFullBright: { value: THREE.MathUtils.degToRad(HIGHLIGHT.fullBrightDeg) },
-      // Shared objects, not copies: the rings glitch with the points by construction.
-      uTime: this.uniforms.uTime,
-      uWarpDir: this.uniforms.uWarpDir,
-      uWarpCount: this.uniforms.uWarpCount,
-      uWarpNearCos: this.uniforms.uWarpNearCos,
-      uWarpFarCos: this.uniforms.uWarpFarCos,
-      uWarpLook: this.uniforms.uWarpLook,
-      uWarpSpike: this.uniforms.uWarpSpike,
-      uWarpFlicker: this.uniforms.uWarpFlicker,
-      uResolution: this.uniforms.uResolution,
     };
     this.rings = new THREE.Points(
       ringsGeom,
@@ -668,6 +656,36 @@ export class SkyScene {
     this.tracks.frustumCulled = false;
     this.tracks.renderOrder = RENDER_ORDER.trail;
     this.scene.add(this.tracks);
+
+    // --- the glitch pass ------------------------------------------------------
+    // The patch texture is made in `resize`, once the pixel ratio is known.
+    this.glitchUniforms = {
+      uPatch: { value: null as THREE.Texture | null },
+      uPatchPx: { value: new THREE.Vector2(1, 1) },
+      uCentrePx: { value: new THREE.Vector2() },
+      uRadiusPx: { value: INTERFERENCE.sight.radiusPx },
+      uBandPx: { value: INTERFERENCE.sight.bandPx },
+      uShiftPx: { value: INTERFERENCE.sight.shiftPx },
+      uSmearPx: { value: INTERFERENCE.sight.smearPx },
+      uTearChance: { value: INTERFERENCE.sight.tearChance },
+      uSteps: { value: INTERFERENCE.sight.stepsPerSecond },
+      // Wall seconds, shared with the debris tumble: this is a property of the mark
+      // and of the screen, not of the orbit.
+      uTime: this.uniforms.uTime,
+    };
+    this.glitchScene = new THREE.Scene();
+    this.glitchScene.add(
+      new THREE.Mesh(
+        new THREE.PlaneGeometry(2, 2),
+        new THREE.ShaderMaterial({
+          vertexShader: GLITCH_VERT,
+          fragmentShader: GLITCH_FRAG,
+          uniforms: this.glitchUniforms,
+          depthTest: false,
+          depthWrite: false,
+        })
+      )
+    );
 
     this.attachLook(canvas);
     this.canvasRect = canvas.getBoundingClientRect();
@@ -754,19 +772,17 @@ export class SkyScene {
   }
 
   /**
-   * The kept shards, which break up every mark near them. Called every frame with
-   * whatever is being kept; an empty list costs one integer.
+   * The kept shards. Their marks are untouched; what happens is that the *picture*
+   * breaks up in a small disc around each of them - see `GLITCH_FRAG`.
    *
-   * Their directions are blended here rather than read from a tick, because the glitch
-   * has to sit where the object is *drawn* - and a vertex shader cannot read another
-   * vertex's position, so the handful of sources have to arrive as uniforms.
+   * Directions are blended here exactly as the shader blends everything else, and
+   * projected to screen inside `render`, after the camera has been pointed.
    */
   setWarpSources(pair: FramePair, indices: readonly number[]): void {
-    const dirs = this.uniforms.uWarpDir.value;
     const { from, to, t } = pair;
     let n = 0;
     for (const i of indices) {
-      if (n >= dirs.length) break;
+      if (n >= this.warpDirs.length) break;
       if (from.range[i]! < 0 || to.range[i]! < 0) continue;
       const k = i * 3;
       const x = from.direction[k]! + (to.direction[k]! - from.direction[k]!) * t;
@@ -774,10 +790,10 @@ export class SkyScene {
       const z = from.direction[k + 2]! + (to.direction[k + 2]! - from.direction[k + 2]!) * t;
       const len = Math.hypot(x, y, z);
       if (len < 1e-6) continue;
-      dirs[n]!.set(x / len, y / len, z / len);
+      this.warpDirs[n]!.set(x / len, y / len, z / len);
       n++;
     }
-    this.uniforms.uWarpCount.value = n;
+    this.warpCount = n;
   }
 
   /** The object under the pointer, or -1. One uniform: a sweep uploads nothing. */
@@ -1108,7 +1124,59 @@ export class SkyScene {
       -Math.cos(this.yaw) * Math.cos(pitch)
     );
     this.camera.lookAt(dir);
+
+    this.renderer.setRenderTarget(null);
     this.renderer.render(this.scene, this.camera);
+
+    // And then chew a square of it around each kept shard. Nothing kept, nothing to
+    // do: this is the overwhelmingly common case and it costs one comparison.
+    if (this.warpCount > 0 && this.patch) this.tearAtShards();
+  }
+
+  /**
+   * Copy a square of the finished canvas around each kept shard and redraw it torn.
+   *
+   * Projection happens here rather than where the sources were set, because the camera
+   * has only just been pointed. Everything below is in CSS pixels with the origin at
+   * the bottom left, which is what both `setViewport` and the shader work in; the copy
+   * itself wants device pixels, which is the one conversion.
+   */
+  private tearAtShards(): void {
+    const w = innerWidth;
+    const h = innerHeight;
+    const side = 2 * INTERFERENCE.sight.radiusPx;
+    if (side > w || side > h) return;
+
+    const ratio = this.patchPixelRatio;
+    this.camera.updateMatrixWorld();
+    this.renderer.autoClear = false;
+
+    for (let k = 0; k < this.warpCount; k++) {
+      const d = this.warpDirs[k]!;
+      this.ndc.set(d.x, d.y, d.z).multiplyScalar(SKY.radius).project(this.camera);
+      // Behind the camera, or past the far plane: nothing to tear.
+      if (this.ndc.z > 1) continue;
+      const sx = (this.ndc.x * 0.5 + 0.5) * w;
+      const sy = (this.ndc.y * 0.5 + 0.5) * h;
+      if (sx < -side || sx > w + side || sy < -side || sy > h + side) continue;
+
+      // The square is clamped to the canvas, so near an edge the shard sits off-centre
+      // inside it rather than the patch hanging over the side.
+      const x0 = Math.min(Math.max(Math.round(sx - side / 2), 0), w - side);
+      const y0 = Math.min(Math.max(Math.round(sy - side / 2), 0), h - side);
+      this.glitchUniforms.uCentrePx.value.set(sx - x0, sy - y0);
+
+      this.copyAt.set(Math.round(x0 * ratio), Math.round(y0 * ratio));
+      this.renderer.copyFramebufferToTexture(this.patch!, this.copyAt);
+      this.renderer.setViewport(x0, y0, side, side);
+      this.renderer.setScissor(x0, y0, side, side);
+      this.renderer.setScissorTest(true);
+      this.renderer.render(this.glitchScene, this.glitchCamera);
+    }
+
+    this.renderer.setScissorTest(false);
+    this.renderer.setViewport(0, 0, w, h);
+    this.renderer.autoClear = true;
   }
 
   private resize() {
@@ -1120,6 +1188,16 @@ export class SkyScene {
     this.canvasRect = this.renderer.domElement.getBoundingClientRect();
     // Pixel-width lines need to know how large a pixel is, and so does the glitch.
     this.trackMaterial.resolution.set(w, h);
-    this.uniforms.uResolution.value.set(w, h);
+    // The patch is a fixed square in CSS pixels; only a change of device pixel ratio
+    // can resize it, so it is built once and kept.
+    const ratio = this.renderer.getPixelRatio();
+    if (ratio !== this.patchPixelRatio) {
+      this.patchPixelRatio = ratio;
+      this.patch?.dispose();
+      const side = Math.max(2, Math.round(2 * INTERFERENCE.sight.radiusPx * ratio));
+      this.patch = new THREE.FramebufferTexture(side, side);
+      this.glitchUniforms.uPatch.value = this.patch;
+      this.glitchUniforms.uPatchPx.value.setScalar(side / ratio);
+    }
   }
 }

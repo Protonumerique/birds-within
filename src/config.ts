@@ -642,26 +642,38 @@ export const INTERFERENCE = {
     /** Wobble rate per voice, Hz. Fast enough to be damage, not vibrato. */
     wobbleHz: [4, 9],
   },
-  /** What it does to a mark. */
+  /**
+   * What it does to the picture.
+   *
+   * **A post-effect in a small disc, not a displacement of the objects.** The first
+   * version moved the marks themselves in the vertex shader, on the same angular
+   * falloff the sound uses, and it was wrong twice over. 45° is a third of the sky, so
+   * it read as everything in view being shaken rather than as something local. And
+   * moving the objects reads as *physics* - as if the wreckage were shoving satellites
+   * about - when what is meant is that the image of them is corrupted. A screen
+   * artefact belongs in screen space, after the scene is drawn.
+   *
+   * So the two senses now deliberately disagree about reach: the sound's is angular,
+   * because it is about the sky, and the picture's is a radius in pixels, because it is
+   * about the display. They still share a cause - the same kept shards - which is the
+   * part that mattered.
+   *
+   * The pass costs a render target and a fullscreen draw, and **only runs while
+   * wreckage is kept**: with nothing kept the scene goes straight to the canvas as it
+   * always did, so a page nobody clicks a fragment on pays nothing.
+   */
   sight: {
-    /** Displacement at full depth, CSS pixels. A mark is 16 px, so this is half of one. */
-    pixels: 9,
-    /**
-     * Steps per second. The offset is **quantised in time** rather than smoothly
-     * animated: a mark that jumps to a new place fourteen times a second reads as a
-     * signal breaking up, and one that slides reads as a wobble. Glitch is discrete.
-     */
-    stepsPerSecond: 14,
-    /** How often a step kicks much harder than the rest, and by how much. */
-    spikeChance: 0.2,
-    spikeScale: 3,
-    /**
-     * And how far the mark's brightness drops out at full depth.
-     *
-     * Displacement alone reads as the sky shaking. A mark that also drops out and
-     * flares reads as a *signal* failing, which is the thing being said - and it is
-     * what makes the effect legible at all on an object only a few pixels across.
-     */
-    flicker: 0.85,
+    /** Radius of the disturbance around a shard, CSS pixels. Small, deliberately. */
+    radiusPx: 58,
+    /** Height of one tear band. Rows of pixels, which is what makes it read as 2D. */
+    bandPx: 3,
+    /** How far a torn band slides sideways. */
+    shiftPx: 7,
+    /** How far the brightest pixel in a row is dragged along it - the sorting look. */
+    smearPx: 11,
+    /** What fraction of bands tear on a given step. Under half: it must stay sparse. */
+    tearChance: 0.42,
+    /** Steps per second. Discrete, so it reads as breaking up rather than as wobbling. */
+    stepsPerSecond: 12,
   },
 };

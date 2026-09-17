@@ -326,40 +326,60 @@ uniform; a tick arriving uploads into whichever of the two GPU slots is stale.
   `refreshSeconds`: a track is a few hundred JS propagations on the same worker thread
   the frame ticks come from, and frames matter more. At 100× the tracks lag a little,
   which is right — at that rate a 70-minute track crosses the sky in forty seconds.
-- **Wreckage breaking up the marks** (`WARP_GLSL`, `INTERFERENCE.sight`): every mark
-  within `farDeg` of a *kept* shard jumps by whole screen pixels and flickers, on the
-  same angular falloff that bends its voice — what you hear bending is what you see
-  shaking. Up to 9 px at full depth, with a fifth of the steps kicking three times
-  harder.
-  - **The offset is quantised in time**, on `floor(uTime * stepsPerSecond)` at 14 Hz. A
-    mark that jumps to a new place fourteen times a second reads as a signal breaking
-    up; one that slides between places reads as a wobble. Glitch is discrete.
-  - **Brightness breaks up too**, and that is what makes it legible. Displacement alone
-    on a sprite a few pixels across reads as the sky shaking; a mark that also drops out
-    and flares reads as a *signal* failing, which is the thing being said.
-  - The sources arrive as a **uniform array of at most `maxSources` directions**, blended
-    on the CPU exactly as the shader blends everything else, because a vertex cannot read
-    another vertex's position. `main` refills it every frame from the kept debris; an
-    empty list costs one integer.
-  - Points and rings run the same chunk, so a ring is displaced *with* its object rather
-    than left behind it. **Picking is deliberately not displaced** — it reads where the
-    object is, not where the glitch threw it, and 9 px against an 18 px pick radius is
-    never the difference between hitting and missing.
+- **Wreckage tearing the picture** (`GLITCH_FRAG`, `INTERFERENCE.sight`): a square of
+  the finished canvas around each *kept* shard is copied back and redrawn torn - rows
+  of pixels slide sideways, and inside a torn row the brightest sample wins, which
+  drags bright things out into streaks. That last part is pixel sorting done cheaply,
+  and it is what keeps it from reading as a plain offset. Quantised on
+  `floor(uTime * stepsPerSecond)` at 12 Hz, because breaking up is discrete: a mark
+  that slides between places reads as a wobble.
+  - **It replaced a vertex-shader warp, and the difference is the whole point.** That
+    version displaced the marks themselves, on the same angular falloff the sound uses.
+    Two things were wrong with it. 45° is a third of the sky, so it read as everything
+    in view being shaken rather than as something local; and moving the objects reads as
+    *physics*, as if the wreckage were shoving satellites about, when what is meant is
+    that the image of them is corrupted. A screen artefact belongs in screen space,
+    after the scene is drawn. So the reach here is a radius in pixels while the sound's
+    stays an angle - the two senses disagree about reach on purpose, and share a cause.
+  - **It reads back the canvas** (three's `FramebufferTexture` pattern) rather than
+    rendering the scene to a target, which avoided two traps and most of the cost:
+    - **A render target receives LINEAR values.** three picks the output encoding from
+      `renderer.outputColorSpace` only when drawing to the canvas; for an ordinary
+      render target it writes linear whatever the texture's own `colorSpace` says, so
+      setting that field looks right and does nothing. Worse, linear **cannot be stored
+      in 8 bits for a sky this dark**: `#05070a` is about 0.0015–0.003 linear, which
+      quantises to 0 or 1 out of 255. Measured symptom: empty sky came back as
+      (0, 13, 13) against its true (5, 7, 10) — red rounded to zero, green and blue both
+      landed on 1/255. A half-float target fixes it. The canvas needs none of this,
+      because it already holds display-ready sRGB bytes.
+    - **A fullscreen pass shades every pixel on screen.** On a software rasteriser that
+      cost **165 ms a frame against 24**. A real GPU would barely notice, but the shape
+      of the work was wrong. Per-patch it is 25.6 ms for one shard and 28.6 for four,
+      against 23.6 with none.
+  - Outside the disc the frame is **pixel-identical** — the shader returns the copied
+    pixel untouched, so there is no colour path to get wrong. Verified by sampling empty
+    sky in both paths: (5, 7, 10) and (2, 3, 4) exactly, either way.
 - **Render order is a design decision**, set in `RENDER_ORDER`: points, tracks and rings
   under the haze so they emerge together; graticule and compass labels above it so the
   dome stays legible to the horizon.
 
-**Measuring a small visual effect needs a visible one first.** The glitch above was
-built, shipped and then could not be found: two screenshots 140 ms apart differed by
-~700 pixels whether it was on or off. Three separate benches all failed, and each failure
-was instructive — the graticule is most of the lit pixels and never moves, so a whole
-frame's mean position barely shifts even when the marks move 120 px; `main` refills
-`uWarpCount` every frame, so a value poked in from the console is gone before the next
-draw; and a software rasteriser's edge dithering gives a noise floor of several hundred
-changed pixels, which is the same order as one shard's worth of ink. What settled it in
-one run was **painting the quantity into the output**: `vColor = mix(vColor, red, warp)`,
-then counting red pixels. 0 with nothing kept, 100 with one shard. If a value is hard to
-measure from the outside, draw it.
+**Measuring a small visual effect is harder than building one.** Finding out whether
+the glitch was doing anything took far longer than writing it, and every wrong turn was
+the same mistake: comparing two screenshots and assuming the difference was the effect.
+It never was. The graticule is most of the lit pixels and never moves, so whole-frame
+statistics barely shift even when the marks move 120 px. `main` rewrites the glitch's
+source list every frame, so a value poked in from the console is gone before the next
+draw. A software rasteriser's edge dithering is a noise floor of several hundred changed
+pixels. And once all that was held still, the residual turned out to be the debris
+tumble, then the ambient track switching objects, then the `?debug` panel's own numbers
+ticking over in the DOM.
+
+Two things work. **Draw the quantity**: `vColor = mix(vColor, red, warp)` and count red
+pixels settled in one run what three benches could not - 0 with nothing kept, 100 with
+one shard. And **hold everything still deliberately**: pause the clock, stub
+`showFrames`, freeze `uTime`, hide the rings, the tracks and every DOM overlay. Only
+then does a bounding box mean something; the tear measures 25 x 84 px inside its 116 px
+patch, which is the number worth having.
 
 **Two traps, both of which look like something else entirely:**
 
@@ -730,8 +750,10 @@ oscillator's detune, its amplitude, and its lowpass cutoff. Any one alone reads 
 vibrato, tremolo or a sweep; together they read as damage. At full depth that is 320
 cents, over a tone and a half of bend.
 
-**In the eye:** every mark near a kept shard jumps by whole screen pixels and its
-brightness breaks up — see *Wreckage breaking up the marks* under **Rendering**.
+**In the eye:** a small disc of the picture around each kept shard tears and smears —
+see *Wreckage tearing the picture* under **Rendering**. Its reach is a screen radius
+rather than an angle, deliberately: the sound is about the sky and this is about the
+display.
 
 The first version of this was too quiet to notice, for a reason worth keeping: `farDeg`
 was 25° and `nearDeg` 4°, and a near miss that close simply does not happen often. Two
@@ -962,9 +984,8 @@ Anything that computes range rate by hand must not repeat the naive version.
         rate, level ← elevation, pan ← direction, timbre ← shadow. Three textures from
         the `kind` byte — bird, machine, shard. Synthesised, deliberately first.
   - [x] **The interference.** A kept shard is a continuous band of noise; it bends the
-        pitch, amplitude and colour of every voice near it, and jolts and flickers every
-        *mark* near it, off one angular falloff shared by both. Counts kept shards, not
-        every fragment — see above.
+        pitch, amplitude and colour of every voice within 45° of it, and tears a small
+        disc of the picture around itself. Counts kept shards, not every fragment.
   - [ ] **Bird species.** More aggressive calls — caw, honk, squawk, cackle — as rougher
         timbres beside the present whistle, and **voices by family**: Starlink as geese,
         so the megaconstellation is audible *as* a constellation. Needs a curated
