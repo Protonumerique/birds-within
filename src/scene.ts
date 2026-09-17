@@ -114,6 +114,8 @@ const GLITCH_FRAG = /* glsl */ `
   uniform vec2 uCentrePx;
   uniform float uRadiusPx;
   uniform float uBandPx;
+  /** 0 tears in rows, 1 in columns. Per fragment, so several do not agree. */
+  uniform float uAxis;
   uniform float uShiftPx;
   uniform float uSmearPx;
   uniform float uTearChance;
@@ -132,28 +134,44 @@ const GLITCH_FRAG = /* glsl */ `
     float mask = 1.0 - smoothstep(uRadiusPx * 0.45, uRadiusPx, distance(px, uCentrePx));
     if (mask <= 0.002) { gl_FragColor = base; return; }
 
-    // Most rows are untouched on any given step. Sparse is what makes it a tear
+    // Bands run across one axis and slide along the other. Which axis is the
+    // fragment's own, so several active at once do not comb the frame one way.
+    bool vertical = uAxis > 0.5;
+    float across = vertical ? px.x : px.y;
+    // One texel step along the sliding axis, in UV.
+    vec2 along = vertical ? vec2(0.0, 1.0 / uPatchPx.y) : vec2(1.0 / uPatchPx.x, 0.0);
+
+    // Most bands are untouched on any given step. Sparse is what makes it a tear
     // rather than a texture.
     float tick = floor(uTime * uSteps);
-    float band = floor(px.y / uBandPx);
+    float band = floor(across / uBandPx);
     if (hash(vec2(band, tick)) < 1.0 - uTearChance) { gl_FragColor = base; return; }
 
     float shift = (hash(vec2(band, tick + 31.0)) - 0.5) * 2.0 * uShiftPx * mask;
-    vec2 uv = vUv + vec2(shift / uPatchPx.x, 0.0);
+    vec2 uv = vUv + along * shift;
     vec4 torn = texture2D(uPatch, uv);
 
-    // Pixel sorting, cheaply: the brightest sample along this row wins, so whatever is
-    // bright smears out into a streak instead of the row simply sliding.
+    // Pixel sorting, cheaply: the brightest sample along this band wins, so whatever
+    // is bright smears out into a streak instead of the band simply sliding.
     float smear = uSmearPx * mask * hash(vec2(band, tick + 7.0));
     float bestL = luma(torn.rgb);
     for (int i = 1; i <= 8; i++) {
-      vec4 c = texture2D(uPatch, uv - vec2(float(i) / 8.0 * smear / uPatchPx.x, 0.0));
+      vec4 c = texture2D(uPatch, uv - along * (float(i) / 8.0 * smear));
       float l = luma(c.rgb);
       if (l > bestL) { bestL = l; torn = c; }
     }
     gl_FragColor = mix(base, torn, mask);
   }
 `;
+
+/**
+ * Deterministic 0..1 from an index and a salt - the same `sin`-and-fract trick the
+ * point shader uses for the debris tumble, so a fragment's look is the same every time.
+ */
+function hash01(index: number, salt: number): number {
+  const x = Math.sin(index * 12.9898 + salt * 78.233) * 43758.5453;
+  return x - Math.floor(x);
+}
 
 /** A track's last few degrees above the horizon, dissolving to nothing at it. */
 function fade(y: number, top: number): number {
@@ -307,6 +325,7 @@ const RING_VERT = /* glsl */ `
   attribute float aIndex;
   attribute float aMark;
   attribute float aChoir;
+  attribute float aKind;
 
   uniform float uRadius;
   uniform float uPixelRatio;
@@ -316,6 +335,7 @@ const RING_VERT = /* glsl */ `
   uniform float uHoverScale;
   uniform vec3 uRingColor;
   uniform vec3 uMarkColor;
+  uniform vec3 uDebrisColor;
   uniform vec3 uChoirColor;
   uniform float uDimAtHorizon;
   uniform float uFullBright;
@@ -351,7 +371,13 @@ const RING_VERT = /* glsl */ `
     // A choir object is never in the readout, so a ring on one is always the
     // pointer's. Blue, smaller, and at a steady brightness: it does not climb or
     // descend, so dimming it by elevation would say something that is not true.
-    vColor = choir ? uChoirColor : ((hovered || marked) ? uMarkColor : uRingColor);
+    //
+    // Everything else takes an attention colour when touched or kept, and **which**
+    // attention colour says what kind of thing it is: amber for a satellite, pink for
+    // wreckage. Merely being listed stays white for both, so the readout's own ring
+    // keeps meaning "this one has a row" rather than doubling as a category.
+    vec3 attention = aKind > 1.5 ? uDebrisColor : uMarkColor;
+    vColor = choir ? uChoirColor : ((hovered || marked) ? attention : uRingColor);
     vAlpha = choir ? 1.0 : (hovered ? 1.0 : (marked ? bright : 1.0));
 
     vStrokePx = choir ? uChoirStrokePx : uStrokePx;
@@ -497,6 +523,8 @@ export class SkyScene {
   readonly glitchUniforms;
   /** Kept shards, as unit directions. Projected to screen inside `render`. */
   private warpDirs = Array.from({ length: INTERFERENCE.maxSources }, () => new THREE.Vector3());
+  /** Their catalogue indices, so each tears the same way every time it is kept. */
+  private warpIds = new Int32Array(INTERFERENCE.maxSources);
   private warpCount = 0;
   private ndc = new THREE.Vector3();
   private copyAt = new THREE.Vector2();
@@ -611,6 +639,7 @@ export class SkyScene {
       uChoirStrokePx: { value: CHOIR.strokePx },
       uRingColor: { value: new THREE.Color(HIGHLIGHT.color) },
       uMarkColor: { value: new THREE.Color(HIGHLIGHT.markColor) },
+      uDebrisColor: { value: new THREE.Color(HIGHLIGHT.debrisMarkColor) },
       uChoirColor: { value: new THREE.Color(CHOIR.color) },
       uHovered: { value: -1 },
       uHoverScale: { value: HIGHLIGHT.hoverScale },
@@ -664,7 +693,8 @@ export class SkyScene {
       uPatchPx: { value: new THREE.Vector2(1, 1) },
       uCentrePx: { value: new THREE.Vector2() },
       uRadiusPx: { value: INTERFERENCE.sight.radiusPx },
-      uBandPx: { value: INTERFERENCE.sight.bandPx },
+      uBandPx: { value: INTERFERENCE.sight.bandPx[0] },
+      uAxis: { value: 0 },
       uShiftPx: { value: INTERFERENCE.sight.shiftPx },
       uSmearPx: { value: INTERFERENCE.sight.smearPx },
       uTearChance: { value: INTERFERENCE.sight.tearChance },
@@ -791,6 +821,7 @@ export class SkyScene {
       const len = Math.hypot(x, y, z);
       if (len < 1e-6) continue;
       this.warpDirs[n]!.set(x / len, y / len, z / len);
+      this.warpIds[n] = i;
       n++;
     }
     this.warpCount = n;
@@ -1165,6 +1196,15 @@ export class SkyScene {
       const x0 = Math.min(Math.max(Math.round(sx - side / 2), 0), w - side);
       const y0 = Math.min(Math.max(Math.round(sy - side / 2), 0), h - side);
       this.glitchUniforms.uCentrePx.value.set(sx - x0, sy - y0);
+
+      // The band thickness and the axis are this fragment's own, from a hash of its
+      // catalogue index - the same trick the debris tumble uses. A given piece of
+      // wreckage therefore always tears the same way, and two kept at once will not
+      // comb the frame at one pitch in one direction.
+      const id = this.warpIds[k]!;
+      const band = INTERFERENCE.sight.bandPx;
+      this.glitchUniforms.uBandPx.value = band[0]! + (band[1]! - band[0]!) * hash01(id, 3);
+      this.glitchUniforms.uAxis.value = hash01(id, 5) < INTERFERENCE.sight.verticalChance ? 1 : 0;
 
       this.copyAt.set(Math.round(x0 * ratio), Math.round(y0 * ratio));
       this.renderer.copyFramebufferToTexture(this.patch!, this.copyAt);

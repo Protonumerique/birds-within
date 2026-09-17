@@ -217,6 +217,14 @@ a neutral `#4a4f54`, never blue, for the same reason.
 is amber until a person touches it, which is what makes a ring read as attention
 rather than as a property of the object.
 
+**A desaturated pink `#e2aac4` is the fourth, and it is attention *on wreckage*.** Added
+2026-09-17. The two attention hues are the one place the axes are allowed to cross: which
+one you get says what kind of thing you touched. Pink rather than the green also on the
+table, and the deciding argument is that it must not shout — the eye's sensitivity peaks
+in the green, so a green of the same magnitude reads markedly brighter against a sky this
+dark. It is also the furthest thing here from the belt's blue, and unlike another warm
+white it cannot be mistaken for a sunlit payload at sixteen pixels.
+
 **Debris is a shard, not a light.** It emits nothing, reflects badly, tumbles, and is
 the reason a spacecraft has to move — so it is drawn as a **slowly turning triangle**,
 flat, with no glow, each fragment at its own rate and phase from a hash of its index.
@@ -302,8 +310,11 @@ uniform; a tick arriving uploads into whichever of the two GPU slots is stale.
   colour-managed like the clear colour, so full haze is exactly empty sky, not a darker
   band. Not everything being visible is deliberate.
 - **Highlight rings** (`HIGHLIGHT`): a white ring around each object the readout lists —
-  the rows its groups are showing, and for now the default voices for Step 4 — and an
-  amber one around whatever the pointer is touching or has kept. The rings
+  the rows its groups are showing — and an **attention** ring around whatever the pointer
+  is touching or has kept: amber for a satellite, pink for wreckage, blue for the belt.
+  Merely being listed stays white for every kind, so the readout's own ring goes on
+  meaning "this one has a row" rather than doubling as a category. Tracks follow the same
+  rule, so a kept orbit says what drew it before you read the name at the end of it. The rings
   are a second, *indexed* draw of the points' own GPU buffers running the same
   `BLEND_GLSL`, so a ring cannot drift from its object at any time rate; the only CPU work
   is swapping a handful of indices when membership changes. Hover is **one uniform**
@@ -333,6 +344,12 @@ uniform; a tick arriving uploads into whichever of the two GPU slots is stale.
   and it is what keeps it from reading as a plain offset. Quantised on
   `floor(uTime * stepsPerSecond)` at 12 Hz, because breaking up is discrete: a mark
   that slides between places reads as a wobble.
+  - **Band thickness and axis are per fragment**, hashed off its catalogue index like
+    the debris tumble, so a given piece of wreckage always tears the same way. With
+    everything horizontal and the same pitch, several active shards agreed with each
+    other and added far too much sideways motion to the frame; about two in five now
+    tear in columns instead, which breaks that up for the cost of swapping two axes in
+    the shader.
   - **It replaced a vertex-shader warp, and the difference is the whole point.** That
     version displaced the marks themselves, on the same angular falloff the sound uses.
     Two things were wrong with it. 45° is a third of the sky, so it read as everything
@@ -414,11 +431,13 @@ what is passing, what is wreckage, and the belt. `GROUP_LOOK` gives each one a g
   mark overhead are therefore the same colour before anything is touched. Resting rows at
   a neutral "info text" grey was a real regression: it made the list a table of strings
   beside the sky rather than a reading of it.
-- **`accent` is attention, and only attention.** It is amber for *both* lists, because
-  amber is what the ring turns when you touch an object — anything outside the belt gets
-  `uMarkColor`. A second highlight hue for debris would have to disagree with its own
-  ring. A distinct blue for it was considered and **deferred, not rejected** — any blue
-  has to survive sitting beside the belt's, and nothing needs it yet.
+- **`accent` is attention, and only attention** — amber for a satellite, a desaturated
+  pink `#e2aac4` for wreckage, and whatever the ring turns is what the row turns. It was
+  amber for both lists until 2026-09-17, on the argument that "a second highlight hue for
+  debris would have to disagree with its own ring". It does not: the ring changed with
+  it. What the piece gained is that a **collision of kinds** is now visible — keep a
+  fragment beside a satellite and the two marks are plainly not the same sort of thing,
+  before either of them moves or makes a sound.
 
 The glyph is the third piece: shape and hue together, which is the whole grammar in one
 character.

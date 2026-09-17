@@ -89,6 +89,9 @@ async function main() {
   let lastTrailVersion = -1;
   let lastMarksVersion = -1;
   const markColor = new THREE.Color(HIGHLIGHT.markColor);
+  // Wreckage keeps its own attention colour here too, so a track says what kind of
+  // thing drew it before you read the name at the other end of it.
+  const debrisColor = new THREE.Color(HIGHLIGHT.debrisMarkColor);
   const trackColor = new THREE.Color(TRAIL.color);
 
   scene.setPointerHandlers({
@@ -180,7 +183,11 @@ async function main() {
       drawn.length = 0;
       for (const i of tracked) {
         const directions = trails.get(i);
-        if (directions) drawn.push({ directions, color: selection.isMarked(i) ? markColor : trackColor });
+        if (directions) {
+          const kept = selection.isMarked(i);
+          const color = kept ? (stream.kind[i] === KIND.DEBRIS ? debrisColor : markColor) : trackColor;
+          drawn.push({ directions, color });
+        }
       }
       scene.setTracks(drawn);
     }

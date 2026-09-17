@@ -234,6 +234,24 @@ export const HIGHLIGHT = {
    */
   dimAtHorizon: 0.3,
   fullBrightDeg: 55,
+  /**
+   * The attention colour for **wreckage**, replacing amber on anything the `kind` byte
+   * calls debris - its ring when touched or kept, its track, and its row in the panel.
+   *
+   * Added 2026-09-17, and it overturns the earlier "a second highlight hue for debris
+   * would have to disagree with its own ring" - it does not, because the ring changes
+   * with it. What the piece gained in exchange is that a collision of *kinds* is now
+   * visible: keep a fragment beside a satellite and the two marks are plainly not the
+   * same sort of thing, before anything moves or sounds.
+   *
+   * A desaturated pink rather than the green that was also on the table, and the
+   * deciding argument is that it must not shout. The eye's sensitivity peaks in the
+   * green, so a green of the same magnitude reads markedly brighter against a sky this
+   * dark - the exact "contamination" this hue is meant to avoid. Pink is also the
+   * furthest thing here from the belt's blue, and unlike a second warm-white it cannot
+   * be confused with a sunlit payload at sixteen pixels.
+   */
+  debrisMarkColor: '#e2aac4',
   /** How near the pointer has to be, in CSS pixels, to take an object. */
   pickRadiusPx: 18,
   /**
@@ -307,7 +325,8 @@ export const GROUP_LOOK = {
   debris: {
     shape: 'triangle',
     tone: dimmed(PALETTE.lit, KIND_LOOK.debris.intensity),
-    accent: HIGHLIGHT.markColor,
+    // Not amber. Wreckage has its own attention colour now - see HIGHLIGHT.
+    accent: HIGHLIGHT.debrisMarkColor,
   },
   belt: { shape: 'dot', tone: PALETTE.geostationary, accent: PALETTE.geostationary },
 } as const;
@@ -665,8 +684,21 @@ export const INTERFERENCE = {
   sight: {
     /** Radius of the disturbance around a shard, CSS pixels. Small, deliberately. */
     radiusPx: 58,
-    /** Height of one tear band. Rows of pixels, which is what makes it read as 2D. */
-    bandPx: 3,
+    /**
+     * Band thickness, **chosen per fragment** from a hash of its catalogue index, so a
+     * given piece of wreckage always tears the same way and several at once do not comb
+     * the image at one pitch.
+     */
+    bandPx: [2, 6],
+    /**
+     * How often a fragment tears in **columns** rather than rows.
+     *
+     * With everything horizontal, several active shards added far too much sideways
+     * motion to the frame - the tears agreed with each other and read as one gesture.
+     * Turning some of them ninety degrees breaks that up at no cost: it is the same
+     * shader with the two axes swapped.
+     */
+    verticalChance: 0.4,
     /** How far a torn band slides sideways. */
     shiftPx: 7,
     /** How far the brightest pixel in a row is dragged along it - the sorting look. */
