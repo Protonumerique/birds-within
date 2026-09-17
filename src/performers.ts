@@ -122,8 +122,14 @@ export class Performers {
     return curve;
   }
 
-  /** `kept` is every marked object that is not in the belt. */
-  update(frame: SkyFrame, kept: readonly number[], heading: number): void {
+  /**
+   * `kept` is every marked object that is not in the belt.
+   *
+   * `held` is the clock being paused. It stops phrases being written and nothing
+   * else: a voice already sounding keeps its level, its pan and its colour, because
+   * those come from a frame that is no longer changing. See AUDIO.paused.
+   */
+  update(frame: SkyFrame, kept: readonly number[], heading: number, held: boolean): void {
     const now = this.ctx.currentTime;
     const rx = Math.cos(heading);
     const rz = Math.sin(heading);
@@ -148,6 +154,13 @@ export class Performers {
       // A shard has no phrase and nothing to schedule: it is a band of noise that is
       // simply there, swelling and sinking under its own LFOs.
       if (v.timbre === 'shard') continue;
+      // Held: write nothing, and carry `nextAt` forward with the clock. Letting it
+      // fall behind would make the guard below fire a backlog of phrases the moment
+      // the clock started again - every held bird singing at once.
+      if (held) {
+        v.nextAt = Math.max(v.nextAt, now);
+        continue;
+      }
       // Write every event that falls inside the lookahead. A phrase is scheduled
       // whole, so this usually does nothing at all.
       let guard = 0;

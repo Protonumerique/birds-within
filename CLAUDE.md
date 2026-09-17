@@ -377,6 +377,37 @@ uniform; a tick arriving uploads into whichever of the two GPU slots is stale.
   - Outside the disc the frame is **pixel-identical** — the shader returns the copied
     pixel untouched, so there is no colour path to get wrong. Verified by sampling empty
     sky in both paths: (5, 7, 10) and (2, 3, 4) exactly, either way.
+- **Ghosting** (`GHOST`): where a thing has just been, drawn only while the clock runs
+  fast. At 1× an object crosses a couple of pixels in a tick and a trail is a smudge on
+  the sprite; at 100× it crosses the sky in forty seconds, and the question a time ramp
+  raises — how fast is this actually going — has no answer in the image at all. The
+  trail answers it, and adds a density in *time* beside the density in space.
+  - **Extra draws of the same points, not a screen effect**, and that is the whole
+    design. A feedback buffer smears in screen space, so turning the camera would drag
+    the entire sky into streaks — and the fix for that, clearing on camera motion, reads
+    as a flicker exactly when someone is looking around. A ghost here is a *position*,
+    re-projected every frame like everything else, so it holds still under a drag with
+    no special case. Verified: the pixels a ghost adds measure 850 facing north and
+    1,038 after a 34° turn — the same order, not a smear.
+  - **It costs no buffers and no uploads.** `mix` extrapolates outside [0, 1], so a
+    ghost is the two ticks the GPU already holds blended at a *negative* `uT`, running
+    the chord between them backwards. Which sign is backwards depends on which slot is
+    older, which `showFrames` already knows. The error against the real past path is a
+    fraction of a degree over the span used, and the thing being drawn is a smudge
+    behind a moving dot.
+  - **The belt casts no ghost.** Those objects do not move, so every copy would land on
+    the original and, under additive blending, simply make it brighter — the belt would
+    flare as the clock sped up. The still things stay still while everything else
+    smears, which is the contrast the piece already trades on.
+  - Every ghost material **spreads the shared uniform block** and overrides three
+    entries, so colour, size by range, the horizon test and the shard's own shape can
+    never disagree with the object being followed.
+  - **The cost, stated honestly: p50 22.7 → 25.7 ms on a software rasteriser**, A/B/A'd
+    to rule out drift (23.5 / 26.2 / 24.2 / 26.1 for none / three / none / three), of
+    which about 0.8 ms is each extra draw rather than its fragments. That is swiftshader
+    at `synthetic` scale — 1,692 objects — and it is the one number in this file that
+    has **not** been checked on a real GPU or at 21k objects. `GHOST.count` is the dial:
+    set it to 0 and the draws disappear entirely.
 - **Render order is a design decision**, set in `RENDER_ORDER`: points, tracks and rings
   under the haze so they emerge together; graticule and compass labels above it so the
   dome stays legible to the horizon.
@@ -391,6 +422,11 @@ draw. A software rasteriser's edge dithering is a noise floor of several hundred
 pixels. And once all that was held still, the residual turned out to be the debris
 tumble, then the ambient track switching objects, then the `?debug` panel's own numbers
 ticking over in the DOM.
+
+That trap caught the ghosting too, and in exactly the same way: `main` calls
+`scene.setTimeRate` every frame, so a `visible` flag poked in from the console was gone
+before the next draw and the before/after screenshots were identical. **Stub the setter,
+not the value.**
 
 Two things work. **Draw the quantity**: `vColor = mix(vColor, red, warp)` and count red
 pixels settled in one run what three benches could not - 0 with nothing kept, 100 with
@@ -516,7 +552,8 @@ when pressed. LISTEN turns the belt's own blue while it is on, because the belt 
 sings.
 
 **No control writes its own label.** PAUSE and LISTEN are both rendered from state in
-`update`. That is not tidiness: the sound can now start without its button being touched
+`update`. The note under them says `held` or `stood back` and never `silent`, because
+nothing is silenced any more — see *Both buses*. That is not tidiness: the sound can now start without its button being touched
 at all, so a label written inside the click would be a lie the moment that happened.
 
 **The lists scroll, and nothing else does.** They used to be clamped - each group
@@ -978,9 +1015,56 @@ shards, because kind decides the class. That is the rule working, not a mis-tag.
 
 #### Both buses
 
-**Sound runs at real time and nowhere else** (`AUDIO.maxTimeRate`). Above 1× the master
-ducks and the panel says `silent above 1×`; the button's state survives, because a
-look-ahead must not cost a press.
+**Sound runs at every time rate, and the rate attenuates it** (`AUDIO.rateDuck`).
+Changed 2026-09-18. It used to stop dead above 1×, on the reasoning that a drone whose
+pans sweep at that speed is a siren. That was true of the 1800× ladder and stopped being
+true when the ladder was capped at 100×, but the mute stayed behind.
+
+**Nothing in the audio path actually accelerates**, and that is worth knowing before
+touching it. Every continuous parameter moves through `setTargetAtTime` with a time
+constant in *real* seconds (0.09–0.4 s), and phrases are scheduled on the audio
+context's own clock — so the song keeps its tempo however fast the sky runs. What does
+change is welcome: range rate is a physical quantity and does not scale with playback,
+so the Doppler bend is the same ±650 cents but sweeps across a pass in forty seconds
+instead of thirty-five minutes. That is the swoop the exaggeration was for.
+
+Measured by rendering `Performers` offline against the same pass walked at each rate —
+six voices, eight seconds, the largest sample-to-sample step as the click detector:
+
+| rate | RMS | peak | largest step |
+|---|---|---|---|
+| 1× | −29.3 dBFS | 0.372 | 0.079 |
+| 10× | −27.4 | 0.448 | 0.096 |
+| 60× | −25.5 | 0.563 | 0.093 |
+| 100× | −27.4 | 0.416 | 0.075 |
+
+**The step is not smaller at 100× by luck — it is the waveform's own slope, not a
+discontinuity.** A square wave steps by its full amplitude between samples, so this
+detector reads the timbre, and the finding is the flat column: nothing the rate does
+introduces a jump that is not there at 1×. The level climbs to 60× because more of the
+pass is inside the window, then falls again as objects set and voices are let go.
+
+So the rate now attenuates instead: full at 1×, `rateDuck.to` (0.55) at 100×,
+logarithmic in between because the ladder is — measured live at 0.450, 0.349, 0.270,
+0.248 for 1/10/60/100×. The belt's bed stays audible at every rate, which also answers
+the thing a mute could not: a listener has no way to tell a silenced piece from a
+broken one.
+
+**Pause freezes the instrument; it does not silence it** (`AUDIO.paused`). The sound
+here is state plus events — where a thing is, how high, lit or eclipsed, and the
+phrases a bird sings. `PAUSE` stops the events: `Performers.update` takes a `held` flag
+and writes no phrase while it is set. The state stops changing by itself, because the
+frame does. What is left is what does not move anyway — the belt's bed and the shards'
+hiss — at `paused.level`, so the press is audible. Turning the camera still sweeps the
+belt across the field, because looking is not time passing.
+
+Measured: the second half of an eight-second render, held at four seconds, falls from
+−29.6 to −44.7 dBFS at 1× and from −32.7 to −40.0 at 100×.
+
+**A held voice carries `nextAt` forward with the clock.** Letting it fall behind while
+no phrase is written would leave the lookahead loop a backlog to catch up on — every
+held bird singing at once the moment the clock started again. The guard of 8 would cap
+it and the burst would still be wrong.
 
 **Nothing in the audio path reads `Clock`.** The drone is driven by belt membership and
 by where the camera is pointing — those objects do not move. The performers are driven by

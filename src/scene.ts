@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
-import { CHOIR, HIGHLIGHT, INTERFERENCE, KIND_LOOK, PALETTE, SKY, TRAIL } from './config';
+import { CHOIR, GHOST, HIGHLIGHT, INTERFERENCE, KIND_LOOK, PALETTE, SKY, TRAIL } from './config';
 import { NO_POSITION, directionFromAltAz, type SkyFrame } from './sky-frame';
 import type { FramePair } from './sky-stream';
 import { pickNearest } from './picking';
@@ -208,6 +208,9 @@ const POINT_VERT = /* glsl */ `
   uniform vec2 uRocketLook;
   uniform vec3 uDebrisLook;
   uniform float uTime;
+  /** 1 on the object itself; less on each ghost behind it. See GHOST. */
+  uniform float uGhostLevel;
+  uniform float uGhostSize;
 
   varying float vAlpha;
   varying vec3 vColor;
@@ -239,8 +242,24 @@ const POINT_VERT = /* glsl */ `
     bool lit = shadow < 0.5;
     bool choir = aChoir > 0.5;
 
+    // The belt casts no ghost. Those objects do not move, so every copy would land on
+    // the original and, under additive blending, simply make it brighter - the belt
+    // would flare as the clock sped up. Instead the still things stay still while
+    // everything else smears, which is the contrast the piece already trades on.
+    if (uGhostLevel < 1.0 && choir) {
+      ${HIDE_GLSL}
+      vAlpha = 0.0;
+      vColor = vec3(0.0);
+      vGlow = 0.0;
+      vShard = 0.0;
+      vSpin = vec2(1.0, 0.0);
+      vSizePx = 0.0;
+      return;
+    }
+
     vColor = choir ? uColorChoir : (above ? (lit ? uColorLit : uColorEclipsed) : uColorBelow);
     vAlpha = above ? (choir ? 1.0 : (lit ? 1.0 : 0.6)) : 0.3;
+    vColor *= uGhostLevel;
 
     // KIND: 0 payload, 1 rocket body, 2 debris. Debris is a shard, not a light: a
     // turning triangle drawn in the fragment shader, so it costs no geometry.
@@ -256,7 +275,7 @@ const POINT_VERT = /* glsl */ `
 
     // Nearer objects read as larger. Purely a depth cue - the dome has no scale.
     float nearness = clamp(1.0 - (range - 400.0) / 4000.0, 0.25, 1.0);
-    vSizePx = (above ? 16.0 : 8.0) * nearness * size * uPixelRatio;
+    vSizePx = (above ? 16.0 : 8.0) * nearness * size * uPixelRatio * uGhostSize;
     gl_PointSize = vSizePx;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(dir * uRadius, 1.0);
   }
@@ -476,9 +495,19 @@ export class SkyScene {
 
   private slots: [TickSlot, TickSlot];
   readonly points: THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>;
+  /** Where each object has just been: one draw each, furthest back first. */
+  private ghosts: THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>[] = [];
+  /**
+   * Which way `uT` has to move to go backwards in time, and how far a whole ghost
+   * span is. Zero while there is nothing to trail from - one tick on screen, or a
+   * rate at which an object does not move far enough for a trail to mean anything.
+   */
+  private ghostStep = 0;
   readonly rings: THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>;
   readonly uniforms = {
     uT: { value: 0 },
+    uGhostLevel: { value: 1 },
+    uGhostSize: { value: 1 },
     uRadius: { value: SKY.radius },
     uPixelRatio: { value: 1 },
     uSinLowest: { value: Math.sin(THREE.MathUtils.degToRad(SKY.lowestVisibleDeg)) },
@@ -620,6 +649,36 @@ export class SkyScene {
     this.points.renderOrder = RENDER_ORDER.points;
     this.scene.add(this.points);
 
+    // --- ghosts -------------------------------------------------------------
+    // The same geometry and the same shader, drawn again at a `uT` that has been run
+    // backwards past the older tick. Spreading `this.uniforms` copies the references,
+    // so every uniform but the three overridden here stays shared with the object
+    // itself - a ghost can never disagree with what it follows about colour, size by
+    // range, the horizon, or which fragment is a shard.
+    for (let k = 0; k < GHOST.count; k++) {
+      const ghost = new THREE.Points(
+        pointsGeom,
+        new THREE.ShaderMaterial({
+          vertexShader: POINT_VERT,
+          fragmentShader: POINT_FRAG,
+          uniforms: {
+            ...this.uniforms,
+            uT: { value: 0 },
+            uGhostLevel: { value: GHOST.level * Math.pow(GHOST.falloff, k) },
+            uGhostSize: { value: GHOST.size },
+          },
+          transparent: true,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+        })
+      );
+      ghost.frustumCulled = false;
+      ghost.renderOrder = RENDER_ORDER.points;
+      ghost.visible = false;
+      this.ghosts.push(ghost);
+      this.scene.add(ghost);
+    }
+
     // --- highlight rings ----------------------------------------------------
     const ringsGeom = withTicks(new THREE.BufferGeometry());
     this.markAttribute = new THREE.BufferAttribute(new Float32Array(count), 1).setUsage(THREE.DynamicDrawUsage);
@@ -735,6 +794,9 @@ export class SkyScene {
     if (from === to) {
       if (fromSlot < 0) fromSlot = this.upload(0, from);
       this.uniforms.uT.value = fromSlot;
+      // One tick on screen: there is no second position to run back towards.
+      this.ghostStep = 0;
+      this.placeGhosts();
       return;
     }
 
@@ -749,6 +811,38 @@ export class SkyScene {
 
     // uT always runs slot 0 -> slot 1, whichever of them is older.
     this.uniforms.uT.value = fromSlot === 0 ? t : 1 - t;
+    // Backwards is whichever way that is not. A ghost extrapolates past the older
+    // tick, which `mix` does happily - the chord simply continues.
+    this.ghostStep = (fromSlot === 0 ? -1 : 1) * (GHOST.spanTicks / GHOST.count);
+    this.placeGhosts();
+  }
+
+  /**
+   * Whether the trails are drawn at all, from the time rate.
+   *
+   * Called by the render loop, because the scene does not read the clock. They fade
+   * in over the step above `fromRate` rather than appearing at full strength, so
+   * changing rate does not flash the sky.
+   */
+  setTimeRate(rate: number) {
+    const r = Math.abs(rate);
+    const on = r > GHOST.fromRate;
+    const fade = on ? Math.min(1, Math.log(r / GHOST.fromRate) / Math.log(10)) : 0;
+    for (let k = 0; k < this.ghosts.length; k++) {
+      const ghost = this.ghosts[k]!;
+      ghost.visible = on && this.ghostStep !== 0;
+      ghost.material.uniforms.uGhostLevel!.value = GHOST.level * Math.pow(GHOST.falloff, k) * fade;
+    }
+  }
+
+  /** Each ghost one step further back along the chord the two ticks describe. */
+  private placeGhosts() {
+    const now = this.uniforms.uT.value;
+    for (let k = 0; k < this.ghosts.length; k++) {
+      const ghost = this.ghosts[k]!;
+      ghost.material.uniforms.uT!.value = now + this.ghostStep * (k + 1);
+      if (this.ghostStep === 0) ghost.visible = false;
+    }
   }
 
   /**

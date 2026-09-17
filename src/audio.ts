@@ -4,6 +4,20 @@ import { Drone } from './drone';
 import { Performers } from './performers';
 
 /**
+ * How much of the master a given time rate is allowed, 1 at real time falling to
+ * `AUDIO.rateDuck.to` at the top of the ladder.
+ *
+ * Logarithmic in the rate, because the ladder is: 1, 10, 60, 100 are four even steps
+ * in the ear and four wildly uneven ones on a line.
+ */
+function rateScale(rate: number): number {
+  const { to, fullAt } = AUDIO.rateDuck;
+  if (rate <= 1) return 1;
+  const t = Math.min(1, Math.log(rate) / Math.log(fullAt));
+  return 1 + (to - 1) * t;
+}
+
+/**
  * The sound engine: the audio context, the master chain, and whatever is currently
  * playing on it.
  *
@@ -24,7 +38,12 @@ export class AudioEngine {
   private drone: Drone | null = null;
   private performers: Performers | null = null;
   private on = false;
-  private ducked = false;
+  /**
+   * What the clock is doing to the level, as a share of `masterGain`: 1 at rest,
+   * less while the sky runs fast or the clock is held. A number rather than the flag
+   * it used to be, because the rate now attenuates by degree instead of muting.
+   */
+  private scale = 1;
   /**
    * Whether the person has worked the button themselves, either way.
    *
@@ -51,9 +70,9 @@ export class AudioEngine {
     return this.on;
   }
 
-  /** On, but silenced because the clock is running fast. See AUDIO.maxTimeRate. */
-  get silenced(): boolean {
-    return this.on && this.ducked;
+  /** On, but standing back because the clock is held or running fast. */
+  get attenuated(): boolean {
+    return this.on && this.scale < 1;
   }
 
   /**
@@ -116,24 +135,30 @@ export class AudioEngine {
     belt: readonly number[],
     marked: ReadonlySet<number>,
     heading: number,
-    timeRate: number
+    timeRate: number,
+    paused: boolean
   ): void {
     if (!this.on || !this.ctx || !this.drone || !this.performers) return;
 
-    // The clock runs faster than sound can mean anything: duck, do not stop. The
-    // button's state has to survive a look-ahead, or every scrub would cost a press.
-    const shouldDuck = Math.abs(timeRate) > AUDIO.maxTimeRate;
-    if (shouldDuck !== this.ducked) {
-      this.ducked = shouldDuck;
+    // The clock's two effects on the level, and neither of them is a mute. A fast
+    // sky steps the sound back; a held one steps it further back and stops the
+    // phrases. Both leave the belt's bed audible, which is what says the sound is
+    // still there - a listener cannot tell silence from a fault.
+    const scale = paused ? AUDIO.paused.level : rateScale(Math.abs(timeRate));
+    if (Math.abs(scale - this.scale) > 0.01) {
+      this.scale = scale;
       this.applyMaster(AUDIO.duckSeconds);
     }
-    if (shouldDuck || !frame) return;
+    if (!frame) return;
 
     this.beltMarked.length = 0;
     this.passMarked.length = 0;
     for (const i of marked) (this.choir[i] === 1 ? this.beltMarked : this.passMarked).push(i);
+    // The belt is driven by membership and by where the camera points, neither of
+    // which is time - so it runs on, held clock or not, and turning to look still
+    // sweeps it across the field.
     this.drone.update(frame, belt, this.beltMarked, heading);
-    this.performers.update(frame, this.passMarked, heading);
+    this.performers.update(frame, this.passMarked, heading, paused);
   }
 
   private build(): void {
@@ -163,7 +188,7 @@ export class AudioEngine {
   /** `seconds` is how long the move takes: a deliberate fade, or a quick duck. */
   private applyMaster(seconds: number): void {
     if (!this.ctx || !this.master) return;
-    const target = this.on && !this.ducked ? AUDIO.masterGain : 0;
+    const target = this.on ? AUDIO.masterGain * this.scale : 0;
     const now = this.ctx.currentTime;
     this.master.gain.cancelScheduledValues(now);
     this.master.gain.setTargetAtTime(target, now, seconds / 4);

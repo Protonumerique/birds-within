@@ -122,6 +122,7 @@ async function main() {
     // safe to read during the frame it came from: `pair` is cleared, not kept.
     pair = stream.update(now, clock.generation, clock.timeRate);
     if (pair) scene.showFrames(pair);
+    scene.setTimeRate(clock.timeRate);
 
     // What the pointer is on, against the blend that is drawn rather than the last
     // tick - at high time rates a tick spans minutes, and the ring would trail the
@@ -201,7 +202,7 @@ async function main() {
     // it reads the heading the frame was just drawn with rather than the last one.
     // It returns immediately while sound is off, which is every page nobody presses
     // the button on.
-    audio.update(pair?.from ?? null, hud.belt(), selection.marked, scene.heading, clock.timeRate);
+    audio.update(pair?.from ?? null, hud.belt(), selection.marked, scene.heading, clock.timeRate, clock.isPaused);
 
     debug?.frame(wall - lastWall, stream.getStats());
     lastWall = wall;

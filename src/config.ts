@@ -387,7 +387,9 @@ export const CLOCK = {
    * nothing to look at that a slower rate does not show better. 100x is a pass in
    * under a minute, which is the fastest rate that still reads as motion.
    *
-   * It also settles the sound: see AUDIO.maxTimeRate.
+   * It also settles the sound, and is why the sound no longer stops above 1x: at
+   * 1800x a pass's whole Doppler bend landed in two seconds and was a siren. At 100x
+   * it takes forty and is a swoop. See AUDIO.rateDuck.
    */
   rates: [1, 10, 60, 100],
 };
@@ -430,21 +432,87 @@ const FAMILY_VOICE: Record<Family, 'none' | 'starlink' | 'iridium' | 'military'>
  *   keeping an object pulls one voice out of it and gives it its own pitch, filter
  *   and envelope. Keep a dozen and the drone becomes invasive, which is the point.
  */
+/**
+ * Ghosting: where a thing has just been, drawn only while the clock runs fast.
+ *
+ * At 1x an object crosses a couple of pixels in a tick and a trail would be a
+ * smudge on the sprite. At 100x it crosses the sky in forty seconds, and the
+ * question the ramp raises - how fast is this actually going? - has no answer in the
+ * image at all. A trail answers it, and adds a density in *time* beside the density
+ * in space the piece is already about.
+ *
+ * **It is extra draws of the same points, not a screen effect**, and that is the
+ * whole design. A feedback buffer smears in screen space, so turning the camera would
+ * drag the entire sky into streaks - and the fix for that (clear the buffer on any
+ * camera motion) reads as a flicker exactly when a person is looking around. A ghost
+ * here is a *position*, re-projected every frame like everything else, so it holds
+ * still under the drag and no special case is needed.
+ *
+ * It costs no buffers and no uploads either: `mix` extrapolates outside [0, 1], so a
+ * ghost is the same two ticks the GPU already holds, blended at a negative `uT`, which
+ * runs the chord between them backwards. The error against the real past path is a
+ * fraction of a degree over the span used here, and the thing being drawn is a
+ * smudge behind a moving dot.
+ */
+export const GHOST = {
+  /** Trails appear above this time rate, and fade in over the step above it. */
+  fromRate: 1,
+  /** Copies behind each object. Each one is another draw of the points. */
+  count: 3,
+  /** How far back the furthest reaches, in tick intervals. */
+  spanTicks: 1.5,
+  /** Brightness of the first ghost, and what each one behind it keeps of the last. */
+  level: 0.45,
+  falloff: 0.6,
+  /**
+   * A ghost's size against its object. Smaller reads as a trail rather than a queue
+   * of satellites, and it is also where the cost is: a point sprite is all fragment,
+   * so 0.66 makes a ghost well under half the work of the object it follows.
+   */
+  size: 0.66,
+};
+
 export const AUDIO = {
   /** Master level once sound is on. Everything else is relative to this. */
   masterGain: 0.45,
   /** Seconds the master takes to arrive or leave when the button is pressed. */
   fadeSeconds: 2.5,
   /**
-   * Sound runs at real time and nowhere else.
+   * **Sound runs at every time rate**, since 2026-09-18. It used to stop dead above
+   * 1x, on the reasoning that a drone whose pans sweep at that speed is a siren.
    *
-   * Above this the piece is an optical curiosity - a pass in a second, tracks
-   * lagging - and a drone whose pans sweep at that speed is a siren, not a sky. The
-   * master simply ducks while the rate is up and comes back when it returns to 1x,
-   * so the button's state survives a look-ahead.
+   * That was true of the 1800x ladder and stopped being true when the ladder was
+   * capped at 100x, but the mute stayed behind. Nothing in the audio path actually
+   * accelerates: every continuous parameter moves through `setTargetAtTime` with a
+   * time constant in *real* seconds, and phrases are scheduled on the audio context's
+   * own clock, so the song keeps its tempo however fast the sky runs. What does
+   * change is welcome - the Doppler bend is the same +-650 cents but sweeps across a
+   * pass in forty seconds instead of thirty-five minutes, which is the swoop the
+   * exaggeration was for.
+   *
+   * So the rate attenuates rather than silences: the sky gets faster and the sound
+   * steps back, which also answers the thing a mute could not - that a listener has
+   * no way to tell a silenced piece from a broken one.
    */
-  maxTimeRate: 1,
-  /** Seconds to duck and unduck for the rate. Shorter than a deliberate fade. */
+  rateDuck: {
+    /** Level at `fullAt` and above, as a share of `masterGain`. 1x is always full. */
+    to: 0.55,
+    /** The rate the attenuation has fully arrived at. The top of the ladder. */
+    fullAt: 100,
+  },
+  /**
+   * What the sound does while the clock is held.
+   *
+   * **Pause freezes the instrument; it does not silence it.** The sound here is state
+   * plus events - where a thing is, how high, lit or eclipsed, and the phrases a bird
+   * sings. Pause stops the events: no chirp, honk or squawk is scheduled while the
+   * clock is held, and the state simply stops changing because the frame does. What
+   * is left is what does not move anyway - the belt's bed and the shards' hiss - a
+   * step quieter, so the press is audible. Turning the camera still sweeps the belt
+   * across the field, because looking is not time passing.
+   */
+  paused: { level: 0.45 },
+  /** Seconds to duck and unduck for the rate or a pause. Shorter than a deliberate fade. */
   duckSeconds: 0.7,
   drone: {
     /**

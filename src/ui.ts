@@ -196,10 +196,10 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
       const listening = source.audio.enabled;
       listenBtn.textContent = listening ? 'SILENCE' : 'LISTEN';
       listenBtn.classList.toggle('on', listening);
-      // Said only while it is true, and never otherwise: the drone is ducked while
-      // the clock runs fast, and a button that looks on while nothing is audible is
-      // worse than no button. See AUDIO.maxTimeRate.
-      soundNote.textContent = source.audio.silenced ? 'silent above 1×' : '';
+      // Said only while it is true, and never otherwise. It no longer says `silent`,
+      // because nothing is silenced any more: a held clock stops the phrases and a
+      // fast one stands the whole mix back, and in both the belt goes on humming.
+      soundNote.textContent = source.audio.attenuated ? (clock.isPaused ? 'held' : 'stood back') : '';
       if (!frame) return;
 
       if (frame !== scanned) {
