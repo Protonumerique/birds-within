@@ -38,6 +38,26 @@ const releaseBelow = (HIGHLIGHT.releaseBelowDeg * Math.PI) / 180;
 const lowestVisible = (SKY.lowestVisibleDeg * Math.PI) / 180;
 
 /**
+ * How wide this browser draws a thin scroll bar, measured rather than assumed.
+ *
+ * The panel pushes both bars into a gutter *outside* the rows, which means the column
+ * has to know the width to give back - and `scrollbar-width: thin` is 6px in one
+ * engine and 10 in another, with `::-webkit-scrollbar` winning in a third. Guessing
+ * costs the rows the difference and leaves a kept row's box out of line with the
+ * controls above it. The probe carries the real class, so whichever rule that engine
+ * honours is the one being measured.
+ */
+function thinBarWidth(): number {
+  const probe = document.createElement('div');
+  probe.className = 'lists';
+  probe.style.cssText = 'position:absolute;visibility:hidden;overflow-y:scroll;width:60px;height:60px';
+  document.body.append(probe);
+  const width = probe.offsetWidth - probe.clientWidth;
+  probe.remove();
+  return width;
+}
+
+/**
  * The panel: one narrow column, pinned left, full height.
  *
  * Title and time at the top, the two lists under them, and the belt's grid **aligned
@@ -57,6 +77,8 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
   const lat = `${Math.abs(OBSERVER.latitudeDeg).toFixed(2)}°${OBSERVER.latitudeDeg >= 0 ? 'N' : 'S'}`;
   const lon = `${Math.abs(OBSERVER.longitudeDeg).toFixed(2)}°${OBSERVER.longitudeDeg >= 0 ? 'E' : 'W'}`;
   const asOf = source.generatedAt.toISOString().slice(0, 10);
+
+  document.documentElement.style.setProperty('--bar-w', `${thinBarWidth()}px`);
 
   root.innerHTML = `
     <div class="scrim"></div>

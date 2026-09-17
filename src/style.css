@@ -3,6 +3,10 @@
   --col-w: 272px;
   /* The scrim behind the column - see .scrim. */
   --scrim-alpha: 0.55;
+  /* The scroll bars' own gutter, outside the rows - see .lists, .foot.
+     `--bar-w` is a fallback; ui.ts measures the real one and overwrites it. */
+  --bar-w: 10px;
+  --bar-gap: 6px;
   --scrim-fade: 76px;
   --ink: #cfe0ec;
   --ink-dim: #6d8698;
@@ -111,10 +115,9 @@ body {
 }
 
 /* The lists scroll; nothing else does.
-   They used to be clamped - each group `overflow: hidden`, so on a short window rows
-   were simply cut off at a border with no sign that more existed, and the two groups
-   took space from each other. Now they keep their natural height, the spacer gives up
-   its slack first, and past that the whole block scrolls. The header stays put and the
+   Each group keeps its natural height (see `.lists .group`), so PASSING pushes DEBRIS
+   down rather than the two taking space from each other. The spacer gives up its slack
+   first, and past that the whole block scrolls as one. The header stays put and the
    belt's grid stays on the floor of the frame, which is the arrangement the panel was
    designed around. */
 .lists {
@@ -128,25 +131,19 @@ body {
   min-height: 84px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--ink-faint) transparent;
 }
 
-.lists::-webkit-scrollbar {
-  width: 6px;
-}
-
-.lists::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.lists::-webkit-scrollbar-thumb {
-  background: var(--ink-faint);
-  border-radius: 3px;
-}
-
+/*
+ * A group is exactly as tall as its rows, and never less.
+ *
+ * `min-height: 0` here was a real bug: in a column flexbox it removes the automatic
+ * minimum size, so a crowded PASSING shrank below its own content and its rows spilled
+ * out over DEBRIS underneath - two lists drawn on top of each other, which is what a
+ * short window showed. `flex: none` is the fix and it is also the behaviour asked for:
+ * the lists push each other down, and when the pair no longer fits, the block scrolls.
+ */
 .lists .group {
-  min-height: 0;
+  flex: none;
 }
 
 /* The grid keeps its natural height and stays on the floor - until there is not
@@ -158,18 +155,38 @@ body {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+/*
+ * The scroll bars live in a gutter of their own, outside the rows.
+ *
+ * A bar drawn at the right edge of the column sits on top of the names and on the box
+ * a kept row draws around itself. So both scrolling boxes are widened past the column
+ * by `--bar-w + --bar-gap` with a negative margin and given that much padding back:
+ * the rows keep the full column width, and the bar stands `--bar-gap` clear of them,
+ * in the frame's own margin. `scrollbar-gutter: stable` reserves the track whether or
+ * not it is scrolling, so rows do not jog sideways the moment a list fills up.
+ */
+.lists,
+.foot {
+  padding-right: var(--bar-gap);
+  margin-right: calc(-1 * (var(--bar-w) + var(--bar-gap)));
+  scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: var(--ink-faint) transparent;
 }
 
+.lists::-webkit-scrollbar,
 .foot::-webkit-scrollbar {
-  width: 6px;
+  width: var(--bar-w);
 }
 
+.lists::-webkit-scrollbar-track,
 .foot::-webkit-scrollbar-track {
   background: transparent;
 }
 
+.lists::-webkit-scrollbar-thumb,
 .foot::-webkit-scrollbar-thumb {
   background: var(--ink-faint);
   border-radius: 3px;

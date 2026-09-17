@@ -523,9 +523,34 @@ at all, so a label written inside the click would be a lie the moment that happe
 `overflow: hidden`, so on a short window rows were cut off at a border with no sign that
 more existed, and the two groups took space from each other. Now the spacer gives up its
 slack first, then the belt's grid gives way and scrolls, and the lists keep a floor of
-84 px so they can never be squeezed to a single row. Measured at 900, 560 and 420 px
-tall: the grid stays on the floor with its 14 px margin at all three and the column never
-once overflows the window.
+84 px so they can never be squeezed to a single row.
+
+**A group is `flex: none`, and that one word is the whole fix.** It was `min-height: 0`,
+which in a column flexbox *removes* the automatic minimum size - so a crowded PASSING
+shrank below its own rows and they spilled out over DEBRIS underneath. Two lists drawn on
+top of each other, which is what a short window showed and what "released the clamping"
+had appeared to fix. At their natural height they push each other down instead, and past
+the pair the block scrolls as one. Measured at 900, 620, 480 and 400 px tall with five
+rows kept open: no row leaves its group, no group meets the next, and the column never
+overflows the window.
+
+**The scroll bars live in a gutter outside the rows.** A bar at the right edge of the
+column sits on the names and on the box a kept row draws around itself. So both scrolling
+boxes are widened past the column by the bar's width plus 6 px with a negative margin, and
+given exactly that much padding back: the rows keep the full 272 px, the bar stands 6 px
+clear of them, and `scrollbar-gutter: stable` reserves the track whether or not it is
+scrolling so nothing jogs sideways when a list fills up.
+
+**The bar's width is measured, not assumed** (`thinBarWidth` in `ui.ts`). `scrollbar-width:
+thin` is 6 px in one engine and 10 in another, and `::-webkit-scrollbar` wins in a third.
+Guessing 6 where Chromium draws 10 cost the rows 4 px and left every kept row's box out of
+line with the controls above it - visible, and for no reason a reader could see. The probe
+carries the real class, so whichever rule that engine honours is the one being measured.
+
+**Headless Chromium paints no scroll bars at all** unless `--hide-scrollbars` is removed
+from Playwright's default arguments. `offsetWidth - clientWidth` still reports the reserved
+width, so the layout measures correctly while the screenshot shows nothing - which looks
+exactly like a bar that failed to render.
 
 The floor matters more than it looks. The belt's grid is four rows on the synthetic sky
 and **twenty-one on the real one** - five hundred squares - so a rule tuned against
