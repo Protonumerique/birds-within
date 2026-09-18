@@ -438,7 +438,7 @@ export const SKY = {
     /** The base. Clearly below the darkest sky, and cool rather than neutral. */
     color: '#02040a',
     /** What a sheen lifts toward: the horizon's own light, well under it. */
-    sheen: '#1d364e',
+    sheen: '#0a1927',
     /**
      * How much of that colour a sheen ever reaches. 0 leaves a flat dark field.
      *
@@ -446,7 +446,7 @@ export const SKY = {
      * anything bright enough to look like a source - or like something reflecting one -
      * is too bright. It came down from 0.9 for exactly that.
      */
-    amount: 0.38,
+    amount: 0.28,
     /**
      * How the sheens are stretched across the plane. Deliberately lopsided - equal
      * numbers give round blobs, which is the one shape this must not have.
@@ -470,13 +470,13 @@ export const SKY = {
      * across it; narrow it and the crests thin into hard ribbons, which are as defined
      * a shape as anything this exists to avoid. 0.18 to 0.72 gave ribbons.
      */
-    crest: [-0.05, 0.9] as [number, number],
+    crest: [-0.05, 1.4] as [number, number],
     /**
      * How hard the crests are shaped after that window - an exponent, so higher is
      * more concentrated and harder-edged, lower is blurrier. 2 was the first value and
      * read a little crisp.
      */
-    contrast: 1.5,
+    contrast: 1.2,
     /**
      * How far the field folds back on itself. Above 1 the domain turns inside out and
      * patches pinch off and reconnect, which is what stops the swells reading as one
