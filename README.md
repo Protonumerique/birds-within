@@ -25,7 +25,8 @@ pulls the real catalogue from CelesTrak and packs it into `public/data/active.bi
 included). Add `?catalog=full` to the URL for the larger set, and `?debug` for frame
 timing and worker stats.
 
-The page opens on a first screen — a title, a drawing of the sky and a LAUNCH button.
+The page opens on a first screen — a title, a drawing of the sky, where you are standing
+and a LAUNCH button.
 Nothing heavy is fetched until that press: three.js, satellite.js, the propagation worker
 and the catalogue are all behind a dynamic import, so the piece can sit in a hero section
 on another page without costing a visitor who scrolls past it anything. `?launch` skips
@@ -37,12 +38,13 @@ in the top right, `f` does the same from the keyboard, and Escape leaves.
 ## Embedding it
 
 ```html
-<iframe src="https://birds.protonumerique.net/" allow="fullscreen"
+<iframe src="https://birds.protonumerique.net/" allow="fullscreen; geolocation"
         style="width:100%;aspect-ratio:16/7;border:0"></iframe>
 ```
 
-`allow="fullscreen"` is not optional: without it the browser refuses full screen to the
-frame and the button is hidden rather than drawn and broken.
+Neither permission is optional: without them the browser refuses full screen and
+geolocation to the frame, and each button is hidden rather than drawn and broken.
+Nothing asks for a location until someone presses USE MY LOCATION.
 
 ## How the data works
 
@@ -119,6 +121,7 @@ src/
   clock.ts             scene time (the single authority)
   ui.ts                overlay
   fullscreen.ts        the full-screen toggle, and what to do when it is not allowed
+  place.ts             where the visitor is, asked only when they press for it
   gate.ts              the first screen
   poster.ts            its drawing, built from the same palette the sky uses
   debug.ts             ?debug panel

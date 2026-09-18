@@ -716,8 +716,49 @@ input[type="range"] {
   color: #e2957f;
 }
 
-.gate-meta {
+/*
+ * Where you are standing, and the offer to stand somewhere else. It sits with the
+ * meta line rather than beside LAUNCH, because it is a fact about the sky you are
+ * about to see and not a second thing to press.
+ */
+.gate-where {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
   margin-top: 26px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* Outlined and quiet. LAUNCH is the offer on this screen; this is not competing. */
+.gate-locate {
+  padding: 5px 10px;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  color: var(--ink-dim);
+}
+
+.gate-locate:hover:not(:disabled) {
+  color: var(--ink);
+}
+
+/* Only there when it has something to say - otherwise it holds a blank line open. */
+.gate-placenote:empty {
+  display: none;
+}
+
+.gate-placenote {
+  margin-top: 6px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--ink-dim);
+}
+
+.gate-meta {
+  margin-top: 10px;
   font-size: 10px;
   letter-spacing: 0.1em;
   text-transform: uppercase;

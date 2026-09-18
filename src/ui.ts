@@ -1,4 +1,4 @@
-import { OBSERVER, CLOCK, GROUP_LOOK, HIGHLIGHT, READOUT, SKY, type Dataset } from './config';
+import { CLOCK, GROUP_LOOK, HIGHLIGHT, READOUT, SKY, observerLabel, type Dataset } from './config';
 import type { Clock } from './clock';
 import type { SkyFrame } from './sky-frame';
 import type { Selection } from './selection';
@@ -75,8 +75,6 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
   /** What wears the track when nothing is kept: whatever is highest, held until it sets. */
   let fallback = -1;
 
-  const lat = `${Math.abs(OBSERVER.latitudeDeg).toFixed(2)}°${OBSERVER.latitudeDeg >= 0 ? 'N' : 'S'}`;
-  const lon = `${Math.abs(OBSERVER.longitudeDeg).toFixed(2)}°${OBSERVER.longitudeDeg >= 0 ? 'E' : 'W'}`;
   const asOf = source.generatedAt.toISOString().slice(0, 10);
 
   document.documentElement.style.setProperty('--bar-w', `${thinBarWidth()}px`);
@@ -86,7 +84,7 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
     <div class="col">
       <header>
         <h1>Birds Within</h1>
-        <div class="sub">${OBSERVER.name} · ${lat} ${lon}</div>
+        <div class="sub">${observerLabel()}</div>
         <div class="sub">${names.length.toLocaleString('en')} objects · ${source.dataset} · ${asOf}</div>
         ${source.dataset === 'synthetic' ? '<div class="warn">invented orbits, not real objects</div>' : ''}
         <div class="clock" id="t">--:--:--<small id="tl">&nbsp;</small></div>

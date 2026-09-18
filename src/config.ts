@@ -1,13 +1,103 @@
 import { FAMILY, type Family } from './catalog-format';
 
-/** Where the observer stands. Everything in this app is relative to this point. */
-export const OBSERVER = {
+/**
+ * Where the observer stands. Everything in this app is relative to this point.
+ *
+ * **Berlin is the default, and the default must not move.** `scripts/reference.py`
+ * pins `OBS_*` to these exact numbers and `npm run validate` compares against the
+ * `reference.json` computed from them. A runtime override cannot reach that check -
+ * nothing in the build imports this file, the scripts take `catalog-format.ts` alone -
+ * but the default and `reference.py` still have to agree.
+ */
+export const DEFAULT_OBSERVER = {
   name: 'Berlin',
   latitudeDeg: 52.52,
   longitudeDeg: 13.405,
   /** Height above the WGS-84 ellipsoid, in kilometres. */
   heightKm: 0.034,
 };
+
+/**
+ * Coordinates off the URL: `?lat=48.86&lon=2.35`. Anything missing, unparseable or
+ * out of range is ignored outright rather than clamped - a half-read coordinate is a
+ * different place, and silently standing somewhere else is worse than standing in
+ * Berlin.
+ */
+function observerFromUrl(): { latitudeDeg: number; longitudeDeg: number; name: string } | null {
+  const q = new URLSearchParams(location.search);
+  const lat = Number(q.get('lat'));
+  const lon = Number(q.get('lon'));
+  if (!q.has('lat') || !q.has('lon')) return null;
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+  // No name. A link someone else sent is not "your location", and there is no
+  // geocoder here to give it a real one - see place.ts. The coordinates stand alone.
+  return { latitudeDeg: lat, longitudeDeg: lon, name: '' };
+}
+
+/**
+ * The observer actually in force. **Mutable, and deliberately so.**
+ *
+ * `setObserver` writes into this object rather than replacing it, and every reader
+ * takes its fields at use time - `createHud`, `createGate` and `run` all read inside a
+ * function, never at module scope. That is what lets the first screen change where you
+ * stand without a reload: at that moment the piece does not exist yet, because the
+ * whole of it is behind the LAUNCH press. **Nothing may capture these fields at module
+ * load**, or it will hold Berlin for the life of the page.
+ */
+export const OBSERVER = { ...DEFAULT_OBSERVER, ...observerFromUrl() };
+
+/**
+ * Stand somewhere else, and put it in the URL so the sky is a link.
+ *
+ * **Rounded to two decimals, on purpose.** That is about a kilometre, which moves a
+ * 500 km object by a tenth of a degree - invisible - and it means a shared URL never
+ * carries anyone's precise coordinates. A location control that publishes a street
+ * address in a link is not one worth having.
+ */
+export function setObserver(latitudeDeg: number, longitudeDeg: number, heightKm = 0): void {
+  const round = (v: number) => Math.round(v * 100) / 100;
+  OBSERVER.latitudeDeg = round(latitudeDeg);
+  OBSERVER.longitudeDeg = round(longitudeDeg);
+  OBSERVER.heightKm = Number.isFinite(heightKm) ? heightKm : 0;
+  OBSERVER.name = 'your location';
+  syncUrl(String(OBSERVER.latitudeDeg), String(OBSERVER.longitudeDeg));
+}
+
+/** Back to Berlin, and out of the URL with it. */
+export function resetObserver(): void {
+  Object.assign(OBSERVER, DEFAULT_OBSERVER);
+  syncUrl(null, null);
+}
+
+/** True when the sky on screen is not the default one. */
+export const observerIsCustom = () => OBSERVER.name !== DEFAULT_OBSERVER.name;
+
+/**
+ * How the observer reads on screen, in one place - the first screen and the panel both
+ * use it, so they cannot format the same coordinates two ways. A location with no name
+ * is its coordinates and nothing else.
+ */
+export function observerLabel(): string {
+  const { latitudeDeg: la, longitudeDeg: lo, name } = OBSERVER;
+  const lat = `${Math.abs(la).toFixed(2)}°${la >= 0 ? 'N' : 'S'}`;
+  const lon = `${Math.abs(lo).toFixed(2)}°${lo >= 0 ? 'E' : 'W'}`;
+  return name ? `${name} · ${lat} ${lon}` : `${lat} ${lon}`;
+}
+
+function syncUrl(lat: string | null, lon: string | null): void {
+  const url = new URL(location.href);
+  if (lat === null) {
+    url.searchParams.delete('lat');
+    url.searchParams.delete('lon');
+  } else {
+    url.searchParams.set('lat', lat);
+    url.searchParams.set('lon', lon!);
+  }
+  // replaceState, not pushState: this is not a page someone should have to press Back
+  // through, and the first screen is still up when it happens.
+  history.replaceState(null, '', url);
+}
 
 /**
  * Which packed catalogue to load - all src/catalog-format.ts binaries in public/data/.

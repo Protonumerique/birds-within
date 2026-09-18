@@ -1,4 +1,5 @@
-import { GATE, OBSERVER } from './config';
+import { GATE, observerIsCustom, observerLabel, resetObserver } from './config';
+import { canLocate, locate } from './place';
 import { posterSvg } from './poster';
 
 /**
@@ -35,9 +36,6 @@ export interface GateHandlers {
 }
 
 export function createGate(root: HTMLElement, handlers: GateHandlers): Gate {
-  const lat = `${Math.abs(OBSERVER.latitudeDeg).toFixed(2)}°${OBSERVER.latitudeDeg >= 0 ? 'N' : 'S'}`;
-  const lon = `${Math.abs(OBSERVER.longitudeDeg).toFixed(2)}°${OBSERVER.longitudeDeg >= 0 ? 'E' : 'W'}`;
-
   const el = document.createElement('div');
   el.className = 'gate';
   // One source of truth for how long the screen takes to leave: the stylesheet fades
@@ -52,7 +50,12 @@ export function createGate(root: HTMLElement, handlers: GateHandlers): Gate {
       <p class="gate-lede">${GATE.lede}</p>
       <button class="gate-launch" type="button">${GATE.launchLabel}</button>
       <div class="gate-status" role="status" aria-live="polite"></div>
-      <div class="gate-meta">${OBSERVER.name} · ${lat} ${lon} · elements from CelesTrak</div>
+      <div class="gate-where">
+        <span class="gate-place"></span>
+        <button class="gate-locate" type="button" hidden></button>
+      </div>
+      <div class="gate-placenote"></div>
+      <div class="gate-meta">elements from CelesTrak, refreshed every six hours</div>
       <div class="gate-hint">${GATE.hint}</div>
     </div>
   `;
@@ -60,6 +63,55 @@ export function createGate(root: HTMLElement, handlers: GateHandlers): Gate {
 
   const button = el.querySelector<HTMLButtonElement>('.gate-launch')!;
   const statusEl = el.querySelector<HTMLElement>('.gate-status')!;
+
+  /*
+   * Where you are standing, and the offer to stand somewhere else.
+   *
+   * **This is the only place the observer can change without a reload**, and the
+   * reason is the first screen itself: at this moment the piece does not exist - no
+   * worker, no satrecs, no catalogue - because all of it is behind the press. Moving
+   * the observer here costs nothing at all. Once LAUNCH is pressed the worker holds
+   * the observer it was built with, and changing it would mean re-initialising twenty
+   * thousand orbits; that is why the offer lives here and not in the panel.
+   *
+   * Nothing is asked before the press. See place.ts.
+   */
+  const placeEl = el.querySelector<HTMLElement>('.gate-place')!;
+  const placeNote = el.querySelector<HTMLElement>('.gate-placenote')!;
+  const locateBtn = el.querySelector<HTMLButtonElement>('.gate-locate')!;
+
+  const paintPlace = () => {
+    placeEl.textContent = observerLabel();
+    // Offered only when there is something to offer: somewhere else to stand, or the
+    // way back. A browser that will not share a location gets no button at all rather
+    // than a button that always fails.
+    const custom = observerIsCustom();
+    locateBtn.hidden = !custom && !canLocate();
+    locateBtn.textContent = custom ? 'BACK TO BERLIN' : 'USE MY LOCATION';
+  };
+
+  locateBtn.addEventListener('click', async () => {
+    if (observerIsCustom()) {
+      resetObserver();
+      placeNote.textContent = '';
+      paintPlace();
+      return;
+    }
+    locateBtn.disabled = true;
+    locateBtn.textContent = 'LOCATING…';
+    placeNote.textContent = '';
+    try {
+      await locate();
+      placeNote.textContent = 'the sky from where you are';
+    } catch (err) {
+      placeNote.textContent = err instanceof Error ? err.message : String(err);
+    } finally {
+      locateBtn.disabled = false;
+      paintPlace();
+    }
+  });
+
+  paintPlace();
 
   let warmed = false;
   const warm = () => {

@@ -598,6 +598,69 @@ amber ring is placed inside that intersection rather than wherever the highest o
 happens to be** — the first version put it on the highest, and a 1600×620 hero cropped it
 away entirely while leaving its track visible, which reads as a stray orange line.
 
+### Where you are standing
+
+Added 2026-09-18. `OBSERVER` used to be a constant; it is now a default with two ways
+to override it — `?lat=&lon=` on the URL, and a **USE MY LOCATION** button on the first
+screen. `src/place.ts` owns the browser call, `config.ts` owns the value and the URL.
+
+**Nothing is asked before a press.** A hero section that fires a permission dialog at
+someone scrolling past is hostile, most people deny, and a denial is sticky per origin —
+so the one chance would be spent on a visitor who had not yet seen what the page is.
+`getCurrentPosition` is called from inside that click and from nowhere else, which is
+the same bargain the sound already makes.
+
+**The first screen is the only place the observer can change without a reload, and
+that is not a coincidence.** At that moment the piece does not exist — no worker, no
+satrecs, no catalogue — because all of it is behind LAUNCH. Moving the observer there
+costs nothing. Once the press has happened the worker holds the observer it was built
+with, and changing it would mean re-initialising twenty thousand orbits; so the offer
+lives on the first screen, and a later change would be a reload on the URL the button
+already writes.
+
+- **`OBSERVER` is mutable on purpose**, and every reader takes its fields at use time —
+  `createHud`, `createGate` and `run` all read inside a function. **Nothing may capture
+  them at module load**, or it holds Berlin for the life of the page.
+- **The default must not move.** `scripts/reference.py` pins `OBS_*` to Berlin and
+  `npm run validate` compares against the `reference.json` computed from them. A runtime
+  override cannot reach that check — nothing in the build imports `config.ts`, the
+  scripts take `catalog-format.ts` alone — but the default and `reference.py` still have
+  to agree.
+- **Two decimals, deliberately.** That is about a kilometre, which moves a 500 km object
+  by a tenth of a degree — invisible — and it means a shared URL never carries anyone's
+  precise coordinates. A location control that publishes a street address in a link is
+  not one worth having.
+- **A URL coordinate is not "your location".** A link someone else sent gets its
+  coordinates and no name; only a fix from the device is named. `observerLabel()` is the
+  one place either is formatted, so the first screen and the panel cannot disagree.
+- **There is no geocoder and there will not be one.** A place name means a third-party
+  lookup per visitor, which is the arrangement `fetch-catalog.mjs` exists to avoid.
+- **Embedded, it needs `allow="geolocation"`** on the iframe, exactly like full screen,
+  and the API is absent on `http:` altogether. `canLocate()` asks both questions and the
+  button is not drawn when the answer is no, rather than drawn and broken.
+
+**The trap, and it is a good one: `getCurrentPosition`'s own `timeout` does not cover
+the prompt.** It starts counting once permission exists. While the dialog is open — or
+if it is never shown, which is what a headless browser and some embedded webviews do —
+neither callback fires and neither does the timeout, so the button sits on `LOCATING…`
+for as long as the page is open. That reads as broken rather than as waiting. `locate`
+therefore keeps a deadline of its own (`WAIT_MS`, 15 s) and **ignores a callback that
+arrives after it**: a location landing thirty seconds after someone gave up and pressed
+LAUNCH would move the sky out from under them.
+
+**Latitude changes the piece, and the belt most of all.** The geostationary arc peaks at
+`atan((cos φ − 0.1513) / sin φ)` — 44° at 40°N, 30° from Berlin, 22° at 60°N, 11° at
+70°N — and above 81.3° it never rises at all. Belt objects above the sky's floor,
+measured on `synthetic`: **96 from Berlin, 76 from Tromsø, 35 from Svalbard, 2 at 85°N,
+105 at the equator.** The two left at 85°N are the inclined and drifting ones, which is
+exactly right — a strictly geostationary satellite is below that horizon and one left
+wandering at ±5° is not. Nothing breaks on the way: an empty slice is already silent
+(`voice.members === 0` in `regroup`), so the bed thins out rather than dividing by zero,
+and the grid simply gets smaller. **The drone is latitude-dependent, and that is a fact
+about the sky rather than a bug.** Passing objects go the other way — 76 from Berlin,
+103 at 85°N, 28 at the equator — because most of what is up there is in a
+high-inclination shell.
+
 ### Full screen
 
 Added 2026-09-18, in `src/fullscreen.ts`. The button lives in the hints corner rather
@@ -1336,12 +1399,16 @@ to do, both cheap and both invisible when missed:
 - **`allow="fullscreen"` on the iframe**, or `document.fullscreenEnabled` is false in
   here and the FULL SCREEN button is not drawn at all. That is the honest behaviour, but
   it looks like the feature was never built.
+- **`allow="geolocation"` too**, for the same reason and with the same symptom: without
+  it USE MY LOCATION is not drawn. Nothing is ever asked before that button is pressed —
+  see *Where you are standing*.
 - **Give it a real height.** The canvas fills whatever box it is given, and the panel is
   a full-height column; under about 400 px the lists scroll rather than fitting, which is
   handled but is not the image.
 
-`?launch` skips the first screen, `?catalog=active` drops the wreckage, and `?debug`
-turns on frame timing — see *The first screen* and *The catalogue*.
+`?launch` skips the first screen, `?lat=&lon=` stands somewhere else, `?catalog=active`
+drops the wreckage, and `?debug` turns on frame timing — see *The first screen*, *Where
+you are standing* and *The catalogue*.
 
 ### The subdomain
 
@@ -1482,8 +1549,10 @@ Anything that computes range rate by hand must not repeat the naive version.
   screen's whole point is that a page nobody presses costs 8.7 KB; one stray static
   import puts 160 KB back, silently and with nothing on screen to show for it. Check the
   entry chunk's size in `npm run build`'s output after touching the entry.
-- Observer location lives in `src/config.ts` and **must** match `OBS_*` in
-  `scripts/reference.py`, or the validation compares different things.
+- The observer's **default** lives in `src/config.ts` as `DEFAULT_OBSERVER` and **must**
+  match `OBS_*` in `scripts/reference.py`, or the validation compares different things.
+  `OBSERVER` itself is settable at runtime — see *Where you are standing* — so **nothing
+  may read its fields at module load**; take them inside the function that needs them.
 - Angles are radians internally; degrees only at the UI boundary.
 - Distances in kilometres throughout.
 - **Only the worker propagates** — frames and trails alike. If the render thread ever
