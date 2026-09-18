@@ -470,31 +470,71 @@ uniform; a tick arriving uploads into whichever of the two GPU slots is stale.
     the fragment shader measures every shape against `vDotPx`, the dot's own width,
     rather than against the sprite, which is what lets the sprite carry a streak and a
     halo without either fattening the mark.
-- **The water** (`REFLECTION`): the ground reflects what is above it. Cosmetic by its
-  own admission, and behind a dial.
-  - **It is one more draw of the same points**, mirrored in y and wobbled — the same
-    bargain the ghosts make. No second camera, no render target, no new geometry, and
-    it holds under a camera drag for free because it is a position rather than a screen
-    effect. **+2.1 ms at 1,692 objects, +5.8 ms at 20,582.**
-  - **The flip happens after the colour is decided**, or every reflection comes out in
-    the below-horizon grey: `above` is read from `dir.y`, and a mirrored object is
-    below the horizon. A reflection is a picture of a lit satellite, not a satellite in
-    the ground.
-  - **The haze has to reach the reflection too**, and this was a real mistake. A
-    reflection lands below the horizon where there is no haze, so the mirror of a low
-    object arrived *brighter* than the object itself — the band under the horizon
-    filled up while the sky just above it was washed out, and the water was showing
-    things the sky was not. You cannot see the reflection of something you cannot see.
-  - **`REFLECTION.strength` is over 1 on purpose.** The ground disc is drawn over the
-    water at 0.72, so what reaches the eye is 0.28 of it; the disc is the water's own
-    tint and no line of code asks for it.
-  - **The tension, stated rather than hidden.** "No Earth geometry, no globe, no map" is
-    the oldest decision in this file, and water is a *place*: this risks turning an
-    abstract dome into a scene. It is here because the piece decides aesthetics by
-    looking. `strength: 0` removes it and the draw with it.
+- **The ground** (`SKY.ground`): a dark field below the horizon with slow sheens
+  drifting over it. Rewritten 2026-09-18, and it replaced a reflection that did not
+  work.
+  - **What was there was a mirror of the objects** — the same points drawn again with y
+    negated, wobbled. Cheap, and wrong: a satellite has a *shape*, and a legible
+    upside-down copy of a legible mark reads as a duplicate of the data rather than as
+    water. Sixteen-pixel discs and triangles do not stop being discs and triangles when
+    you flip them. There is now nothing identifiable down there at all — two warped sine
+    fields crossed at different rates and stretched unequally, with no edge in them and
+    no period a viewer can count.
+  - **The ground disc was doing nothing, and had been for a long time.** It was a
+    `CircleGeometry` at y = 0 and the camera sits at y = 0, so every one of its vertices
+    projects onto the horizon line: seen exactly edge-on, it is degenerate. Verified by
+    sampling the canvas with the mesh shown and hidden — **byte-identical**, (6, 8, 12)
+    and (4, 6, 9) either way. Everything anyone has ever seen below the horizon was the
+    backdrop sphere. The disc is gone, and the claim it once carried — that it dimmed
+    what was under it to 28% — was false; anything written against that number,
+    including this file's own note on `REFLECTION.strength`, was wrong.
+  - So the ground is a branch inside the backdrop's fragment shader, which was already
+    covering those pixels. It costs arithmetic on the lower third of the frame and not
+    one extra draw.
+  - **It has to be darker than the sky, and that is the whole of what was wrong before.**
+    Once the horizon had an airglow above it, a ground within a shade of the sky's own
+    colour read as the same material with the glow inexplicably switched off. A horizon
+    is a change of substance and value is what says so.
+  - The coordinate is the ray projected onto a plane one unit below the eye, so the
+    sheens compress toward the horizon the way anything lying flat does. **The distance
+    is clamped**, because that projection runs to infinity at the horizon and an
+    unclamped one aliases into a shimmering comb exactly where the eye is looking; the
+    sheen is also held off the horizon itself for the same reason.
+- **The glow pass** (`BLOOM`): light bleeding out of the whole finished frame — objects,
+  orbits, rings, the graticule, the compass. Added 2026-09-18. `GLOW`'s halo lives
+  inside each object's sprite and reaches objects alone; this is the other kind.
+  - **It works entirely in display space, which is what makes it safe here.** The
+    documented trap is that a render target receives linear values and `#05070a` cannot
+    survive 8 bits of linear. This pass never meets it: it starts from a copy of the
+    **canvas**, which already holds display-ready sRGB bytes, and no shader in the chain
+    includes `colorspace_fragment` or tags a texture as sRGB, so every value passes
+    through untouched from copy to composite. Blurring in display space is not
+    physically correct and on a sky this dark it is the better-looking wrong — a linear
+    blur blows the bright cores out.
+  - Four kinds of pass: threshold-and-downsample, blur across, blur down, composite.
+  - **The kernel is not scalable, and stretching it drew boxes.** The blur is a nine-tap
+    Gaussian folded into five bilinear samples, and those offsets only weight correctly
+    at their own spacing. Widening them to `spread: 2.2` pulled the five taps into
+    separate lobes and put a visible **square** around every bright mark. Reach comes
+    from `passes` — blurs compose, so n of them give `sigma*sqrt(n)` — and from
+    `downscale`, never from moving the taps.
+  - **+19.5 ms on a software rasteriser**, A/B/A'd (63.9 / 83.6 / 65.3 / 84.7), and
+    almost all of it is the two full-size operations: the canvas copy and the composite.
+    The nine low-resolution passes at 1/36 of the frame each are nearly free, which is
+    the tuning guidance worth having — **raising `passes` costs almost nothing, lowering
+    `downscale` costs a lot.** `strength: 0` skips every pass and both render targets.
+  - Checked at 20,582 objects before shipping, because bloom over a sky that already
+    sums additive haloes is exactly the thing that could turn into one white field. It
+    does not: it reads as dense.
+  - The panel does not glow. It is DOM and sits above the canvas, which is where this
+    pass ends.
 - **Render order is a design decision**, set in `RENDER_ORDER`: points, tracks and rings
   under the haze so they emerge together; graticule and compass labels above it so the
-  dome stays legible to the horizon.
+  dome stays legible to the horizon. **Tracks are under the objects** since 2026-09-18 —
+  a track drawn over its own satellite puts a line across the mark being looked at, and
+  the mark is the thing; the orbit is where it has been. The two shared an order before,
+  and the tie went to whichever material three sorted first, which is not a decision
+  anyone made.
 
 **Measuring a small visual effect is harder than building one.** Finding out whether
 the glitch was doing anything took far longer than writing it, and every wrong turn was
@@ -1515,12 +1555,12 @@ Anything that computes range rate by hand must not repeat the naive version.
       of the Earth is drawn at all. Appearance already lives in the vertex shader, fed
       blended direction, shadow and range; the `kind` byte is in the catalogue for it.
   - [x] **Filling the frame.** Airglow and grain on a backdrop the haze shares its ramp
-        with, a halo inside the sprite each object already draws, and a reflection in
-        the ground. All three are cheap and none is a post pass. See *Rendering*.
-  - [ ] **Bloom.** Still open, and still an architecture change rather than a knob:
-        half-float render targets for the whole scene, and the glitch's canvas readback
-        moving with them. The argument for it is that it keys off brightness, which
-        already means sunlit.
+        with, a halo inside the sprite each object already draws, and a ground that is
+        a different substance from the sky. See *Rendering*.
+  - [x] **The glow pass.** Screen-space bloom over the whole finished frame, orbits and
+        rings included — and it turned out not to need half-float targets after all,
+        because working from a copy of the canvas keeps the whole chain in display
+        space. See *The glow pass*.
 - [ ] **Step 4 — sound.** Web Audio over the `SkyFrame` columns. A global view sonifies
       into mush; one observer's sky does not. See *Sound: the drone first*.
       ← *you are here*

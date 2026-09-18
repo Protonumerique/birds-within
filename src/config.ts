@@ -401,6 +401,41 @@ export const SKY = {
      */
     grain: 0.014,
   },
+  /**
+   * The ground. Rewritten 2026-09-18, and it replaced a reflection that did not work.
+   *
+   * **What was there before was a mirror of the objects** - the same points drawn again
+   * with y negated. It was cheap and it was wrong: a satellite has a *shape*, and a
+   * legible upside-down copy of a legible mark reads as a duplicate of the data rather
+   * than as water. Sixteen-pixel discs and triangles do not stop being discs and
+   * triangles when you flip them.
+   *
+   * So there is nothing identifiable down here at all now. The ground is a dark field
+   * with slow, very elongated sheens drifting across it - no points, no edges, nothing
+   * with a period a viewer could count. It suggests a surface catching light off the
+   * horizon without claiming to be any particular surface.
+   *
+   * It is also **darker than the sky, which it has to be.** The old disc was 0.72 of
+   * `#070b10` over the unlifted backdrop, which came out within a shade of the sky's own
+   * colour - so once the horizon had an airglow above it, the ground below read as the
+   * same material with the glow inexplicably switched off. A horizon is a change of
+   * substance, and value is what says so.
+   */
+  ground: {
+    /** The base. Clearly below the darkest sky, and cool rather than neutral. */
+    color: '#02040a',
+    /** What a sheen lifts toward: the horizon's own light, well under it. */
+    sheen: '#24415e',
+    /** How much of that colour a sheen ever reaches. 0 leaves a flat dark field. */
+    amount: 0.75,
+    /**
+     * How the sheens are stretched across the plane. Deliberately lopsided - equal
+     * numbers give round blobs, which is the one shape this must not have.
+     */
+    stretch: [0.55, 0.13] as [number, number],
+    /** Drift rate. Slow enough that nothing in it reads as an event. */
+    speed: 0.05,
+  },
 };
 
 /**
@@ -421,6 +456,61 @@ export const SKY = {
  * Only lights have one. A shard is not a light and does not glow; `KIND_LOOK.debris`
  * already says so, and the halo obeys it.
  */
+/**
+ * The glow pass: light bleeding out of everything on the canvas. Added 2026-09-18.
+ *
+ * `GLOW`'s halo is inside each object's own sprite, so it reaches objects and nothing
+ * else. This is the other kind, the one that was asked for: a real screen-space bloom
+ * that takes the **finished frame** - objects, orbits, rings, the graticule, the
+ * compass - and spreads the bright parts of it across everything. Anything drawn on
+ * the canvas glows; the panel does not, because it is DOM and sits above the canvas.
+ *
+ * **It works entirely in display space, which is what makes it safe here.** The
+ * documented trap under *Wreckage tearing the picture* is that a render target
+ * receives linear values and `#05070a` cannot survive 8 bits of linear. This pass never
+ * meets that problem: it starts from a copy of the **canvas**, which already holds
+ * display-ready sRGB bytes, and no shader in the chain includes `colorspace_fragment`
+ * or tags a texture as sRGB - so every value passes through untouched from the copy to
+ * the composite. Blurring in display space is not physically correct, and on a sky this
+ * dark it is the better-looking wrong: a linear blur blows the bright cores out.
+ *
+ * The shape of the work is four passes: threshold-and-downsample, blur across, blur
+ * down, composite. Three of them run at 1/`downscale` in each axis, so they cost a
+ * sixteenth of a fullscreen pass each; only the composite is full-size.
+ */
+export const BLOOM = {
+  /** 0 turns it off and skips every pass and both render targets. */
+  strength: 0.85,
+  /**
+   * How bright a pixel has to be before it bleeds, 0-1 against the display value. Low,
+   * because this sky's brightest marks are not close to white - but not 0, or the
+   * graticule and the haze bloom and the whole frame turns to soup.
+   */
+  threshold: 0.16,
+  /** How soft the threshold's edge is. A hard cut makes marks pop as they brighten. */
+  knee: 0.22,
+  /**
+   * Resolution divisor for the blur. Reach in screen pixels scales with it and cost
+   * falls as its square, so a bigger divisor is the cheap way to a wider glow; past
+   * about 8 the upsample starts to show as soft blocking.
+   */
+  downscale: 6,
+  /**
+   * Blur radius in low-resolution texels, and **it must stay near 1**. The kernel is a
+   * nine-tap Gaussian folded into five bilinear samples, and those offsets only weight
+   * correctly at their own spacing: stretching them pulls the taps into separate lobes
+   * and draws a **box** around every bright mark instead of a halo. That is what 2.2
+   * did. Reach comes from `passes` and `downscale`.
+   */
+  spread: 1,
+  /**
+   * How many across-and-down pairs to run. Blurs compose, so n passes of sigma give
+   * sigma*sqrt(n) - four is about twice the reach of one, for four sixteenths of a
+   * fullscreen pass at `downscale` 4, or four thirty-sixths at 6.
+   */
+  passes: 4,
+};
+
 export const GLOW = {
   /**
    * How far the halo reaches, as a multiple of the dot's own radius. The sprite grows
@@ -430,45 +520,6 @@ export const GLOW = {
   haloScale: 2.4,
   /** How bright the halo is at the centre, against the core's own 1.9. */
   haloGain: 0.42,
-};
-
-/**
- * The ground as water. Added 2026-09-18, and **cosmetic by its own admission**.
- *
- * The lower fifth of the frame is a dark disc and nothing else. This reflects the
- * objects in it - not by rendering the scene twice, but the way the ghosts already
- * work: **one more draw of the same points**, with the blended direction mirrored in
- * y and wobbled. No second camera, no render target, no new geometry, and it holds
- * under a camera drag for free because it is a position rather than a screen effect.
- *
- * The ground disc then does the rest: it is drawn *over* the reflection at 0.72, so
- * the water's own tint is the disc, and the reflection arrives at 28% without a single
- * line of code asking for it.
- *
- * **The tension, stated rather than hidden.** "No Earth geometry, no globe, no map" is
- * the oldest decision in this file, and water is a *place*: this risks turning an
- * abstract dome into a scene. It is here because the piece decides aesthetics by
- * looking, and this is cheap enough to look at. `strength: 0` removes it completely
- * and costs one skipped draw call.
- */
-export const REFLECTION = {
-  /**
-   * How bright the reflection is **before** the ground disc dims it - and that is the
-   * whole of why this number is over 1. The disc is drawn over the water at 0.72, so
-   * what reaches the eye is 0.28 of this: 1.3 here arrives at about a third of the
-   * brightness of the object being reflected, which is what a reflection looks like.
-   * 0 turns it off and skips the draw.
-   */
-  strength: 1.15,
-  /** How far the water bends a mark, in radians of sky at the zenith. */
-  wobble: 0.055,
-  /** Wobble rate, Hz. Wall time, like the debris tumble - it is the water, not the orbit. */
-  wobbleHz: 0.11,
-  /**
-   * How far below the horizon the reflection has faded out, in degrees. Short: the
-   * far end of a reflection is the part that least resembles one.
-   */
-  fadeDeg: 34,
 };
 
 /**

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
-import { CHOIR, GHOST, GLOW, HIGHLIGHT, INTERFERENCE, KIND_LOOK, PALETTE, REFLECTION, SKY, TRAIL } from './config';
+import { BLOOM, CHOIR, GHOST, GLOW, HIGHLIGHT, INTERFERENCE, KIND_LOOK, PALETTE, SKY, TRAIL } from './config';
 import { NO_POSITION, directionFromAltAz, type SkyFrame } from './sky-frame';
 import type { FramePair } from './sky-stream';
 import { pickNearest } from './picking';
@@ -18,15 +18,18 @@ const SKY_COLOR = PALETTE.sky;
  */
 const RENDER_ORDER = {
   /** The airglow and its grain, under everything - it is what the frame is made of. */
-  backdrop: -2,
-  /** The water. Under the objects, and under the ground disc that tints it. */
-  reflection: -1,
-  points: 0,
-  trail: 0,
-  rings: 1,
-  ground: 1,
-  haze: 2,
-  graticule: 3,
+  backdrop: -3,
+  /**
+   * **Under the objects**, since 2026-09-18. A track drawn over its own satellite puts
+   * a line across the mark it belongs to, and the mark is the thing being looked at;
+   * the orbit is where it has been. They shared an order before and the tie was broken
+   * by whichever material three sorted first, which is not a decision anyone made.
+   */
+  trail: -2,
+  points: -1,
+  rings: 0,
+  haze: 1,
+  graticule: 2,
 } as const;
 
 /** Horizontal coordinates to scene space, scaled. The mapping itself lives in sky-frame.ts. */
@@ -231,13 +234,6 @@ const POINT_VERT = /* glsl */ `
   uniform vec2 uViewport;
   /** GLOW: x how far the halo reaches as a multiple of the dot, y how bright it is. */
   uniform vec2 uHalo;
-  /**
-   * REFLECTION, and x is also the switch: 0 means this draw is the objects themselves.
-   * y wobble in radians, z wobble rate in Hz, w the depth it has faded out by.
-   */
-  uniform vec4 uReflect;
-  /** Sine of SKY.haze.topDeg: how much of an object the haze has eaten. */
-  uniform float uHazeTop;
 
   varying float vAlpha;
   varying vec3 vColor;
@@ -321,47 +317,6 @@ const POINT_VERT = /* glsl */ `
     // Nearer objects read as larger. Purely a depth cue - the dome has no scale.
     float nearness = clamp(1.0 - (range - 400.0) / 4000.0, 0.25, 1.0);
     float dot16 = (above ? 16.0 : 8.0) * nearness * size * uPixelRatio * uGhostSize;
-
-    /*
-     * The water. The same object, mirrored in the ground and bent - one more draw of
-     * these very buffers rather than a second render of the scene, which is the same
-     * bargain the ghosts already make.
-     *
-     * It happens **after** the colour above, on purpose: above is read from dir.y,
-     * and a mirrored object is below the horizon, so flipping first would paint every
-     * reflection in the below-horizon grey instead of the colour of the thing it
-     * reflects. A reflection is a picture of a lit satellite, not a satellite in the
-     * ground.
-     */
-    if (uReflect.x > 0.0) {
-      float depth = dir.y;
-      // A near reflection barely moves and a far one is torn apart - which is what a
-      // reflection does, and also what keeps the horizon line crisp.
-      float wob = uReflect.y * (0.3 + depth * 1.9);
-      float phase = uTime * uReflect.z * 6.2831853 + h * 6.2831853;
-      dir.y = -dir.y;
-      dir.x += wob * sin(phase);
-      dir.z += wob * cos(phase * 0.87 + 1.3);
-      dir.y += wob * 0.55 * sin(phase * 1.31);
-      dir = normalize(dir);
-      /*
-       * Two fades, and the first one was a real mistake worth keeping written down.
-       *
-       * A reflection lands BELOW the horizon, where there is no haze - so a mirror of
-       * a low object arrived brighter than the object itself, which is dimmed almost
-       * to nothing by the haze on its way down. The band under the horizon filled up
-       * while the sky just above it was washed out: the water was showing things the
-       * sky was not. You cannot see the reflection of something you cannot see, so the
-       * haze has to reach the reflection too - same curve, same constant.
-       *
-       * The second fade is depth: a reflection thins out as it runs away from the
-       * observer, and the far end of one is the part that least resembles a reflection.
-       */
-      float seen = smoothstep(0.0, uHazeTop, depth);
-      float fade = seen * (1.0 - smoothstep(0.0, uReflect.w, depth));
-      vColor *= uReflect.x * fade;
-      vAlpha *= fade;
-    }
 
     // A ghost is a streak, not a dot: it covers the gap back to the ghost behind it,
     // so the trail joins up instead of reading as a row of beads. The span is worked
@@ -632,11 +587,51 @@ const BACKDROP_FRAG = /* glsl */ `
   ${SKY_RAMP_GLSL}
 
   uniform float uGrain;
+  uniform vec3 uGround;
+  uniform vec3 uSheen;
+  uniform vec2 uStretch;
+  uniform float uAmount;
+  uniform float uSpeed;
+  uniform float uTime;
 
   varying vec3 vDirection;
 
+  /**
+   * Below the horizon: a dark field with slow sheens drifting across it.
+   *
+   * **There is nothing identifiable down here on purpose.** What was here before was a
+   * mirror of the objects, and it read as a duplicate of the data rather than as a
+   * surface - a sixteen-pixel disc does not stop being a disc when you flip it. No
+   * points, no edges, nothing with a period a viewer can count.
+   *
+   * The coordinate is the ray projected onto a plane one unit below the eye, so the
+   * sheens compress toward the horizon the way anything lying flat does. The distance
+   * is clamped, because that projection runs to infinity at the horizon and an
+   * unclamped one aliases into a shimmering comb exactly where the eye is looking.
+   */
+  vec2 groundPlane(vec3 dir) {
+    return vec2(dir.x, dir.z) / max(-dir.y, 0.02);
+  }
+
+  vec3 groundAt(vec3 dir) {
+    vec2 q = groundPlane(dir) * uStretch;
+    float t = uTime * uSpeed;
+    // Two warped sine fields crossed at different rates and stretched unequally. Not
+    // noise and not a shape: the warp keeps the two from ever agreeing into a plaid,
+    // and equal frequencies would give round blobs, which is the one thing this must
+    // not have.
+    q += 0.55 * vec2(sin(q.y * 0.7 + t * 1.1), cos(q.x * 0.5 - t * 0.9));
+    float a = sin(q.x + q.y * 0.35 + t);
+    float b = sin(q.x * 0.33 - q.y * 0.9 - t * 0.8);
+    float v = pow(0.25 * (a + 1.0) * (b + 1.0), 1.7);
+    // Held off the horizon itself, where the projection is densest and would alias,
+    // and faded again as the surface turns to face the eye further down.
+    float band = smoothstep(0.015, 0.11, -dir.y) * (1.0 - smoothstep(0.42, 1.0, -dir.y));
+    return mix(uGround, uSheen, v * band * uAmount);
+  }
+
   void main() {
-    gl_FragColor = vec4(skyAt(vDirection.y), 1.0);
+    gl_FragColor = vec4(vDirection.y >= 0.0 ? skyAt(vDirection.y) : groundAt(vDirection), 1.0);
 
     // Colour-managed like the clear colour and the haze, so an unlifted patch is
     // exactly empty sky.
@@ -660,6 +655,80 @@ const BACKDROP_FRAG = /* glsl */ `
      */
     float n = fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)));
     gl_FragColor.rgb += (fract(52.9829189 * n) - 0.5) * uGrain;
+  }
+`;
+
+/**
+ * The glow pass. Four fullscreen quads, all of them working in display space - see
+ * BLOOM in config.ts for why that is the safe choice here and not a shortcut.
+ *
+ * The vertex shader writes clip coordinates straight out, so no camera matters.
+ */
+const QUAD_VERT = /* glsl */ `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    gl_Position = vec4(position.xy, 0.0, 1.0);
+  }
+`;
+
+/** Take what is bright enough to bleed, and shrink it on the way. */
+const BLOOM_CUT_FRAG = /* glsl */ `
+  uniform sampler2D uSource;
+  uniform vec2 uTexel;
+  uniform float uThreshold;
+  uniform float uKnee;
+  varying vec2 vUv;
+
+  void main() {
+    // Four taps rather than one: at a fraction of the resolution a single-pixel
+    // highlight lands between samples more often than not, and a mark would flicker
+    // into and out of its own glow as it crossed the sky.
+    vec3 c = texture2D(uSource, vUv + uTexel * vec2(-1.0, -1.0)).rgb;
+    c += texture2D(uSource, vUv + uTexel * vec2(1.0, -1.0)).rgb;
+    c += texture2D(uSource, vUv + uTexel * vec2(-1.0, 1.0)).rgb;
+    c += texture2D(uSource, vUv + uTexel * vec2(1.0, 1.0)).rgb;
+    c *= 0.25;
+    // Against the brightest channel, so a saturated blue mark bleeds like a white one
+    // of the same intensity rather than a third as much.
+    float level = max(c.r, max(c.g, c.b));
+    gl_FragColor = vec4(c * smoothstep(uThreshold, uThreshold + uKnee, level), 1.0);
+  }
+`;
+
+/**
+ * One axis of a separable Gaussian: nine taps expressed as five, by landing each pair
+ * between two texels and letting the bilinear filter weight them.
+ *
+ * **The offsets are not scalable**, and that was a real bug worth keeping. Stretching
+ * them to widen the glow pulls the five taps apart into separate lobes, and what the
+ * screen shows is a **box** around every bright mark rather than a halo - a Gaussian
+ * sampled at four-texel gaps is not a Gaussian. Reach comes from running the pair more
+ * than once (`BLOOM.passes`) and from the downscale, never from moving these.
+ */
+const BLOOM_BLUR_FRAG = /* glsl */ `
+  uniform sampler2D uSource;
+  uniform vec2 uStep;
+  varying vec2 vUv;
+
+  void main() {
+    vec3 c = texture2D(uSource, vUv).rgb * 0.2270270270;
+    c += texture2D(uSource, vUv + uStep * 1.3846153846).rgb * 0.3162162162;
+    c += texture2D(uSource, vUv - uStep * 1.3846153846).rgb * 0.3162162162;
+    c += texture2D(uSource, vUv + uStep * 3.2307692308).rgb * 0.0702702703;
+    c += texture2D(uSource, vUv - uStep * 3.2307692308).rgb * 0.0702702703;
+    gl_FragColor = vec4(c, 1.0);
+  }
+`;
+
+/** Add it back over the frame. Additive, so the glow only ever lightens. */
+const BLOOM_ADD_FRAG = /* glsl */ `
+  uniform sampler2D uSource;
+  uniform float uStrength;
+  varying vec2 vUv;
+
+  void main() {
+    gl_FragColor = vec4(texture2D(uSource, vUv).rgb * uStrength, 1.0);
   }
 `;
 
@@ -770,14 +839,6 @@ export class SkyScene {
      */
     uTime: { value: 0 },
     uHalo: { value: new THREE.Vector2(GLOW.haloScale, GLOW.haloGain) },
-    uHazeTop: { value: Math.sin(THREE.MathUtils.degToRad(SKY.haze.topDeg)) },
-    /**
-     * Zero on x, so this draw is the objects themselves. Only the reflection's own
-     * material overrides it - and because every other uniform here is shared by
-     * reference, the reflection can never disagree with what it reflects about colour,
-     * size by range, the horizon or which mark is a shard.
-     */
-    uReflect: { value: new THREE.Vector4(0, 0, 0, 1) },
   };
 
   /**
@@ -803,6 +864,23 @@ export class SkyScene {
   private kindAttribute: THREE.BufferAttribute;
   private marked: number[] = [];
   private readonly ringUniforms;
+
+  /**
+   * The glow pass: a copy of the whole finished canvas, two low-resolution targets to
+   * bounce the blur between, and one quad whose material is swapped per pass. Null
+   * throughout when BLOOM.strength is 0, and then nothing below runs.
+   */
+  private bloomCopy: THREE.FramebufferTexture | null = null;
+  private bloomA: THREE.WebGLRenderTarget | null = null;
+  private bloomB: THREE.WebGLRenderTarget | null = null;
+  private bloomPixelRatio = 0;
+  private readonly bloomQuad: THREE.Mesh | null;
+  private readonly bloomScene = new THREE.Scene();
+  private readonly bloomCamera = new THREE.Camera();
+  private readonly bloomCut;
+  private readonly bloomBlur;
+  private readonly bloomAdd;
+  private readonly bloomOrigin = new THREE.Vector2(0, 0);
 
   /** A square of the finished canvas, copied back so the glitch pass can chew it. */
   private patch: THREE.FramebufferTexture | null = null;
@@ -854,7 +932,6 @@ export class SkyScene {
     // Strength 0 removes the pass rather than drawing an invisible one: it is the app's
     // only fullscreen shading, so "off" has to mean the draw does not happen.
     if (SKY.backdrop.strength > 0) this.scene.add(this.buildBackdrop());
-    this.scene.add(this.buildGround());
     this.scene.add(this.buildHaze());
 
     // --- satellites ---------------------------------------------------------
@@ -941,37 +1018,6 @@ export class SkyScene {
       ghost.visible = false;
       this.ghosts.push(ghost);
       this.scene.add(ghost);
-    }
-
-    // --- the water ----------------------------------------------------------
-    // The same geometry and the same shader again, mirrored in the ground. Spreading
-    // `this.uniforms` shares every reference but the one overridden, exactly as the
-    // ghosts do. `REFLECTION.strength` of 0 skips the draw entirely.
-    if (REFLECTION.strength > 0) {
-      const water = new THREE.Points(
-        pointsGeom,
-        new THREE.ShaderMaterial({
-          vertexShader: POINT_VERT,
-          fragmentShader: POINT_FRAG,
-          uniforms: {
-            ...this.uniforms,
-            uReflect: {
-              value: new THREE.Vector4(
-                REFLECTION.strength,
-                REFLECTION.wobble,
-                REFLECTION.wobbleHz,
-                Math.sin(THREE.MathUtils.degToRad(REFLECTION.fadeDeg))
-              ),
-            },
-          },
-          transparent: true,
-          depthWrite: false,
-          blending: THREE.AdditiveBlending,
-        })
-      );
-      water.frustumCulled = false;
-      water.renderOrder = RENDER_ORDER.reflection;
-      this.scene.add(water);
     }
 
     // --- highlight rings ----------------------------------------------------
@@ -1070,6 +1116,46 @@ export class SkyScene {
         })
       )
     );
+
+    // --- the glow pass --------------------------------------------------------
+    if (BLOOM.strength > 0) {
+      this.bloomCut = new THREE.ShaderMaterial({
+        vertexShader: QUAD_VERT,
+        fragmentShader: BLOOM_CUT_FRAG,
+        uniforms: {
+          uSource: { value: null },
+          uTexel: { value: new THREE.Vector2() },
+          uThreshold: { value: BLOOM.threshold },
+          uKnee: { value: BLOOM.knee },
+        },
+        depthTest: false,
+        depthWrite: false,
+      });
+      this.bloomBlur = new THREE.ShaderMaterial({
+        vertexShader: QUAD_VERT,
+        fragmentShader: BLOOM_BLUR_FRAG,
+        uniforms: { uSource: { value: null }, uStep: { value: new THREE.Vector2() } },
+        depthTest: false,
+        depthWrite: false,
+      });
+      this.bloomAdd = new THREE.ShaderMaterial({
+        vertexShader: QUAD_VERT,
+        fragmentShader: BLOOM_ADD_FRAG,
+        uniforms: { uSource: { value: null }, uStrength: { value: BLOOM.strength } },
+        depthTest: false,
+        depthWrite: false,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+      });
+      this.bloomQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.bloomCut);
+      this.bloomQuad.frustumCulled = false;
+      this.bloomScene.add(this.bloomQuad);
+    } else {
+      this.bloomQuad = null;
+      this.bloomCut = null;
+      this.bloomBlur = null;
+      this.bloomAdd = null;
+    }
 
     this.attachLook(canvas);
     this.canvasRect = canvas.getBoundingClientRect();
@@ -1374,6 +1460,14 @@ export class SkyScene {
         uniforms: {
           ...this.skyRamp,
           uGrain: { value: SKY.backdrop.grain },
+          uGround: { value: new THREE.Color(SKY.ground.color) },
+          uSheen: { value: new THREE.Color(SKY.ground.sheen) },
+          uStretch: { value: new THREE.Vector2(SKY.ground.stretch[0], SKY.ground.stretch[1]) },
+          uAmount: { value: SKY.ground.amount },
+          uSpeed: { value: SKY.ground.speed },
+          // Wall seconds, like the debris tumble: weather on a surface, not anything
+          // the clock is doing.
+          uTime: this.uniforms.uTime,
         },
         side: THREE.BackSide,
         depthWrite: false,
@@ -1382,26 +1476,6 @@ export class SkyScene {
     );
     mesh.frustumCulled = false;
     mesh.renderOrder = RENDER_ORDER.backdrop;
-    return mesh;
-  }
-
-  /** A dark disc at the horizon so "below" reads as ground rather than as sky. */
-  private buildGround(): THREE.Mesh {
-    const mesh = new THREE.Mesh(
-      new THREE.CircleGeometry(SKY.radius * 1.2, 96),
-      new THREE.MeshBasicMaterial({
-        color: 0x070b10,
-        transparent: true,
-        // Nothing is drawn below SKY.lowestVisibleDeg any more, so this no longer
-        // decides whether the far side shows through - it only darkens the ground so
-        // the horizon reads as an edge.
-        opacity: 0.72,
-        side: THREE.DoubleSide,
-        depthWrite: false,
-      })
-    );
-    mesh.rotation.x = -Math.PI / 2;
-    mesh.renderOrder = RENDER_ORDER.ground;
     return mesh;
   }
 
@@ -1596,6 +1670,60 @@ export class SkyScene {
     // And then chew a square of it around each kept shard. Nothing kept, nothing to
     // do: this is the overwhelmingly common case and it costs one comparison.
     if (this.warpCount > 0 && this.patch) this.tearAtShards();
+
+    // The glow goes last, so it reads the frame as it will actually be seen - torn
+    // patches included. A shard that is breaking the picture up should bleed the
+    // pieces, not the tidy version underneath them.
+    this.bloom();
+  }
+
+  /**
+   * Spread the bright parts of the finished canvas across everything.
+   *
+   * Four passes, all of them in display space - the copy is of the **canvas**, which
+   * already holds sRGB bytes, and no shader here converts anything. That is what keeps
+   * this clear of the trap that a render target receiving linear values cannot hold a
+   * sky this dark in 8 bits. See BLOOM in config.ts.
+   */
+  private bloom(): void {
+    const quad = this.bloomQuad;
+    const a = this.bloomA;
+    const b = this.bloomB;
+    if (!quad || !a || !b || !this.bloomCopy) return;
+
+    this.renderer.copyFramebufferToTexture(this.bloomCopy, this.bloomOrigin);
+
+    // Cut what is bright enough to bleed, at a quarter size.
+    this.bloomCut!.uniforms.uSource!.value = this.bloomCopy;
+    quad.material = this.bloomCut!;
+    this.renderer.setRenderTarget(a);
+    this.renderer.render(this.bloomScene, this.bloomCamera);
+
+    // Across, then down, as many times as it takes. Widening the kernel instead would
+    // box every mark - see BLOOM_BLUR_FRAG. Each pair lands back in A, so the loop can
+    // simply run again; the blurs compose, and n passes of sigma give sigma*sqrt(n).
+    const step = this.bloomBlur!.uniforms.uStep!.value as THREE.Vector2;
+    quad.material = this.bloomBlur!;
+    for (let pass = 0; pass < BLOOM.passes; pass++) {
+      this.bloomBlur!.uniforms.uSource!.value = a.texture;
+      step.set(BLOOM.spread / a.width, 0);
+      this.renderer.setRenderTarget(b);
+      this.renderer.render(this.bloomScene, this.bloomCamera);
+
+      this.bloomBlur!.uniforms.uSource!.value = b.texture;
+      step.set(0, BLOOM.spread / a.height);
+      this.renderer.setRenderTarget(a);
+      this.renderer.render(this.bloomScene, this.bloomCamera);
+    }
+
+    // And back over the canvas, additively. autoClear off, or the frame this is meant
+    // to be added to is wiped a moment before it gets there.
+    this.renderer.setRenderTarget(null);
+    this.bloomAdd!.uniforms.uSource!.value = a.texture;
+    quad.material = this.bloomAdd!;
+    this.renderer.autoClear = false;
+    this.renderer.render(this.bloomScene, this.bloomCamera);
+    this.renderer.autoClear = true;
   }
 
   /**
@@ -1666,6 +1794,36 @@ export class SkyScene {
     this.trackMaterial.resolution.set(w, h);
     // The patch is a fixed square in CSS pixels; only a change of device pixel ratio
     // can resize it, so it is built once and kept.
+    // The glow's buffers follow the canvas, so they are rebuilt whenever it changes.
+    if (this.bloomQuad && (ratio !== this.bloomPixelRatio || this.bloomA?.width !== Math.max(1, Math.floor((w * ratio) / BLOOM.downscale)))) {
+      this.bloomPixelRatio = ratio;
+      const dw = Math.max(1, Math.round(w * ratio));
+      const dh = Math.max(1, Math.round(h * ratio));
+      const lw = Math.max(1, Math.floor(dw / BLOOM.downscale));
+      const lh = Math.max(1, Math.floor(dh / BLOOM.downscale));
+
+      this.bloomCopy?.dispose();
+      this.bloomCopy = new THREE.FramebufferTexture(dw, dh);
+      // Raw bytes, decoded by nobody: the canvas is already display-encoded and every
+      // shader in the chain treats these values as data rather than as colour.
+      this.bloomCopy.colorSpace = THREE.NoColorSpace;
+      this.bloomCopy.minFilter = THREE.LinearFilter;
+      this.bloomCopy.magFilter = THREE.LinearFilter;
+      this.bloomCut!.uniforms.uTexel!.value.set(1 / dw, 1 / dh);
+
+      this.bloomA?.dispose();
+      this.bloomB?.dispose();
+      const opts = {
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter,
+        depthBuffer: false,
+        stencilBuffer: false,
+        colorSpace: THREE.NoColorSpace,
+      } as const;
+      this.bloomA = new THREE.WebGLRenderTarget(lw, lh, opts);
+      this.bloomB = new THREE.WebGLRenderTarget(lw, lh, opts);
+    }
+
     if (ratio !== this.patchPixelRatio) {
       this.patchPixelRatio = ratio;
       this.patch?.dispose();
