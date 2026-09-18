@@ -593,6 +593,10 @@ const BACKDROP_FRAG = /* glsl */ `
   uniform float uAmount;
   uniform float uSpeed;
   uniform float uShadow;
+  uniform vec2 uCrest;
+  uniform float uContrast;
+  uniform float uWarp;
+  uniform float uReach;
   uniform float uTime;
 
   varying vec3 vDirection;
@@ -641,7 +645,7 @@ const BACKDROP_FRAG = /* glsl */ `
     // A strong warp, and the cheapest way there is to stop a smooth field reading as
     // one smooth thing. Amplitude above 1 folds the domain back on itself, so patches
     // pinch off and reconnect instead of staying a single continuous swell.
-    q += 1.1 * vec2(sin(q.y * 0.9 + t * 0.55), cos(q.x * 0.75 - t * 0.61));
+    q += uWarp * vec2(sin(q.y * 0.9 + t * 0.55), cos(q.x * 0.75 - t * 0.61));
     // One extra scale, because a field of same-sized anythings reads as a set of
     // objects. A single higher-frequency term is enough to break that up.
     float v = swell(q, t) + 0.3 * sin(q.x * 2.6 - q.y * 1.9 + t * 1.17);
@@ -649,11 +653,10 @@ const BACKDROP_FRAG = /* glsl */ `
     // the whole field at once and the ground reads as one sheet of light sliding across
     // it. Too narrow is the opposite failure - the crests thin into hard ribbons, which
     // are as defined a shape as anything this is meant to avoid. 0.18 to 0.72 did that.
-    v = smoothstep(0.02, 0.82, v);
-    v *= v;
+    v = pow(smoothstep(uCrest.x, uCrest.y, v), uContrast);
     // Held off the horizon itself, where the projection is densest and would alias,
     // and faded again as the surface turns to face the eye further down.
-    float band = smoothstep(0.02, 0.13, -dir.y) * (1.0 - smoothstep(0.55, 1.25, -dir.y));
+    float band = smoothstep(0.02, 0.13, -dir.y) * (1.0 - smoothstep(uReach, uReach * 2.3, -dir.y));
     /*
      * The observer's own shadow: a pool of darkness where they are standing, deepest
      * straight down and gone by the time the ground reaches the horizon.
@@ -942,8 +945,10 @@ export class SkyScene {
   /** Segments, not samples: one track of N samples costs N-1 of these. */
   private trackCapacity: number;
 
-  private yaw = 0;
-  private pitch = THREE.MathUtils.degToRad(38);
+  // Compass bearing, not an arbitrary zero: see SKY.startFacingDeg for why the piece
+  // opens facing south.
+  private yaw = THREE.MathUtils.degToRad(SKY.startFacingDeg);
+  private pitch = THREE.MathUtils.degToRad(SKY.startPitchDeg);
   private pointer: PointerHandlers | null = null;
   private canvasRect: DOMRect;
 
@@ -1505,6 +1510,10 @@ export class SkyScene {
           uAmount: { value: SKY.ground.amount },
           uSpeed: { value: SKY.ground.speed },
           uShadow: { value: SKY.ground.shadow },
+          uCrest: { value: new THREE.Vector2(SKY.ground.crest[0], SKY.ground.crest[1]) },
+          uContrast: { value: SKY.ground.contrast },
+          uWarp: { value: SKY.ground.warp },
+          uReach: { value: Math.sin(THREE.MathUtils.degToRad(SKY.ground.reachDeg)) },
           // Wall seconds, like the debris tumble: weather on a surface, not anything
           // the clock is doing.
           uTime: this.uniforms.uTime,

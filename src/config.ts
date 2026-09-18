@@ -332,6 +332,19 @@ export const SKY = {
   /** Radius of the dome in scene units. Arbitrary - the sky has no scale. */
   radius: 100,
   /**
+   * Where the camera is pointing when the piece opens: a compass bearing in degrees,
+   * 0 north and 180 south, with `startPitchDeg` above the horizon.
+   *
+   * **South, since 2026-09-18.** North was the default only because `sky-frame.ts` maps
+   * -Z to north and a camera with no yaw looks down -Z - which is a fact about the
+   * coordinate system rather than a decision about the image. South is where the piece
+   * actually is: from this latitude the geostationary belt is a fixed arc across the
+   * southern sky, and it is the one thing in the frame that holds still while
+   * everything else streams past. Opening facing away from it wasted the first look.
+   */
+  startFacingDeg: 180,
+  startPitchDeg: 38,
+  /**
    * The lowest elevation anything is drawn at. **The sky ends here** - below it an
    * object is not drawn, not listed, not in the belt's grid, and a mark on it is let
    * go. One floor, so the panel can never name something the sky is not showing.
@@ -433,12 +446,12 @@ export const SKY = {
      * anything bright enough to look like a source - or like something reflecting one -
      * is too bright. It came down from 0.9 for exactly that.
      */
-    amount: 0.5,
+    amount: 0.38,
     /**
      * How the sheens are stretched across the plane. Deliberately lopsided - equal
      * numbers give round blobs, which is the one shape this must not have.
      */
-    stretch: [1.7, 0.62] as [number, number],
+    stretch: [1.15, 0.62] as [number, number],
     /**
      * How dark it gets where the observer is standing, 0-1. Deepest straight down and
      * gone by the horizon.
@@ -450,6 +463,31 @@ export const SKY = {
      * whole frame, together with the frequency above.
      */
     shadow: 0.45,
+    /**
+     * The window the crests come through, against a field running roughly -1 to 1.
+     * **This is the softness dial**, and both ends fail differently: widen it and the
+     * whole field lifts at once, so the ground becomes one sheet of light sliding
+     * across it; narrow it and the crests thin into hard ribbons, which are as defined
+     * a shape as anything this exists to avoid. 0.18 to 0.72 gave ribbons.
+     */
+    crest: [-0.05, 0.9] as [number, number],
+    /**
+     * How hard the crests are shaped after that window - an exponent, so higher is
+     * more concentrated and harder-edged, lower is blurrier. 2 was the first value and
+     * read a little crisp.
+     */
+    contrast: 1.5,
+    /**
+     * How far the field folds back on itself. Above 1 the domain turns inside out and
+     * patches pinch off and reconnect, which is what stops the swells reading as one
+     * continuous mass; below 1 it is a gentle distortion and they join back up.
+     */
+    warp: 1.1,
+    /**
+     * How far down the ground the sheens reach, in degrees below the horizon. Past
+     * this the surface has turned to face the eye and there is no grazing light left.
+     */
+    reachDeg: 33,
     /**
      * The pace it evolves at. Slow enough that nothing in it reads as an event: the
      * three waves in `swell` beat against each other over tens of seconds and never

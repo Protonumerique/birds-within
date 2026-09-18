@@ -284,6 +284,12 @@ three.js, `src/scene.ts`. Every object is drawn from **two ticks at once** and b
 the vertex shader by one uniform, `uT`. The CPU work per rendered frame is setting that
 uniform; a tick arriving uploads into whichever of the two GPU slots is stale.
 
+- **The piece opens facing south** (`SKY.startFacingDeg`). North was the default only
+  because `sky-frame.ts` maps −Z to north and a camera with no yaw looks down −Z — a
+  fact about the coordinate system rather than a decision about the image. South is
+  where the piece is: the geostationary belt is a fixed arc across the southern sky and
+  the one thing in frame that holds still while everything else streams past, so opening
+  away from it wasted the first look.
 - **Blend unit direction vectors and renormalise.** This is why there is no azimuth
   wrap-around problem — lerping 359° → 1° goes the long way round, but a vector has no
   seam. Do not reintroduce alt/az interpolation.
@@ -519,7 +525,13 @@ uniform; a tick arriving uploads into whichever of the two GPU slots is stale.
   - **The contrast window is a balance, and both ends fail differently.** Wide lifts the
     whole field at once and the ground becomes one sheet of light sliding across it;
     narrow thins the crests into hard ribbons, which are as defined a shape as anything
-    this exists to avoid. 0.18–0.72 gave ribbons; 0.02–0.82 is the settled value.
+    this exists to avoid. 0.18–0.72 gave ribbons.
+  - **Every number in it is a dial**, and that was a fair complaint when half of them
+    were still in the shader: `color` and `sheen`, `amount` for how present it is,
+    `stretch` for the scale on each axis, `crest` and `contrast` for how soft the swells
+    are, `warp` for how hard the field folds, `speed` for the pace, `shadow` for the pool
+    under the observer, `reachDeg` for how far down the light gets. Tuning this by
+    looking is the point, so nothing about it should need a shader edit.
   - **It has to be darker than the sky, and that is the whole of what was wrong before.**
     Once the horizon had an airglow above it, a ground within a shade of the sky's own
     colour read as the same material with the glow inexplicably switched off. A horizon
