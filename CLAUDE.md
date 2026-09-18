@@ -694,6 +694,33 @@ expensive thing in the app. The levers are `maxGain` and `bokeh`, and area goes 
 square of each, so trimming either pays back fast. The dimming exponents do not help:
 the sprites are the same size whatever they are set to.
 
+**A near mark is a body, not a glow** (`bodyEdge`, `bodyGain`): a hard-edged disc, and a
+shard keeps its triangle. **Additive blending cannot occlude** — it adds to whatever is
+behind it, so nothing drawn this way is opaque in the compositing sense. What it can do
+is *saturate*: against a `#05070a` sky a disc over 1.0 clamps to white, and once clamped,
+what is behind contributes nothing more. That is the honest cheap version of opacity.
+Real occlusion would need alpha blending and a depth buffer — and here is the one thing
+the "distance is invisible" finding does **not** cover: radius is invisible to the
+*projection*, but it is not invisible to the *depth buffer*. Giving the points real z
+would buy occlusion and nothing else. It would also mean depth-writing points in a scene
+where every layer currently sets `depthWrite: false` and `renderOrder` decides
+everything, so it is a real change, not a knob.
+
+**Where this stands, and it is not finished.** The mechanism works and every part of it
+is cheap. What does not work is the *density*: at catalogue scale about 800 objects are
+above the horizon, so "bring the near ones close" brings **hundreds** of them close and
+the frame becomes a wall of discs at any tuning. Narrowing the range band does not fix
+it — it swings to the other failure, where at some instants nothing at all is inside the
+band and there is no subject, because the effect is at the mercy of what happens to be
+overhead. That is a design problem, not a shader or performance one.
+
+The promising answer is the one the sound already reached, for the same reason and in
+almost the same words: **nothing sounds until it is kept**, because sonifying what is
+merely *there* is mush. Immersing what is merely there is the same mush in the other
+sense. Immersing only the **kept** objects would give one to five subjects, sharp and
+close, against a soft field — legible, and consistent with the grammar the piece already
+has. It needs picking to survive the effect first, which is the next piece of work.
+
 **Markers leave, and picking stops.** A mark drawn eight times its size and spread into a
 soft disc is nowhere near where `picking.ts` projects it, so rings and tracks fade out by
 `markersGoneAt` and `piece.ts` stops picking above 0.02. A pointer that lies is worse

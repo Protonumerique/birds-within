@@ -259,6 +259,8 @@ const POINT_VERT = /* glsl */ `
   varying float vBlur;
   /** How much this mark has been magnified by immersion, 1 = not at all. */
   varying float vGain;
+  /** How near-and-immersed this mark is, 0-1: how much of a solid body it has become. */
+  varying float vSolid;
 
   /** Where a blended direction lands on screen, in device pixels. */
   vec2 toScreen(vec3 dir) {
@@ -283,6 +285,7 @@ const POINT_VERT = /* glsl */ `
       vDotPx = 0.0;
       vBlur = 0.0;
       vGain = 1.0;
+      vSolid = 0.0;
       return;
     }
 
@@ -307,6 +310,7 @@ const POINT_VERT = /* glsl */ `
       vDotPx = 0.0;
       vBlur = 0.0;
       vGain = 1.0;
+      vSolid = 0.0;
       return;
     }
 
@@ -342,7 +346,8 @@ const POINT_VERT = /* glsl */ `
 
     // The subject comes forward and stays SHARP. A lens focused on something near does
     // not blur it - it blurs everything behind it.
-    float gain = mix(1.0, uImmerse.w, uImmerse.x * near);
+    vSolid = uImmerse.x * near;
+    float gain = mix(1.0, uImmerse.w, vSolid);
     vGain = gain;
     // And the background goes soft. This is the half that was backwards at first: the
     // first version defocused the near marks and left the belt crisp, which is a lens
@@ -399,10 +404,13 @@ const POINT_FRAG = /* glsl */ `
   varying float vDotPx;
   varying float vBlur;
   varying float vGain;
+  varying float vSolid;
 
   uniform vec2 uHalo;
   /** How much the core tightens as a near mark is magnified. See IMMERSION.coreTighten. */
   uniform float uCoreTighten;
+  /** x the body's edge as a fraction of the dot radius, y how bright it is. */
+  uniform vec2 uBody;
 
   /**
    * Sweep a sprite along its streak: collapse the point onto the segment first and
@@ -443,7 +451,9 @@ const POINT_FRAG = /* glsl */ `
       float aa = mix(1.5, vSizePx * 0.30, vBlur) / max(vSizePx, 1.0);
       float fill = 1.0 - smoothstep(-aa, aa, t);
       if (fill <= 0.0) discard;
-      gl_FragColor = vec4(vColor * vGlow * fill * vAlpha, 1.0);
+      // A near shard is a body too - the triangle is already hard-edged, it only needs
+      // the brightness to saturate against the sky the way a near light does.
+      gl_FragColor = vec4(vColor * vGlow * fill * vAlpha * mix(1.0, uBody.y, vSolid), 1.0);
       return;
     }
 
@@ -482,7 +492,21 @@ const POINT_FRAG = /* glsl */ `
      * defocus - no depth buffer, no gather, no second pass. The sprite is the bokeh.
      */
     float disc = (1.0 - smoothstep(uHalo.x * 0.68, uHalo.x, r)) * 0.55;
-    gl_FragColor = vec4(vColor * mix(focused, disc, vBlur) * vAlpha, 1.0);
+
+    /*
+     * A near mark is a **body**, not a glow: a hard-edged disc bright enough to clamp
+     * the screen to white, with the halo left around it.
+     *
+     * Additive blending cannot occlude - it adds to whatever is behind - so nothing
+     * here is opaque in the compositing sense. What it can do is saturate, and once a
+     * pixel has clamped, whatever is behind it contributes nothing more. Against a sky
+     * this dark that reads as solid, which is the honest cheap version of the thing.
+     */
+    float edge = 2.0 / max(vDotPx * vGain, 1.0);
+    float body = 1.0 - smoothstep(uBody.x - edge, uBody.x, r);
+    float solid = focused * 0.45 + body * uBody.y;
+
+    gl_FragColor = vec4(vColor * mix(mix(focused, solid, vSolid), disc, vBlur) * vAlpha, 1.0);
   }
 `;
 
@@ -958,6 +982,7 @@ export class SkyScene {
       value: new THREE.Vector3(IMMERSION.bokeh, IMMERSION.nearDim, IMMERSION.farDim),
     },
     uCoreTighten: { value: IMMERSION.coreTighten },
+    uBody: { value: new THREE.Vector2(IMMERSION.bodyEdge, IMMERSION.bodyGain) },
   };
 
   /**

@@ -637,7 +637,7 @@ export const IMMERSION = {
    * summed additively into a single white cloud on a 20,582-object sky. There are
    * hundreds of them, so anything less than conservation blows the frame out.
    */
-  nearDim: 1.2,
+  nearDim: 0.7,
   /**
    * How much a near mark's bright core tightens as it is magnified, as an exponent on
    * the gain: 0 keeps the whole profile scaling together, 1 holds the core at a fixed
@@ -651,6 +651,20 @@ export const IMMERSION = {
    */
   coreTighten: 0.7,
   /**
+   * A near mark stops being a glow and becomes a **body**: a hard-edged disc, as a
+   * fraction of the dot's radius, at `bodyGain` brightness.
+   *
+   * **Additive blending cannot occlude** - it adds to whatever is behind it, so nothing
+   * drawn this way is ever truly opaque. What it can do is *saturate*: against a
+   * `#05070a` sky a disc at over 1.0 clamps to white, and once it has clamped, more
+   * light behind it adds nothing. It reads as solid because it is the brightest the
+   * screen goes. That is the honest cheap version of opacity here; real occlusion would
+   * need alpha blending and a depth buffer, which is a much larger change - see the
+   * note on depth at the end of this section.
+   */
+  bodyEdge: 0.52,
+  bodyGain: 2.4,
+  /**
    * Energy conservation on the **far** bokeh, and deliberately gentler than `nearDim`.
    *
    * Full conservation would be correct and useless: a belt point is faint and two
@@ -659,7 +673,7 @@ export const IMMERSION = {
    * to be visible - that is what bokeh is - so this keeps them in the image. There are
    * also far fewer of them than there are near marks, so they can afford it.
    */
-  farDim: 1.7,
+  farDim: 2,
   /**
    * Immersion at which rings and tracks have faded out completely.
    *
