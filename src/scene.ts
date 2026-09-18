@@ -613,17 +613,38 @@ const BACKDROP_FRAG = /* glsl */ `
     return vec2(dir.x, dir.z) / max(-dir.y, 0.02);
   }
 
+  /**
+   * A field that **evolves in place rather than sliding past**, which is the whole of
+   * what makes this read as incidental light instead of as something being moved about.
+   *
+   * Three waves whose directions and rates are all incommensurate: no two of them agree
+   * on a velocity, so their sum has none. It boils. One translating layer - which is
+   * what was here before - gives the pattern a direction, and anything with a direction
+   * reads as an object with somewhere to be.
+   */
+  float swell(vec2 p, float t) {
+    return (sin(p.x + p.y * 0.35 + t)
+      + sin(p.x * -0.55 + p.y * 0.80 - t * 0.73)
+      + sin(p.x * 0.30 - p.y * 1.20 + t * 1.31)) / 3.0;
+  }
+
   vec3 groundAt(vec3 dir) {
     vec2 q = groundPlane(dir) * uStretch;
     float t = uTime * uSpeed;
-    // Two warped sine fields crossed at different rates and stretched unequally. Not
-    // noise and not a shape: the warp keeps the two from ever agreeing into a plaid,
-    // and equal frequencies would give round blobs, which is the one thing this must
-    // not have.
-    q += 0.55 * vec2(sin(q.y * 0.7 + t * 1.1), cos(q.x * 0.5 - t * 0.9));
-    float a = sin(q.x + q.y * 0.35 + t);
-    float b = sin(q.x * 0.33 - q.y * 0.9 - t * 0.8);
-    float v = pow(0.25 * (a + 1.0) * (b + 1.0), 1.7);
+    // The warp runs on its own slower clock, so the shapes deform as well as drift -
+    // a rigid pattern under a moving warp still reads as a rigid pattern.
+    // Two plain sines are enough here: the warp only has to break up regularity, and
+    // the field it distorts is already boiling. Warping with two more swells looked
+    // no different and cost twelve sines a pixel against six - see the note on cost in
+    // buildBackdrop, because this is the fullscreen pass and it pays for everything.
+    q += 0.7 * vec2(sin(q.y * 0.45 + t * 0.55), cos(q.x * 0.38 - t * 0.61));
+    // One extra scale, because a field of same-sized anythings reads as a set of
+    // objects. A single higher-frequency term is enough to break that up.
+    float v = swell(q, t) + 0.22 * sin(q.x * 2.6 - q.y * 1.9 + t * 1.17);
+    // Soft-edged and mostly dark: squared rather than thresholded, so nothing in it
+    // ever acquires a boundary.
+    v = smoothstep(-0.15, 0.85, v);
+    v *= v;
     // Held off the horizon itself, where the projection is densest and would alias,
     // and faded again as the surface turns to face the eye further down.
     float band = smoothstep(0.015, 0.11, -dir.y) * (1.0 - smoothstep(0.42, 1.0, -dir.y));
@@ -1442,7 +1463,9 @@ export class SkyScene {
    * runs on the sine of elevation, the direction is normalised in the vertex shader,
    * and the dither has no `sin` in it. Measured on a software rasteriser, where fill
    * cost is enormously exaggerated: +30.2 ms a frame before those three changes, +22.6
-   * after.
+   * after, and **+29.5 once the ground moved in here** - the sheens are six sines on
+   * whatever part of the screen is below the horizon, and twelve cost +35 while looking
+   * no different.
    *
    * **Do not keep optimising the arithmetic; it is not where the cost is.** The same
    * sphere shaded with a constant colour - no varying, no ramp, no dither - still costs

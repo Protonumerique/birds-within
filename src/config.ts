@@ -425,16 +425,26 @@ export const SKY = {
     /** The base. Clearly below the darkest sky, and cool rather than neutral. */
     color: '#02040a',
     /** What a sheen lifts toward: the horizon's own light, well under it. */
-    sheen: '#24415e',
-    /** How much of that colour a sheen ever reaches. 0 leaves a flat dark field. */
-    amount: 0.75,
+    sheen: '#1d364e',
+    /**
+     * How much of that colour a sheen ever reaches. 0 leaves a flat dark field.
+     *
+     * Low on purpose. These are meant to read as light that happens to be there, and
+     * anything bright enough to look like a source - or like something reflecting one -
+     * is too bright. It came down from 0.9 for exactly that.
+     */
+    amount: 0.5,
     /**
      * How the sheens are stretched across the plane. Deliberately lopsided - equal
      * numbers give round blobs, which is the one shape this must not have.
      */
     stretch: [0.55, 0.13] as [number, number],
-    /** Drift rate. Slow enough that nothing in it reads as an event. */
-    speed: 0.05,
+    /**
+     * The pace it evolves at. Slow enough that nothing in it reads as an event: the
+     * three waves in `swell` beat against each other over tens of seconds and never
+     * repeat, so there is change to notice but never a moment when something happens.
+     */
+    speed: 0.07,
   },
 };
 

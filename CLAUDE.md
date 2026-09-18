@@ -441,8 +441,9 @@ uniform; a tick arriving uploads into whichever of the two GPU slots is stale.
     shows in 8 bits. It is hashed on `gl_FragCoord`, so it holds still in the frame
     while the sky turns behind it: the image's noise floor, not paint on the dome.
   - **It is the app's only fullscreen pass, and that is its whole cost.** +22.6 ms a
-    frame on a software rasteriser, at 1,692 objects and at 20,582 alike — it is fill,
-    so object count does not enter into it. **Do not keep optimising the arithmetic.**
+    frame on a software rasteriser with the sky alone, +29.5 once the ground moved into
+    it, and the same at 1,692 objects and at 20,582 — it is fill, so object count does
+    not enter into it. **Do not keep optimising the arithmetic.**
     The same sphere shaded with a constant colour still costs +11.0 ms of that, so half
     the bill is a CPU rasteriser touching a million pixels and would be nothing at all
     on a GPU. Moving the ramp onto the sine of elevation, normalising in the vertex
@@ -489,8 +490,19 @@ uniform; a tick arriving uploads into whichever of the two GPU slots is stale.
     what was under it to 28% — was false; anything written against that number,
     including this file's own note on `REFLECTION.strength`, was wrong.
   - So the ground is a branch inside the backdrop's fragment shader, which was already
-    covering those pixels. It costs arithmetic on the lower third of the frame and not
-    one extra draw.
+    covering those pixels: no extra draw, only arithmetic on whatever part of the screen
+    is below the horizon. **+6.9 ms of the backdrop's +29.5** on a software rasteriser,
+    at six sines a pixel. Twelve cost +12.6 and looked no different, which is where the
+    warp lost its two extra octaves.
+  - **It evolves in place; it does not slide past.** Three waves whose directions and
+    rates are all incommensurate, so no two agree on a velocity and their sum has none —
+    it boils. That is the whole difference between light that happens and something
+    being moved about: one translating layer gives the pattern a direction, and anything
+    with a direction reads as an object with somewhere to be. Verified by running the
+    field twenty times over and comparing frames a minute of real time apart — the
+    structure is *different*, not displaced, and the amount of light in it changes too.
+  - Kept dark deliberately (`amount`, down from 0.9 to 0.5). Anything bright enough to
+    look like a source, or like something reflecting one, is too bright.
   - **It has to be darker than the sky, and that is the whole of what was wrong before.**
     Once the horizon had an airglow above it, a ground within a shade of the sky's own
     colour read as the same material with the glow inexplicably switched off. A horizon
