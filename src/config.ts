@@ -269,6 +269,116 @@ export const SKY = {
     /** 1 = objects at the horizon are fully hidden. */
     horizonOpacity: 1,
   },
+  /**
+   * The backdrop: airglow, and the grain over it. Added 2026-09-18.
+   *
+   * The sky was one flat value everywhere above the haze, and a flat value is what
+   * makes a frame read as empty rather than as dark. Two nearly free things fix that,
+   * and neither is a post pass:
+   *
+   * - **A lift toward the horizon.** Real night sky is not uniform; it brightens
+   *   toward the rim. Here it is one gradient on a backdrop sphere drawn before
+   *   everything else, which gives the dome a floor to sit on and the objects near
+   *   the horizon something to be seen against.
+   * - **Grain.** At `#05070a` a gradient this shallow bands *badly* in 8 bits - the
+   *   steps are wider than the gradient. A pixel of noise dissolves the steps and,
+   *   at a slightly higher amplitude, reads as the image's own noise floor rather
+   *   than as dither.
+   *
+   * **Cool, not warm, and that is a rule rather than a taste.** A warm horizon glow
+   * reads as light pollution, which reads as a city, which is a *place* - and the
+   * piece is an abstract dome with no Earth geometry in it. It is also the one hue
+   * warm white is already spoken for by. `color` is the dial if that judgement ever
+   * changes.
+   */
+  backdrop: {
+    /** What the sky lifts toward at the horizon. Cool - see above. */
+    color: '#16283a',
+    /** How much of that colour arrives at the horizon. 0 disables the lift entirely. */
+    strength: 0.32,
+    /**
+     * How far up it reaches. Above the haze, so the two do not read as one band, but
+     * well short of the zenith: the first try ran to 58 deg and, at a 95 deg field of
+     * view, that is the whole sky - it read as fog rather than as a horizon.
+     */
+    topDeg: 36,
+    /** Higher hugs the horizon more tightly. */
+    falloff: 2.6,
+    /**
+     * Grain amplitude, peak to peak, in **display** units - so 0.012 is about 3/255.
+     * Added after the colour-space conversion, which is the whole trick: a linear
+     * 0.012 near black comes out around 39/255 once sRGB's steep toe is applied.
+     */
+    grain: 0.014,
+  },
+};
+
+/**
+ * The halo around a light. Added 2026-09-18.
+ *
+ * "Can we add some glow" has two answers, and this is the cheap one: a broad, soft
+ * falloff *inside the sprite the object already draws*. No render target, no
+ * fullscreen pass, no extra draw - the sprite grows and the fragment shader spends a
+ * few more pixels. The expensive answer is bloom, which means an EffectComposer,
+ * half-float targets for the whole scene, and moving the glitch's canvas readback
+ * with it; see the render-target trap under **Rendering**.
+ *
+ * It does something the piece wants beyond looking better: **haloes sum.** Blending is
+ * additive, so a crowded patch of sky is brighter than a sparse one by more than the
+ * count of its marks - density becomes a quantity the eye reads directly, which is
+ * what this whole piece is about.
+ *
+ * Only lights have one. A shard is not a light and does not glow; `KIND_LOOK.debris`
+ * already says so, and the halo obeys it.
+ */
+export const GLOW = {
+  /**
+   * How far the halo reaches, as a multiple of the dot's own radius. The sprite grows
+   * by this, so the fill cost grows by its square - but only the ~6-9% of the
+   * catalogue that is above the horizon is drawn at all.
+   */
+  haloScale: 2.4,
+  /** How bright the halo is at the centre, against the core's own 1.9. */
+  haloGain: 0.42,
+};
+
+/**
+ * The ground as water. Added 2026-09-18, and **cosmetic by its own admission**.
+ *
+ * The lower fifth of the frame is a dark disc and nothing else. This reflects the
+ * objects in it - not by rendering the scene twice, but the way the ghosts already
+ * work: **one more draw of the same points**, with the blended direction mirrored in
+ * y and wobbled. No second camera, no render target, no new geometry, and it holds
+ * under a camera drag for free because it is a position rather than a screen effect.
+ *
+ * The ground disc then does the rest: it is drawn *over* the reflection at 0.72, so
+ * the water's own tint is the disc, and the reflection arrives at 28% without a single
+ * line of code asking for it.
+ *
+ * **The tension, stated rather than hidden.** "No Earth geometry, no globe, no map" is
+ * the oldest decision in this file, and water is a *place*: this risks turning an
+ * abstract dome into a scene. It is here because the piece decides aesthetics by
+ * looking, and this is cheap enough to look at. `strength: 0` removes it completely
+ * and costs one skipped draw call.
+ */
+export const REFLECTION = {
+  /**
+   * How bright the reflection is **before** the ground disc dims it - and that is the
+   * whole of why this number is over 1. The disc is drawn over the water at 0.72, so
+   * what reaches the eye is 0.28 of this: 1.3 here arrives at about a third of the
+   * brightness of the object being reflected, which is what a reflection looks like.
+   * 0 turns it off and skips the draw.
+   */
+  strength: 1.15,
+  /** How far the water bends a mark, in radians of sky at the zenith. */
+  wobble: 0.055,
+  /** Wobble rate, Hz. Wall time, like the debris tumble - it is the water, not the orbit. */
+  wobbleHz: 0.11,
+  /**
+   * How far below the horizon the reflection has faded out, in degrees. Short: the
+   * far end of a reflection is the part that least resembles one.
+   */
+  fadeDeg: 34,
 };
 
 /**

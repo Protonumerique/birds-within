@@ -309,7 +309,9 @@ uniform; a tick arriving uploads into whichever of the two GPU slots is stale.
 - **Haze** (`SKY.haze`): a sky-coloured band from the horizon to `topDeg`, opacity computed
   per pixel from elevation, so objects come into view gradually as they climb. It is
   colour-managed like the clear colour, so full haze is exactly empty sky, not a darker
-  band. Not everything being visible is deliberate.
+  band — and since 2026-09-18 "empty sky" is no longer one colour: it reads the same
+  `SKY_RAMP_GLSL` the backdrop does, so an object fades into the airglow that is
+  actually behind it. Not everything being visible is deliberate.
 - **Highlight rings** (`HIGHLIGHT`): a white ring around each object the readout lists —
   the rows its groups are showing — and an **attention** ring around whatever the pointer
   is touching or has kept: amber for a satellite, pink for wreckage, blue for the belt.
@@ -418,6 +420,78 @@ uniform; a tick arriving uploads into whichever of the two GPU slots is stale.
     is the one number in this file that has **not** been checked on a real GPU or at
     21k objects. `GHOST.count` is the dial: set it to 0 and the draws disappear
     entirely.
+- **The backdrop** (`SKY.backdrop`): the sky's own colour lifted toward the horizon,
+  with a pixel of grain over it. Added 2026-09-18, and the cheap half of the answer to
+  "can we fill the black space". The sky was one flat value everywhere above the haze,
+  and a flat value is what makes a frame read as *empty* rather than as dark.
+  - **The lift and the haze share one ramp** (`SKY_RAMP_GLSL`), and they have to. The
+    haze paints sky colour over objects as they sink — so a haze painting the *flat*
+    sky erased the airglow in exactly the band where the airglow is strongest, and left
+    a seam along the horizon with a dark sky above it and a lit ground below. A hazed
+    object has to fade into the sky that is actually there. That was the first version,
+    and it read as the floor leaking, which is the same symptom `lowestVisibleDeg`
+    fixed for a different cause.
+  - **Cool, not warm, and that is a rule.** A warm horizon glow reads as light
+    pollution, which reads as a city, which is a *place* — and the framing is an
+    abstract dome with no Earth geometry. Warm is also already spoken for by sunlight.
+  - **The grain is added after the colour-space conversion**, which is the whole trick.
+    sRGB's toe multiplies by 12.92 near black, so 0.012 of noise mixed in *before*
+    `colorspace_fragment` arrives at about 39/255 on screen — static, not grain. Added
+    after, it is 3/255, which is what dissolves the banding a gradient this shallow
+    shows in 8 bits. It is hashed on `gl_FragCoord`, so it holds still in the frame
+    while the sky turns behind it: the image's noise floor, not paint on the dome.
+  - **It is the app's only fullscreen pass, and that is its whole cost.** +22.6 ms a
+    frame on a software rasteriser, at 1,692 objects and at 20,582 alike — it is fill,
+    so object count does not enter into it. **Do not keep optimising the arithmetic.**
+    The same sphere shaded with a constant colour still costs +11.0 ms of that, so half
+    the bill is a CPU rasteriser touching a million pixels and would be nothing at all
+    on a GPU. Moving the ramp onto the sine of elevation, normalising in the vertex
+    shader and using a `sin`-free dither took it from +30.2; replacing the remaining
+    `pow` with a cubic saved 0.6 ms, which is noise, and cost a dial.
+    `SKY.backdrop.strength` of 0 skips the mesh, which is the only change that removes
+    the pass. **This number has not been checked on a real GPU.**
+- **The halo** (`GLOW`): a broad, soft falloff reaching past the dot, *inside the sprite
+  the object already draws*. The cheap answer to "can we add glow" — no render target,
+  no fullscreen pass, no extra draw. **+0.8 ms at 1,692 objects, +1.8 ms at 20,582**,
+  on a software rasteriser, which is nearly free even there.
+  - Bloom is the expensive answer and it is an architecture change, not a knob: an
+    `EffectComposer` means half-float targets for the whole scene — see the
+    render-target trap under *Wreckage tearing the picture* — and the glitch's canvas
+    readback has to move with it. There is a real argument for it (bloom keys off
+    brightness, and brightness already means *sunlit*, so it would reinforce the
+    two-axis rule) and it is still open. It was not needed to fill the frame.
+  - **Haloes sum, and that is the point.** Blending is additive, so a crowded patch of
+    sky comes out brighter than a sparse one by more than the count of its marks.
+    Density becomes a quantity the eye reads straight off the image, which is what this
+    piece is about. Checked at 20,582 objects before shipping, because the risk was
+    exactly the opposite — that the real sky would wash out to a single field of white.
+    It does not: it reads as many.
+  - Only lights have one. A shard is not a light, and the sprite does not grow for it —
+    the fragment shader measures every shape against `vDotPx`, the dot's own width,
+    rather than against the sprite, which is what lets the sprite carry a streak and a
+    halo without either fattening the mark.
+- **The water** (`REFLECTION`): the ground reflects what is above it. Cosmetic by its
+  own admission, and behind a dial.
+  - **It is one more draw of the same points**, mirrored in y and wobbled — the same
+    bargain the ghosts make. No second camera, no render target, no new geometry, and
+    it holds under a camera drag for free because it is a position rather than a screen
+    effect. **+2.1 ms at 1,692 objects, +5.8 ms at 20,582.**
+  - **The flip happens after the colour is decided**, or every reflection comes out in
+    the below-horizon grey: `above` is read from `dir.y`, and a mirrored object is
+    below the horizon. A reflection is a picture of a lit satellite, not a satellite in
+    the ground.
+  - **The haze has to reach the reflection too**, and this was a real mistake. A
+    reflection lands below the horizon where there is no haze, so the mirror of a low
+    object arrived *brighter* than the object itself — the band under the horizon
+    filled up while the sky just above it was washed out, and the water was showing
+    things the sky was not. You cannot see the reflection of something you cannot see.
+  - **`REFLECTION.strength` is over 1 on purpose.** The ground disc is drawn over the
+    water at 0.72, so what reaches the eye is 0.28 of it; the disc is the water's own
+    tint and no line of code asks for it.
+  - **The tension, stated rather than hidden.** "No Earth geometry, no globe, no map" is
+    the oldest decision in this file, and water is a *place*: this risks turning an
+    abstract dome into a scene. It is here because the piece decides aesthetics by
+    looking. `strength: 0` removes it and the draw with it.
 - **Render order is a design decision**, set in `RENDER_ORDER`: points, tracks and rings
   under the haze so they emerge together; graticule and compass labels above it so the
   dome stays legible to the horizon.
@@ -1373,6 +1447,13 @@ Anything that computes range rate by hand must not repeat the naive version.
       satellite *is* on screen, how trails read, how density reads, whether the far side
       of the Earth is drawn at all. Appearance already lives in the vertex shader, fed
       blended direction, shadow and range; the `kind` byte is in the catalogue for it.
+  - [x] **Filling the frame.** Airglow and grain on a backdrop the haze shares its ramp
+        with, a halo inside the sprite each object already draws, and a reflection in
+        the ground. All three are cheap and none is a post pass. See *Rendering*.
+  - [ ] **Bloom.** Still open, and still an architecture change rather than a knob:
+        half-float render targets for the whole scene, and the glitch's canvas readback
+        moving with them. The argument for it is that it keys off brightness, which
+        already means sunlit.
 - [ ] **Step 4 — sound.** Web Audio over the `SkyFrame` columns. A global view sonifies
       into mush; one observer's sky does not. See *Sound: the drone first*.
       ← *you are here*

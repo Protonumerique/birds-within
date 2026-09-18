@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
-import { CHOIR, GHOST, HIGHLIGHT, INTERFERENCE, KIND_LOOK, PALETTE, SKY, TRAIL } from './config';
+import { CHOIR, GHOST, GLOW, HIGHLIGHT, INTERFERENCE, KIND_LOOK, PALETTE, REFLECTION, SKY, TRAIL } from './config';
 import { NO_POSITION, directionFromAltAz, type SkyFrame } from './sky-frame';
 import type { FramePair } from './sky-stream';
 import { pickNearest } from './picking';
@@ -16,7 +16,18 @@ const SKY_COLOR = PALETTE.sky;
  * compass labels sit above it, so the structure of the dome stays legible right down
  * to the horizon - move `graticule` below `haze` to let the haze swallow it too.
  */
-const RENDER_ORDER = { points: 0, trail: 0, rings: 1, ground: 1, haze: 2, graticule: 3 } as const;
+const RENDER_ORDER = {
+  /** The airglow and its grain, under everything - it is what the frame is made of. */
+  backdrop: -2,
+  /** The water. Under the objects, and under the ground disc that tints it. */
+  reflection: -1,
+  points: 0,
+  trail: 0,
+  rings: 1,
+  ground: 1,
+  haze: 2,
+  graticule: 3,
+} as const;
 
 /** Horizontal coordinates to scene space, scaled. The mapping itself lives in sky-frame.ts. */
 const scratch = [0, 0, 0];
@@ -218,6 +229,15 @@ const POINT_VERT = /* glsl */ `
    */
   uniform float uGhostStreak;
   uniform vec2 uViewport;
+  /** GLOW: x how far the halo reaches as a multiple of the dot, y how bright it is. */
+  uniform vec2 uHalo;
+  /**
+   * REFLECTION, and x is also the switch: 0 means this draw is the objects themselves.
+   * y wobble in radians, z wobble rate in Hz, w the depth it has faded out by.
+   */
+  uniform vec4 uReflect;
+  /** Sine of SKY.haze.topDeg: how much of an object the haze has eaten. */
+  uniform float uHazeTop;
 
   varying float vAlpha;
   varying vec3 vColor;
@@ -232,6 +252,9 @@ const POINT_VERT = /* glsl */ `
   /** The streak's direction in sprite coordinates, and its length in device pixels. */
   varying vec2 vStreak;
   varying float vStreakPx;
+  /** The DOT's own width in device pixels - the sprite is this plus its halo and its
+      streak, and every shape below is measured against the dot rather than the sprite. */
+  varying float vDotPx;
 
   /** Where a blended direction lands on screen, in device pixels. */
   vec2 toScreen(vec3 dir) {
@@ -253,6 +276,7 @@ const POINT_VERT = /* glsl */ `
       vSizePx = 0.0;
       vStreak = vec2(1.0, 0.0);
       vStreakPx = 0.0;
+      vDotPx = 0.0;
       return;
     }
 
@@ -274,6 +298,7 @@ const POINT_VERT = /* glsl */ `
       vSizePx = 0.0;
       vStreak = vec2(1.0, 0.0);
       vStreakPx = 0.0;
+      vDotPx = 0.0;
       return;
     }
 
@@ -297,6 +322,47 @@ const POINT_VERT = /* glsl */ `
     float nearness = clamp(1.0 - (range - 400.0) / 4000.0, 0.25, 1.0);
     float dot16 = (above ? 16.0 : 8.0) * nearness * size * uPixelRatio * uGhostSize;
 
+    /*
+     * The water. The same object, mirrored in the ground and bent - one more draw of
+     * these very buffers rather than a second render of the scene, which is the same
+     * bargain the ghosts already make.
+     *
+     * It happens **after** the colour above, on purpose: above is read from dir.y,
+     * and a mirrored object is below the horizon, so flipping first would paint every
+     * reflection in the below-horizon grey instead of the colour of the thing it
+     * reflects. A reflection is a picture of a lit satellite, not a satellite in the
+     * ground.
+     */
+    if (uReflect.x > 0.0) {
+      float depth = dir.y;
+      // A near reflection barely moves and a far one is torn apart - which is what a
+      // reflection does, and also what keeps the horizon line crisp.
+      float wob = uReflect.y * (0.3 + depth * 1.9);
+      float phase = uTime * uReflect.z * 6.2831853 + h * 6.2831853;
+      dir.y = -dir.y;
+      dir.x += wob * sin(phase);
+      dir.z += wob * cos(phase * 0.87 + 1.3);
+      dir.y += wob * 0.55 * sin(phase * 1.31);
+      dir = normalize(dir);
+      /*
+       * Two fades, and the first one was a real mistake worth keeping written down.
+       *
+       * A reflection lands BELOW the horizon, where there is no haze - so a mirror of
+       * a low object arrived brighter than the object itself, which is dimmed almost
+       * to nothing by the haze on its way down. The band under the horizon filled up
+       * while the sky just above it was washed out: the water was showing things the
+       * sky was not. You cannot see the reflection of something you cannot see, so the
+       * haze has to reach the reflection too - same curve, same constant.
+       *
+       * The second fade is depth: a reflection thins out as it runs away from the
+       * observer, and the far end of one is the part that least resembles a reflection.
+       */
+      float seen = smoothstep(0.0, uHazeTop, depth);
+      float fade = seen * (1.0 - smoothstep(0.0, uReflect.w, depth));
+      vColor *= uReflect.x * fade;
+      vAlpha *= fade;
+    }
+
     // A ghost is a streak, not a dot: it covers the gap back to the ghost behind it,
     // so the trail joins up instead of reading as a row of beads. The span is worked
     // out on screen rather than in the sky, because that is where the gap is - project
@@ -318,8 +384,10 @@ const POINT_VERT = /* glsl */ `
     }
 
     // The sprite has to contain the capsule: a rectangle of L by w fits inside a
-    // square of side L + w at any rotation, so this is enough and no more.
-    vSizePx = dot16 + vStreakPx;
+    // square of side L + w at any rotation, so this is enough and no more - plus the
+    // halo, which only a light has. A shard is not a light and does not glow.
+    vDotPx = dot16;
+    vSizePx = dot16 * (vShard > 0.5 ? 1.0 : uHalo.x) + vStreakPx;
     gl_PointSize = vSizePx;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(dir * uRadius, 1.0);
   }
@@ -334,6 +402,9 @@ const POINT_FRAG = /* glsl */ `
   varying float vSizePx;
   varying vec2 vStreak;
   varying float vStreakPx;
+  varying float vDotPx;
+
+  uniform vec2 uHalo;
 
   /**
    * Sweep a sprite along its streak: collapse the point onto the segment first and
@@ -366,7 +437,7 @@ const POINT_FRAG = /* glsl */ `
 
     if (vShard > 0.5) {
       // Debris: a flat shard, turning. No core, no halo - it is not a light.
-      vec2 p = mat2(vSpin.x, -vSpin.y, vSpin.y, vSpin.x) * d * (vSizePx / max(vSizePx - vStreakPx, 1.0));
+      vec2 p = mat2(vSpin.x, -vSpin.y, vSpin.y, vSpin.x) * d * (vSizePx / max(vDotPx, 1.0));
       float t = sdTriangle(p, 0.40);
       // One-pixel edge, in sprite units, so it stays crisp at any size.
       float aa = 1.5 / max(vSizePx, 1.0);
@@ -377,13 +448,24 @@ const POINT_FRAG = /* glsl */ `
     }
 
     // Soft round sprite with a hot core, so dense clusters still read as many. The
-    // radius is the DOT's width, not the sprite's - a streaked sprite is longer, and
-    // measuring against it would fatten the stroke as the trail grew.
-    float r = length(d) * 2.0 * vSizePx / max(vSizePx - vStreakPx, 1.0);
-    if (r > 1.0) discard;
+    // radius is the DOT's width, not the sprite's - a streaked or haloed sprite is
+    // larger, and measuring against it would fatten the stroke as the trail grew.
+    // So r = 1 is the dot's own edge whatever else the sprite is carrying.
+    float r = length(d) * 2.0 * vSizePx / max(vDotPx, 1.0);
+    if (r > uHalo.x) discard;
     float core = smoothstep(1.0, 0.0, r);
     float glow = pow(core, 2.5);
-    gl_FragColor = vec4(vColor * (0.22 * core + 1.9 * glow * vGlow) * vAlpha, 1.0);
+    /*
+     * The halo: broad, soft, and reaching well past the dot - what fills the black
+     * between objects without a post pass touching the frame.
+     *
+     * It is worth knowing what this does beyond looking better. Blending is additive,
+     * so haloes **sum**: a crowded patch of sky comes out brighter than a sparse one
+     * by more than the count of its marks. Density becomes a quantity the eye reads
+     * off the image directly, which is the thing this piece is about.
+     */
+    float halo = pow(max(1.0 - r / uHalo.x, 0.0), 2.0);
+    gl_FragColor = vec4(vColor * (0.22 * core + 1.9 * glow * vGlow + uHalo.y * halo * vGlow) * vAlpha, 1.0);
   }
 `;
 
@@ -494,6 +576,93 @@ const RING_FRAG = /* glsl */ `
  * opacity computed per pixel from the true elevation - so the gradient is smooth
  * however coarse the geometry.
  */
+/**
+ * The backdrop: the sky's own colour lifted toward the horizon, with a pixel of grain
+ * over it. Drawn before everything, so it is the surface the whole image sits on.
+ *
+ * See SKY.backdrop for why the lift is cool rather than warm, and why the grain is
+ * worth its two lines.
+ */
+/**
+ * The sky's own colour at a given **sine** of elevation: PALETTE.sky lifted toward
+ * SKY.backdrop.color as it nears the horizon.
+ *
+ * Shared by the backdrop and the haze, and it has to be shared. The haze paints sky
+ * colour over objects as they sink - so a haze that painted the *flat* sky would erase
+ * the airglow in exactly the band where the airglow is strongest, and leave a seam
+ * along the horizon with a dark sky above it and a lit ground below it. That is what
+ * the first version did, and it read as the floor leaking. A hazed object has to fade
+ * into the sky that is actually there.
+ *
+ * On the sine rather than the angle: monotonic either way, indistinguishable in a
+ * gradient this soft, and it saves an asin on every pixel of the screen - see the cost
+ * note in buildBackdrop.
+ */
+const SKY_RAMP_GLSL = /* glsl */ `
+  uniform vec3 uSky;
+  uniform vec3 uGlow;
+  uniform float uStrength;
+  uniform float uSinTop;
+  uniform float uFalloff;
+
+  vec3 skyAt(float sinElevation) {
+    float t = clamp(sinElevation / uSinTop, 0.0, 1.0);
+    float lift = pow(1.0 - t, uFalloff) * uStrength;
+    // Cut at the horizon. Airglow is something the sky does and there is no sky down
+    // there; the ground disc is only 0.72 opaque, so a lift that ran on underneath it
+    // would show through and the ground would glow.
+    lift *= smoothstep(-0.03, 0.0, sinElevation);
+    return mix(uSky, uGlow, lift);
+  }
+`;
+
+const BACKDROP_VERT = /* glsl */ `
+  varying vec3 vDirection;
+  void main() {
+    // Normalised here rather than in the fragment shader: this is a sphere, so the
+    // interpolated vector is barely under unit length across a face and the gradient
+    // cannot tell the difference - and it saves a square root on every pixel of the
+    // screen. See the cost note in buildBackdrop.
+    vDirection = normalize(position);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+const BACKDROP_FRAG = /* glsl */ `
+  ${SKY_RAMP_GLSL}
+
+  uniform float uGrain;
+
+  varying vec3 vDirection;
+
+  void main() {
+    gl_FragColor = vec4(skyAt(vDirection.y), 1.0);
+
+    // Colour-managed like the clear colour and the haze, so an unlifted patch is
+    // exactly empty sky.
+    #include <colorspace_fragment>
+
+    /*
+     * Grain, added **after** that conversion, and this is the whole of the trick.
+     *
+     * sRGB's toe is steep - near black it multiplies by 12.92 - so a 0.012 of noise
+     * mixed in before the conversion arrives at around 39/255 on screen, which is
+     * static, not grain. Added here it is 0.012 of the output, about 3/255, which is
+     * what dissolves the banding this gradient would otherwise show in 8 bits.
+     *
+     * Hashed on gl_FragCoord, so it holds still in the frame while the sky turns
+     * behind it: it is the image's noise floor, not something painted on the dome.
+     *
+     * Jimenez's interleaved-gradient dither rather than the usual
+     * fract(sin(dot(...)) * 43758.5): two fracts and a dot against a transcendental,
+     * on every pixel of the screen. This shader is the only fullscreen pass in the
+     * app and it pays for everything twice.
+     */
+    float n = fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)));
+    gl_FragColor.rgb += (fract(52.9829189 * n) - 0.5) * uGrain;
+  }
+`;
+
 const HAZE_VERT = /* glsl */ `
   varying vec3 vDirection;
   void main() {
@@ -503,16 +672,20 @@ const HAZE_VERT = /* glsl */ `
 `;
 
 const HAZE_FRAG = /* glsl */ `
-  uniform vec3 uColor;
+  ${SKY_RAMP_GLSL}
+
   uniform float uOpacity;
   uniform float uTop;
 
   varying vec3 vDirection;
 
   void main() {
-    float elevation = asin(clamp(normalize(vDirection).y, -1.0, 1.0));
+    vec3 dir = normalize(vDirection);
+    float elevation = asin(clamp(dir.y, -1.0, 1.0));
     float t = clamp(elevation / uTop, 0.0, 1.0);
-    gl_FragColor = vec4(uColor, uOpacity * (1.0 - smoothstep(0.0, 1.0, t)));
+    // The colour it fades objects into is the sky that is actually at that elevation,
+    // airglow included - not the flat clear colour. See SKY_RAMP_GLSL.
+    gl_FragColor = vec4(skyAt(dir.y), uOpacity * (1.0 - smoothstep(0.0, 1.0, t)));
     // Colour-managed like the clear colour, so a fully hazed patch is exactly the
     // sky rather than a slightly darker band.
     #include <colorspace_fragment>
@@ -596,6 +769,28 @@ export class SkyScene {
      * rotation rate in the elements to be faithful to anyway.
      */
     uTime: { value: 0 },
+    uHalo: { value: new THREE.Vector2(GLOW.haloScale, GLOW.haloGain) },
+    uHazeTop: { value: Math.sin(THREE.MathUtils.degToRad(SKY.haze.topDeg)) },
+    /**
+     * Zero on x, so this draw is the objects themselves. Only the reflection's own
+     * material overrides it - and because every other uniform here is shared by
+     * reference, the reflection can never disagree with what it reflects about colour,
+     * size by range, the horizon or which mark is a shard.
+     */
+    uReflect: { value: new THREE.Vector4(0, 0, 0, 1) },
+  };
+
+  /**
+   * The sky's own colour ramp - PALETTE.sky lifted toward the airglow near the
+   * horizon. Shared **by reference** between the backdrop and the haze, so the colour
+   * an object fades into is exactly the colour behind it. See SKY_RAMP_GLSL.
+   */
+  private readonly skyRamp = {
+    uSky: { value: new THREE.Color(SKY_COLOR) },
+    uGlow: { value: new THREE.Color(SKY.backdrop.color) },
+    uStrength: { value: SKY.backdrop.strength },
+    uSinTop: { value: Math.sin(THREE.MathUtils.degToRad(SKY.backdrop.topDeg)) },
+    uFalloff: { value: SKY.backdrop.falloff },
   };
 
   private highlightIndex: THREE.BufferAttribute;
@@ -656,6 +851,9 @@ export class SkyScene {
     const graticule = this.buildGraticule();
     graticule.renderOrder = RENDER_ORDER.graticule;
     this.scene.add(graticule);
+    // Strength 0 removes the pass rather than drawing an invisible one: it is the app's
+    // only fullscreen shading, so "off" has to mean the draw does not happen.
+    if (SKY.backdrop.strength > 0) this.scene.add(this.buildBackdrop());
     this.scene.add(this.buildGround());
     this.scene.add(this.buildHaze());
 
@@ -743,6 +941,37 @@ export class SkyScene {
       ghost.visible = false;
       this.ghosts.push(ghost);
       this.scene.add(ghost);
+    }
+
+    // --- the water ----------------------------------------------------------
+    // The same geometry and the same shader again, mirrored in the ground. Spreading
+    // `this.uniforms` shares every reference but the one overridden, exactly as the
+    // ghosts do. `REFLECTION.strength` of 0 skips the draw entirely.
+    if (REFLECTION.strength > 0) {
+      const water = new THREE.Points(
+        pointsGeom,
+        new THREE.ShaderMaterial({
+          vertexShader: POINT_VERT,
+          fragmentShader: POINT_FRAG,
+          uniforms: {
+            ...this.uniforms,
+            uReflect: {
+              value: new THREE.Vector4(
+                REFLECTION.strength,
+                REFLECTION.wobble,
+                REFLECTION.wobbleHz,
+                Math.sin(THREE.MathUtils.degToRad(REFLECTION.fadeDeg))
+              ),
+            },
+          },
+          transparent: true,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+        })
+      );
+      water.frustumCulled = false;
+      water.renderOrder = RENDER_ORDER.reflection;
+      this.scene.add(water);
     }
 
     // --- highlight rings ----------------------------------------------------
@@ -1113,6 +1342,49 @@ export class SkyScene {
     return sprite;
   }
 
+  /**
+   * The backdrop: airglow toward the horizon, and grain over the whole frame.
+   *
+   * A full sphere rather than a dome, because the camera looks down as well as up and
+   * the ground disc is only 0.72 opaque. Drawn first and depth-tested against nothing
+   * - every layer in this scene has `depthWrite: false`, so the depth buffer is never
+   * written and `renderOrder` alone decides what covers what.
+   *
+   * **This is the app's only fullscreen pass, and it is the reason its shader is
+   * written the way it is.** Every pixel of the screen runs it, every frame, so an
+   * `asin` or a `sin` in there is a transcendental per pixel - which is why the ramp
+   * runs on the sine of elevation, the direction is normalised in the vertex shader,
+   * and the dither has no `sin` in it. Measured on a software rasteriser, where fill
+   * cost is enormously exaggerated: +30.2 ms a frame before those three changes, +22.6
+   * after.
+   *
+   * **Do not keep optimising the arithmetic; it is not where the cost is.** The same
+   * sphere shaded with a constant colour - no varying, no ramp, no dither - still costs
+   * +11.0 ms of that, so half the bill is a CPU rasteriser touching a million pixels
+   * and would be nothing at all on a GPU. Replacing the `pow` with a cubic saved 0.6 ms,
+   * which is noise, and cost a dial. `SKY.backdrop.strength` of 0 skips the mesh
+   * entirely, which is the only change that removes the pass.
+   */
+  private buildBackdrop(): THREE.Mesh {
+    const mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(SKY.radius * 1.5, 64, 48),
+      new THREE.ShaderMaterial({
+        vertexShader: BACKDROP_VERT,
+        fragmentShader: BACKDROP_FRAG,
+        uniforms: {
+          ...this.skyRamp,
+          uGrain: { value: SKY.backdrop.grain },
+        },
+        side: THREE.BackSide,
+        depthWrite: false,
+        depthTest: false,
+      })
+    );
+    mesh.frustumCulled = false;
+    mesh.renderOrder = RENDER_ORDER.backdrop;
+    return mesh;
+  }
+
   /** A dark disc at the horizon so "below" reads as ground rather than as sky. */
   private buildGround(): THREE.Mesh {
     const mesh = new THREE.Mesh(
@@ -1145,7 +1417,7 @@ export class SkyScene {
         vertexShader: HAZE_VERT,
         fragmentShader: HAZE_FRAG,
         uniforms: {
-          uColor: { value: new THREE.Color(SKY_COLOR) },
+          ...this.skyRamp,
           uOpacity: { value: SKY.haze.horizonOpacity },
           uTop: { value: top },
         },
