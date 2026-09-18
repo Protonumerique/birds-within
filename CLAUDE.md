@@ -619,6 +619,13 @@ patch, which is the number worth having.
 Added 2026-09-18, **and it is an experiment**: a slider at the bottom of the frame,
 starting at 0, and 0 is exactly the piece as it was. `IMMERSION` in config.ts.
 
+**Stashed the same day, behind `?immerse`.** `IMMERSION.enabled` is false without that
+flag, the slider is not drawn, and `scene.immersion` stays at 0 — so the piece ships as
+it was and every path here still exists. It is stashed rather than deleted because the
+finding underneath it is worth keeping and the fix is known; see *Where this stands* at
+the end of this section. Read the rest as a record of what was built and measured, not
+as a description of what a visitor sees.
+
 **Distance is invisible here, and that is the finding the whole thing rests on.** Every
 object is drawn at `dir * SKY.radius` — one sphere, all 21k of them — and the camera sits
 at the origin and only ever rotates. A perspective projection from the origin sends
@@ -721,6 +728,13 @@ sense. Immersing only the **kept** objects would give one to five subjects, shar
 close, against a soft field — legible, and consistent with the grammar the piece already
 has. It needs picking to survive the effect first, which is the next piece of work.
 
+So the slider went behind `?immerse` rather than out: shipping a control that fails at
+the scale the piece actually runs at is worse than shipping none, and everything the
+experiment cost — the shader paths, the numbers below, the "distance is invisible"
+finding — is a starting point for the kept-objects version rather than something to
+rediscover. Two readings, both from looking at the real sky rather than `synthetic`: it
+is "too transparent, too bokehish", which is the wall of discs from the inside.
+
 **Markers leave, and picking stops.** A mark drawn eight times its size and spread into a
 soft disc is nowhere near where `picking.ts` projects it, so rings and tracks fade out by
 `markersGoneAt` and `piece.ts` stops picking above 0.02. A pointer that lies is worse
@@ -738,10 +752,14 @@ nothing — it renders a title, a drawing, four sentences and a LAUNCH button �
 WASM propagator, the worker and the packed catalogue. `src/piece.ts` is the old `main`,
 `src/gate.ts` is the screen, `src/poster.ts` is the drawing.
 
-**Measured, on the production build: 8.7 KB before the press.** The page, the stylesheet
-and a 12.7 KB entry chunk (5.7 gzipped). The press then fetches the piece chunk — 617.8 KB,
-159.8 gzipped — the catalogue, the worker and the WASM build. Nothing else has ever been
-this cheap to not look at.
+**Measured, on the production build: 10.4 KB before the press.** The page, the stylesheet
+and a 15.8 KB entry chunk (7.0 gzipped). The press then fetches the piece chunk — 635.7 KB,
+166.0 gzipped — the catalogue, the worker and the WASM build. Nothing else has ever been
+this cheap to not look at. It was 8.7 KB when the screen shipped and drifted upward as
+the screen gained the location control; `config.ts` is in the entry chunk because
+`gate.ts` reads the observer from it, so anything added there is paid for before the
+press. **Re-measure rather than trusting this line** — it is the number the convention
+below asks you to check.
 
 **The trap in that, and it cost the whole saving before it was caught.** The button is
 focused on creation, so Enter works for anyone who never touches a pointer. Warming the
@@ -1603,8 +1621,9 @@ to do, both cheap and both invisible when missed:
   handled but is not the image.
 
 `?launch` skips the first screen, `?lat=&lon=` stands somewhere else, `?catalog=active`
-drops the wreckage, and `?debug` turns on frame timing — see *The first screen*, *Where
-you are standing* and *The catalogue*.
+drops the wreckage, `?debug` turns on frame timing, and `?immerse` draws the stashed
+immersion slider — see *The first screen*, *Where you are standing*, *The catalogue* and
+*Immersion*.
 
 ### The subdomain
 
@@ -1713,10 +1732,13 @@ Anything that computes range rate by hand must not repeat the naive version.
   - [x] **Filling the frame.** Airglow and grain on a backdrop the haze shares its ramp
         with, a halo inside the sprite each object already draws, and a ground that is
         a different substance from the sky. See *Rendering*.
-  - [x] **Immersion.** A slider that brings the near things close and defocuses them,
+  - [ ] **Immersion.** A slider that brings the near things close and defocuses them,
         leaving the belt small and sharp behind. Nothing moves - from a camera at the
         origin every radius projects to the same pixel - so range drives size and bokeh
-        instead. Markers and picking are still to follow. See *Immersion*.
+        instead. Built and measured, then **stashed behind `?immerse`**: at catalogue
+        scale it immerses hundreds of objects at once and the frame becomes a wall of
+        discs. The answer is to immerse only what is *kept*, which needs picking to
+        survive the effect first. See *Immersion*.
   - [x] **The glow pass.** Screen-space bloom over the whole finished frame, orbits and
         rings included — and it turned out not to need half-float targets after all,
         because working from a copy of the canvas keeps the whole chain in display
@@ -1746,7 +1768,7 @@ Anything that computes range rate by hand must not repeat the naive version.
 
 - **`main.ts`, and everything it imports, must stay free of three.js, satellite.js and
   the catalogue.** Anything heavy belongs in `src/piece.ts` or behind it. The first
-  screen's whole point is that a page nobody presses costs 8.7 KB; one stray static
+  screen's whole point is that a page nobody presses costs ~10 KB; one stray static
   import puts 160 KB back, silently and with nothing on screen to show for it. Check the
   entry chunk's size in `npm run build`'s output after touching the entry.
 - The observer's **default** lives in `src/config.ts` as `DEFAULT_OBSERVER` and **must**

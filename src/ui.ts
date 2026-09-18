@@ -1,4 +1,4 @@
-import { CLOCK, GROUP_LOOK, HIGHLIGHT, READOUT, SKY, observerLabel, type Dataset } from './config';
+import { CLOCK, GROUP_LOOK, HIGHLIGHT, IMMERSION, READOUT, SKY, observerLabel, type Dataset } from './config';
 import type { Clock } from './clock';
 import type { SkyFrame } from './sky-frame';
 import type { Selection } from './selection';
@@ -110,10 +110,11 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
       <div class="spacer"></div>
       <div class="foot"></div>
     </div>
+    ${IMMERSION.enabled ? `
     <div class="immerse">
       <input id="immerse" type="range" min="0" max="100" step="1" value="0" title="immersion" />
       <div class="immerse-label">IMMERSE</div>
-    </div>
+    </div>` : ''}
     <div class="hints">
       <div class="hintline" id="hint"></div>
       <button id="full" type="button" hidden>FULL SCREEN</button>
@@ -184,10 +185,15 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
   /*
    * Immersion, bottom centre and starting at 0 - which is the piece exactly as it was.
    * Its own control rather than the scroll wheel, because zoom and immersion are
-   * different axes and would fight over one gesture. See IMMERSION in config.ts.
+   * different axes and would fight over one gesture.
+   *
+   * Drawn only behind ?immerse: the effect is unfinished at catalogue scale and an
+   * unfinished control is worse than none. See IMMERSION.enabled in config.ts.
    */
-  const immerse = $<HTMLInputElement>('immerse');
-  immerse.oninput = () => source.immersion(Number(immerse.value) / 100);
+  if (IMMERSION.enabled) {
+    const immerse = $<HTMLInputElement>('immerse');
+    immerse.oninput = () => source.immersion(Number(immerse.value) / 100);
+  }
 
   let lastScrub = 0;
   scrub.oninput = () => {

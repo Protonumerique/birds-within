@@ -599,6 +599,21 @@ export const BLOOM = {
  * which is the truthful version of the effect rather than a staged one.
  */
 export const IMMERSION = {
+  /**
+   * Whether the slider is offered at all. **Off, and behind `?immerse`** since
+   * 2026-09-18: the mechanism works and is cheap, but the *density* does not - at
+   * catalogue scale about 800 objects are above the horizon, so bringing the near ones
+   * forward brings hundreds forward and the frame becomes a wall of discs at any
+   * tuning. Narrowing the band swings to the other failure, where at some instants
+   * nothing is inside it and there is no subject at all.
+   *
+   * Nothing is deleted, because the finding underneath is worth keeping and the fix is
+   * known: immerse only the **kept** objects, which is the rule the sound already
+   * reached for the same reason. That needs picking to survive the effect first. Until
+   * then the slider is not drawn and `scene.immersion` stays at 0, which is exactly the
+   * piece as it was.
+   */
+  enabled: new URLSearchParams(location.search).has('immerse'),
   /** At or inside this slant range, an object takes the effect in full. */
   nearKm: 400,
   /**
