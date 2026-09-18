@@ -234,10 +234,10 @@ const POINT_VERT = /* glsl */ `
   uniform vec2 uViewport;
   /** GLOW: x how far the halo reaches as a multiple of the dot, y how bright it is. */
   uniform vec2 uHalo;
-  /** IMMERSION: x amount 0-1, y nearKm, z farKm, w how much larger at full. */
+  /** IMMERSION: x amount 0-1, y nearKm, z farKm, w how much larger a near mark gets. */
   uniform vec4 uImmerse;
-  /** The exponent that dims a mark as it spreads. See IMMERSION.dimPower. */
-  uniform float uImmerseDim;
+  /** x bokeh width for a far mark, y nearDim, z farDim. See IMMERSION. */
+  uniform vec3 uImmerseLook;
 
   varying float vAlpha;
   varying vec3 vColor;
@@ -257,6 +257,8 @@ const POINT_VERT = /* glsl */ `
   varying float vDotPx;
   /** How far out of focus this mark is, 0-1. See IMMERSION. */
   varying float vBlur;
+  /** How much this mark has been magnified by immersion, 1 = not at all. */
+  varying float vGain;
 
   /** Where a blended direction lands on screen, in device pixels. */
   vec2 toScreen(vec3 dir) {
@@ -280,6 +282,7 @@ const POINT_VERT = /* glsl */ `
       vStreakPx = 0.0;
       vDotPx = 0.0;
       vBlur = 0.0;
+      vGain = 1.0;
       return;
     }
 
@@ -303,6 +306,7 @@ const POINT_VERT = /* glsl */ `
       vStreakPx = 0.0;
       vDotPx = 0.0;
       vBlur = 0.0;
+      vGain = 1.0;
       return;
     }
 
@@ -335,13 +339,23 @@ const POINT_VERT = /* glsl */ `
      * as it crosses overhead, because that is when it is actually nearest.
      */
     float near = 1.0 - smoothstep(uImmerse.y, uImmerse.z, range);
-    float immerse = uImmerse.x * near;
-    float gain = mix(1.0, uImmerse.w, immerse);
-    vBlur = immerse;
-    // A mark that spreads has to dim, or a sky of huge soft discs is one white field.
-    vColor *= pow(gain, -uImmerseDim);
 
-    float dot16 = (above ? 16.0 : 8.0) * nearness * size * uPixelRatio * uGhostSize * gain;
+    // The subject comes forward and stays SHARP. A lens focused on something near does
+    // not blur it - it blurs everything behind it.
+    float gain = mix(1.0, uImmerse.w, uImmerse.x * near);
+    vGain = gain;
+    // And the background goes soft. This is the half that was backwards at first: the
+    // first version defocused the near marks and left the belt crisp, which is a lens
+    // focused at infinity, the opposite of the effect.
+    vBlur = uImmerse.x * (1.0 - near);
+    float spread = mix(1.0, uImmerseLook.x, vBlur);
+
+    // Both dim as they spread, on their own exponents. Near needs full conservation -
+    // there are hundreds of them and anything less blew the frame out. Far needs less
+    // than full, or a faint two-pixel belt point does not blur, it disappears.
+    vColor *= pow(gain, -uImmerseLook.y) * pow(spread, -uImmerseLook.z);
+
+    float dot16 = (above ? 16.0 : 8.0) * nearness * size * uPixelRatio * uGhostSize * gain * spread;
 
     // A ghost is a streak, not a dot: it covers the gap back to the ghost behind it,
     // so the trail joins up instead of reading as a row of beads. The span is worked
@@ -384,8 +398,11 @@ const POINT_FRAG = /* glsl */ `
   varying float vStreakPx;
   varying float vDotPx;
   varying float vBlur;
+  varying float vGain;
 
   uniform vec2 uHalo;
+  /** How much the core tightens as a near mark is magnified. See IMMERSION.coreTighten. */
+  uniform float uCoreTighten;
 
   /**
    * Sweep a sprite along its streak: collapse the point onto the segment first and
@@ -436,7 +453,16 @@ const POINT_FRAG = /* glsl */ `
     // So r = 1 is the dot's own edge whatever else the sprite is carrying.
     float r = length(d) * 2.0 * vSizePx / max(vDotPx, 1.0);
     if (r > uHalo.x) discard;
-    float core = smoothstep(1.0, 0.0, r);
+    /*
+     * **The core tightens as the mark is magnified**, and without this the whole effect
+     * fails. Scaling a soft profile up only gives a bigger soft profile: a 16 px dot at
+     * six times reads as a 96 px *blur*, not as a light that has come close - and it
+     * then looks identical to the background bokeh it is supposed to be the opposite
+     * of. Holding the core near its own size while the halo grows is what makes a near
+     * mark read as bright and sharp rather than merely large.
+     */
+    float rc = r * pow(vGain, uCoreTighten);
+    float core = smoothstep(1.0, 0.0, rc);
     float glow = pow(core, 2.5);
     /*
      * The halo: broad, soft, and reaching well past the dot - what fills the black
@@ -928,7 +954,10 @@ export class SkyScene {
     uImmerse: {
       value: new THREE.Vector4(0, IMMERSION.nearKm, IMMERSION.farKm, IMMERSION.maxGain),
     },
-    uImmerseDim: { value: IMMERSION.dimPower },
+    uImmerseLook: {
+      value: new THREE.Vector3(IMMERSION.bokeh, IMMERSION.nearDim, IMMERSION.farDim),
+    },
+    uCoreTighten: { value: IMMERSION.coreTighten },
   };
 
   /**

@@ -600,27 +600,66 @@ export const BLOOM = {
  */
 export const IMMERSION = {
   /** At or inside this slant range, an object takes the effect in full. */
-  nearKm: 350,
+  nearKm: 400,
   /**
-   * Beyond this, nothing happens at all. The geostationary belt is 36,000 km away, so
-   * it is excluded by arithmetic rather than by a special case.
+   * Where a mark is fully background. **Wide on purpose**, and this is the number that
+   * decides what the picture is about: the passing sky is 300-2,500 km, so a generous
+   * far point leaves nearly all of it on the near side of the ramp - the subject, sharp
+   * and enlarged - while the belt at 36,000 km is flatly background. At 2,500 almost
+   * everything counted as far and the whole frame turned to bokeh with no subject in
+   * it, which is the opposite failure to the one before it.
    */
-  farKm: 2500,
+  farKm: 6000,
   /**
-   * How much larger a fully immersed mark is drawn. Watch this one: a 16 px dot at 8x
-   * is 128 px, and **`gl_PointSize` has a hardware ceiling** that is 1024+ on desktop
-   * but as low as 63 or 255 on some mobile GPUs. Past that the driver silently clamps
-   * and the effect stops growing.
+   * How much larger a **near** mark is drawn. These are the subject: they come forward
+   * and they stay **sharp**, because that is what a lens focused on something near
+   * does.
+   *
+   * Watch this one: a 16 px dot at 6x is 96 px, and **`gl_PointSize` has a hardware
+   * ceiling** that is 1024+ on desktop but as low as 63 or 255 on some mobile GPUs.
+   * Past that the driver silently clamps and the effect stops growing.
    */
-  maxGain: 8,
+  maxGain: 6,
   /**
-   * How much a mark dims as it spreads, as an exponent on the gain. A real defocused
-   * point conserves energy, so brightness would fall as the square of the gain - 1/64
-   * at 8x, which is invisible. 1 is half that bargain: bright enough to stay in the
-   * image, dim enough that a sky full of huge soft discs does not become one white
-   * field.
+   * How much wider a **far** mark's disc gets as it goes out of focus.
+   *
+   * This is the background bokeh, and it is the half that was backwards at first: the
+   * first version defocused the near objects and left the background crisp, which is a
+   * lens focused at infinity - the opposite of the effect. The subject is near and
+   * sharp; the belt and everything else far goes soft behind it.
    */
-  dimPower: 2,
+  bokeh: 4,
+  /**
+   * Energy conservation on the **near** growth. A real defocused point conserves
+   * energy, so brightness falls as the square of the size.
+   *
+   * It has to be the full 2 here, and that was found the hard way: at 1 the near marks
+   * summed additively into a single white cloud on a 20,582-object sky. There are
+   * hundreds of them, so anything less than conservation blows the frame out.
+   */
+  nearDim: 1.2,
+  /**
+   * How much a near mark's bright core tightens as it is magnified, as an exponent on
+   * the gain: 0 keeps the whole profile scaling together, 1 holds the core at a fixed
+   * size in pixels while the halo grows around it.
+   *
+   * **Without this the effect fails outright.** Scaling a soft profile up only gives a
+   * bigger soft profile, so a magnified mark reads as a 96 px *blur* - indistinguishable
+   * from the background bokeh it is meant to be the opposite of. Keeping a hot core
+   * inside a spreading halo is what makes a near mark read as a light that has come
+   * close rather than as one that has gone out of focus.
+   */
+  coreTighten: 0.7,
+  /**
+   * Energy conservation on the **far** bokeh, and deliberately gentler than `nearDim`.
+   *
+   * Full conservation would be correct and useless: a belt point is faint and two
+   * pixels wide, so spreading it over twenty-five times the area at 1/25 the brightness
+   * does not blur it, it **deletes** it. Out-of-focus background highlights are meant
+   * to be visible - that is what bokeh is - so this keeps them in the image. There are
+   * also far fewer of them than there are near marks, so they can afford it.
+   */
+  farDim: 1.7,
   /**
    * Immersion at which rings and tracks have faded out completely.
    *

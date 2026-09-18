@@ -642,35 +642,57 @@ spreads the light evenly over the circle of confusion. That is what `POINT_FRAG`
 toward, and a shard just gets its antialias band widened until the triangle stops being
 one.
 
-**What comes close is decided by range alone**, and that single rule does both jobs:
-the belt sits at 36,000 km so `near` is flatly 0 and it stays small, sharp and in the
-background — excluded by arithmetic rather than by a special case — and anything else
-high enough is left alone too. It also means a pass arrives as it crosses overhead,
-because that is when it is genuinely nearest. Nothing about this is staged.
+**Near is the subject and stays sharp; far is the background and goes soft.** That is
+what a lens focused on something near does, and **the first version had it exactly
+backwards** — it defocused the near marks and left the belt crisp, which is a lens
+focused at *infinity*. Getting it right is one sign, but two more things had to follow
+it, and neither was optional:
 
-**It blew out at catalogue scale, and the fix was to be physically right.** On
-`synthetic` (1,692 objects, ~100 above the horizon) it looked well at `dimPower: 1`. On
-20,582 objects, with 793 passing, the additive haloes summed into **one white cloud** —
-exactly the failure the config comment predicted. A defocused point conserves energy, so
-brightness has to fall as the *square* of the gain: 8× larger is 64× the area and 1/64
-the peak. `dimPower: 2` is that, and it holds total luminance roughly constant however
-many objects are in the effect. **Check this at both scales; `synthetic` will not show
-it.**
+- **The core has to tighten as a mark is magnified** (`coreTighten`). Scaling a soft
+  profile up only gives a bigger soft profile: a 16 px dot at six times reads as a 96 px
+  *blur*, indistinguishable from the background bokeh it is meant to be the opposite of.
+  Holding a hot core inside a spreading halo is what makes a near mark read as a light
+  that has come close rather than one that has gone out of focus.
+- **The two ends need different energy bargains** (`nearDim`, `farDim`). A near mark
+  needs most of the conservation, because there are hundreds of them and anything
+  generous piles them into a white cloud. A far one needs *less* than full: a belt point
+  is faint and two pixels wide, so spreading it over sixteen times the area at 1/16 the
+  brightness does not blur it, it **deletes** it. Out-of-focus highlights are supposed to
+  be visible — that is what bokeh is.
+
+**`farKm` decides what the picture is about**, and it is wide on purpose. The passing sky
+is 300–2,500 km, so a generous far point leaves nearly all of it on the near side of the
+ramp — subject, sharp, enlarged — while the belt at 36,000 km is flatly background,
+excluded by arithmetic rather than by a special case. At 2,500 almost everything counted
+as far and the whole frame turned to bokeh with no subject in it, which is the opposite
+failure to the first one. It also means a pass arrives as it crosses overhead, because
+that is when it is genuinely nearest. Nothing about this is staged.
+
+**It blows out at catalogue scale, and `synthetic` will never show you.** On 1,692
+objects (~100 above the horizon) almost any setting looks well. On 20,582, with 800
+passing, the additive marks pile into **one white cloud** wherever a constellation shell
+is dense. Every exponent here was set against the real count, not the development one.
+**Check this at both scales.**
 
 **The cost is fill, it scales with the catalogue, and it is the largest single thing
 added so far.** A/B/A'd on a software rasteriser:
 
-| | immersion 0 | 0.5 | 1 | 0 again |
+| `full`, 20,582 | immersion 0 | 0.5 | 1 | 0 again |
 |---|---|---|---|---|
-| `synthetic`, 1,692 | 84.1 ms | 86.4 | 87.1 | 84.4 |
-| `full`, 20,582 | 96.0 ms | 118.9 | **158.6** | 98.4 |
+| near blurred (the wrong version) | 96.0 ms | 118.9 | 158.6 | 98.4 |
+| near sharp, far bokeh (this one) | 96.4 ms | 148.1 | **264.1** | 98.4 |
 
-So **+3 ms at synthetic scale and +62 ms at catalogue scale** — because far more objects
-fall inside `farKm` on the real sky. For comparison the backdrop's whole fullscreen pass
-costs +22 ms there, so this is about three fullscreen passes of fill; on a GPU it should
-be a fraction of a millisecond, but **that has not been checked on one.** `dimPower` does
-not change it — the sprites are the same size either way. The lever is `maxGain`, and
-area goes as its square, so 8 → 5 roughly halves the bill.
+**+166 ms at full immersion on 20,582 objects**, against +62 for the version that only
+grew the near marks — because now *everything* grows, the background included. At
+`synthetic` scale the same effect was +3 ms, so this is entirely a question of how many
+objects are on screen.
+
+For scale, the backdrop's whole fullscreen pass costs +22 ms on the same rasteriser, so
+this is roughly seven passes' worth of fill — which on a GPU should be one or two
+milliseconds, **though that has not been checked on one.** It is comfortably the most
+expensive thing in the app. The levers are `maxGain` and `bokeh`, and area goes as the
+square of each, so trimming either pays back fast. The dimming exponents do not help:
+the sprites are the same size whatever they are set to.
 
 **Markers leave, and picking stops.** A mark drawn eight times its size and spread into a
 soft disc is nowhere near where `picking.ts` projects it, so rings and tracks fade out by
