@@ -592,6 +592,7 @@ const BACKDROP_FRAG = /* glsl */ `
   uniform vec2 uStretch;
   uniform float uAmount;
   uniform float uSpeed;
+  uniform float uShadow;
   uniform float uTime;
 
   varying vec3 vDirection;
@@ -637,18 +638,33 @@ const BACKDROP_FRAG = /* glsl */ `
     // the field it distorts is already boiling. Warping with two more swells looked
     // no different and cost twelve sines a pixel against six - see the note on cost in
     // buildBackdrop, because this is the fullscreen pass and it pays for everything.
-    q += 0.7 * vec2(sin(q.y * 0.45 + t * 0.55), cos(q.x * 0.38 - t * 0.61));
+    // A strong warp, and the cheapest way there is to stop a smooth field reading as
+    // one smooth thing. Amplitude above 1 folds the domain back on itself, so patches
+    // pinch off and reconnect instead of staying a single continuous swell.
+    q += 1.1 * vec2(sin(q.y * 0.9 + t * 0.55), cos(q.x * 0.75 - t * 0.61));
     // One extra scale, because a field of same-sized anythings reads as a set of
     // objects. A single higher-frequency term is enough to break that up.
-    float v = swell(q, t) + 0.22 * sin(q.x * 2.6 - q.y * 1.9 + t * 1.17);
-    // Soft-edged and mostly dark: squared rather than thresholded, so nothing in it
-    // ever acquires a boundary.
-    v = smoothstep(-0.15, 0.85, v);
+    float v = swell(q, t) + 0.3 * sin(q.x * 2.6 - q.y * 1.9 + t * 1.17);
+    // Only the crests come through, so there is dark between them: a wide window lifts
+    // the whole field at once and the ground reads as one sheet of light sliding across
+    // it. Too narrow is the opposite failure - the crests thin into hard ribbons, which
+    // are as defined a shape as anything this is meant to avoid. 0.18 to 0.72 did that.
+    v = smoothstep(0.02, 0.82, v);
     v *= v;
     // Held off the horizon itself, where the projection is densest and would alias,
     // and faded again as the surface turns to face the eye further down.
-    float band = smoothstep(0.015, 0.11, -dir.y) * (1.0 - smoothstep(0.42, 1.0, -dir.y));
-    return mix(uGround, uSheen, v * band * uAmount);
+    float band = smoothstep(0.02, 0.13, -dir.y) * (1.0 - smoothstep(0.55, 1.25, -dir.y));
+    /*
+     * The observer's own shadow: a pool of darkness where they are standing, deepest
+     * straight down and gone by the time the ground reaches the horizon.
+     *
+     * It is doing two jobs. It puts the viewer in the picture - the one place a person
+     * standing on a dark plain always is - and it **cuts every sheen in half**, because
+     * the shortest way across the ground from south to north runs straight through the
+     * observer. A patch that was one unbroken sweep is now two.
+     */
+    float shadow = 1.0 - uShadow * smoothstep(0.22, 0.95, -dir.y);
+    return mix(uGround, uSheen, v * band * uAmount) * shadow;
   }
 
   void main() {
@@ -1488,6 +1504,7 @@ export class SkyScene {
           uStretch: { value: new THREE.Vector2(SKY.ground.stretch[0], SKY.ground.stretch[1]) },
           uAmount: { value: SKY.ground.amount },
           uSpeed: { value: SKY.ground.speed },
+          uShadow: { value: SKY.ground.shadow },
           // Wall seconds, like the debris tumble: weather on a surface, not anything
           // the clock is doing.
           uTime: this.uniforms.uTime,

@@ -438,7 +438,18 @@ export const SKY = {
      * How the sheens are stretched across the plane. Deliberately lopsided - equal
      * numbers give round blobs, which is the one shape this must not have.
      */
-    stretch: [0.55, 0.13] as [number, number],
+    stretch: [1.7, 0.62] as [number, number],
+    /**
+     * How dark it gets where the observer is standing, 0-1. Deepest straight down and
+     * gone by the horizon.
+     *
+     * It puts the viewer in the picture - a person on a dark plain always has one - but
+     * it is here for a second reason: **the shortest way across the ground from south
+     * to north runs straight through the observer**, so this cuts every sheen that
+     * tries it in half. It was the fix for swells reading as one mass crossing the
+     * whole frame, together with the frequency above.
+     */
+    shadow: 0.45,
     /**
      * The pace it evolves at. Slow enough that nothing in it reads as an event: the
      * three waves in `swell` beat against each other over tens of seconds and never

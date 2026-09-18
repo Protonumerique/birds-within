@@ -503,6 +503,23 @@ uniform; a tick arriving uploads into whichever of the two GPU slots is stale.
     structure is *different*, not displaced, and the amount of light in it changes too.
   - Kept dark deliberately (`amount`, down from 0.9 to 0.5). Anything bright enough to
     look like a source, or like something reflecting one, is too bright.
+  - **Three things stop it reading as one mass**, which is what it did at first — a
+    single swell crossing the whole ground from south to north:
+    - **Frequency.** `stretch` went from (0.55, 0.13) to (1.7, 0.62): three times finer,
+      and less lopsided. One feature spanning the frame is a scale problem before it is
+      anything else.
+    - **A folding warp.** The domain offset is over 1, so the coordinate folds back on
+      itself and patches pinch off and reconnect instead of staying one continuous
+      swell. It costs nothing — the warp was already there.
+    - **The observer's shadow** (`shadow`): a pool of darkness deepest straight down and
+      gone by the horizon. It puts the viewer in the picture, which a person on a dark
+      plain always is, and it does the structural job too — **the shortest way across
+      the ground from south to north runs straight through the observer**, so anything
+      trying it is cut in half.
+  - **The contrast window is a balance, and both ends fail differently.** Wide lifts the
+    whole field at once and the ground becomes one sheet of light sliding across it;
+    narrow thins the crests into hard ribbons, which are as defined a shape as anything
+    this exists to avoid. 0.18–0.72 gave ribbons; 0.02–0.82 is the settled value.
   - **It has to be darker than the sky, and that is the whole of what was wrong before.**
     Once the horizon had an airglow above it, a ground within a shade of the sky's own
     colour read as the same material with the glow inexplicably switched off. A horizon
