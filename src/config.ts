@@ -74,22 +74,19 @@ export const catalogUrl = (dataset: Dataset) => `${import.meta.env.BASE_URL}data
  */
 export const GATE = {
   title: 'Birds Within',
-  tagline: 'the catalogue overhead, in realtime',
+  tagline: 'A visualization of crowded skies. An immersive panorama showing our traces in orbit, our observers above.',
   /**
    * Very short, and it has one job: say what changed between 2010 and now. That
    * change *is* the piece - see the top of CLAUDE.md - and it is the one thing a
    * reader cannot get from looking at the sky, because they never saw the old one.
    */
   lede:
-    'Around 2010 a thousand or so satellites crossed the sky above any one place. ' +
-    'Today more than twenty thousand tracked objects do — payloads, spent stages, ' +
-    'and the wreckage of both. This is that sky as it is right now, from one point ' +
-    'on the ground.',
+    'Referring to a satellite as "Bird" was common in sat-spotter networks years ago and approaching them as such, allows newcomers to discover the taxonomies of that environment. This piece is an immersive experience of the crowded skies above us, and tool to explore and understand them more, or simply, contemplate their dynamics.',
   /** The one offer on the screen. */
   launchLabel: 'LAUNCH',
   /** What the press costs, said before it is pressed rather than after. */
   loadingLabel: 'LAUNCHING…',
-  hint: 'drag to look · click to keep · press LISTEN for sound',
+  hint: 'drag to look · click to trace · press LISTEN for sound',
   /** How long the screen takes to leave once the first frame is on the canvas. */
   fadeMs: 700,
   /**
