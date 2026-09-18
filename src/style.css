@@ -465,6 +465,31 @@ input[type="range"] {
   color: var(--geo);
 }
 
+/*
+ * Immersion, bottom centre. Its own control rather than an overload of the scroll
+ * wheel: zoom and immersion are different axes and would fight over one gesture.
+ *
+ * Centred on the whole frame rather than on the sky to the right of the column, because
+ * it belongs to the image and not to the panel - and it is clear of the belt's grid at
+ * the bottom left and the debug panel at the bottom right.
+ */
+.immerse {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  width: min(320px, 40vw);
+  pointer-events: auto;
+  text-align: center;
+}
+
+.immerse-label {
+  margin-top: 4px;
+  font-size: 9px;
+  letter-spacing: 0.24em;
+  color: var(--ink-faint);
+}
+
 /* --- the belt -------------------------------------------------------------- */
 
 /*

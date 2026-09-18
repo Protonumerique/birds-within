@@ -570,6 +570,68 @@ export const BLOOM = {
   passes: 4,
 };
 
+/**
+ * Immersion: bringing the near things close. Added 2026-09-18, **and it is an
+ * experiment** - the slider is at the bottom of the screen, it starts at 0, and 0 is
+ * exactly the piece as it was.
+ *
+ * **The thing to understand before touching this: distance is invisible here.** Every
+ * object is drawn at `dir * SKY.radius` - one sphere, all 21k of them - and the camera
+ * sits at the origin and only ever rotates. A perspective projection from the origin
+ * sends `dir * r` to the same pixel for *every* r, which `picking.ts` has said out loud
+ * for months. So moving objects to their true ranges would change nothing at all on
+ * screen: no parallax, no perspective, no growth. Parallax would need the camera to
+ * translate, and that would give the dome a scale the piece does not have.
+ *
+ * So nothing moves. The range column the shader already carries drives **size** and
+ * **defocus** directly, which is the only way a fixed eyepoint can show depth.
+ *
+ * **Defocus is nearly free here, for a reason that would not hold anywhere else.** Real
+ * depth of field needs a depth buffer and a screen-space gather. But a defocused point
+ * light *is* a soft disc, and every object here is a point sprite that already draws
+ * one - so widening its own falloff is per-object bokeh with no render target, no pass
+ * and no extra draw. The sprite is the bokeh.
+ *
+ * **What comes close is decided by range, not by kind**, and that one rule does both
+ * jobs asked of it: the belt sits at 36,000 km so it never moves - it stays small,
+ * sharp and in the background - and anything else high enough is left alone too. It
+ * also means an object arrives as it passes overhead, since that is when it is nearest,
+ * which is the truthful version of the effect rather than a staged one.
+ */
+export const IMMERSION = {
+  /** At or inside this slant range, an object takes the effect in full. */
+  nearKm: 350,
+  /**
+   * Beyond this, nothing happens at all. The geostationary belt is 36,000 km away, so
+   * it is excluded by arithmetic rather than by a special case.
+   */
+  farKm: 2500,
+  /**
+   * How much larger a fully immersed mark is drawn. Watch this one: a 16 px dot at 8x
+   * is 128 px, and **`gl_PointSize` has a hardware ceiling** that is 1024+ on desktop
+   * but as low as 63 or 255 on some mobile GPUs. Past that the driver silently clamps
+   * and the effect stops growing.
+   */
+  maxGain: 8,
+  /**
+   * How much a mark dims as it spreads, as an exponent on the gain. A real defocused
+   * point conserves energy, so brightness would fall as the square of the gain - 1/64
+   * at 8x, which is invisible. 1 is half that bargain: bright enough to stay in the
+   * image, dim enough that a sky full of huge soft discs does not become one white
+   * field.
+   */
+  dimPower: 2,
+  /**
+   * Immersion at which rings and tracks have faded out completely.
+   *
+   * They go because this is a first test and picking has not been dealt with: a mark
+   * that has grown eight times and gone soft is nowhere near where `picking.ts` thinks
+   * it is, so pointing at things would ring the wrong ones. Rather than leave a pointer
+   * that lies, the markers leave and picking stops. Both come back when the slider does.
+   */
+  markersGoneAt: 0.3,
+};
+
 export const GLOW = {
   /**
    * How far the halo reaches, as a multiple of the dot's own radius. The sprite grows

@@ -83,6 +83,7 @@ export async function run(status: StatusFn): Promise<void> {
     choir: stream.choir,
     kind: stream.kind,
     audio,
+    immersion: (amount) => scene.setImmersion(amount),
   });
   const debug = DEBUG ? createDebugPanel(document.body) : null;
   // ?debug: the running piece, for poking at from the console.
@@ -147,7 +148,14 @@ export async function run(status: StatusFn): Promise<void> {
     // What the pointer is on, against the blend that is drawn rather than the last
     // tick - at high time rates a tick spans minutes, and the ring would trail the
     // object by degrees.
-    if (pointerAt && pair) {
+    // Picking is off while the sky is immersed: the marks are drawn several times their
+    // size and spread into soft discs, and `picking.ts` still projects the bare
+    // direction - so a ring would land nowhere near what the pointer is on. The rings
+    // and tracks have faded out by then too. See IMMERSION.markersGoneAt.
+    if (scene.immersion > 0.02) {
+      pointerAt = null;
+      if (selection.hovered >= 0) selection.setHovered(-1);
+    } else if (pointerAt && pair) {
       const hit = scene.pickAt(pair, pointerAt.x, pointerAt.y);
       selection.setHovered(hit);
       scene.setPickCursor(hit >= 0);

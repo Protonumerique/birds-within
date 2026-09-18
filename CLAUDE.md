@@ -614,6 +614,72 @@ patch, which is the number worth having.
   scene disappears. `render` clamps pitch to ±89° itself rather than trusting whoever
   set it — the drag handler is not the only thing that does, debug snippets included.
 
+### Immersion
+
+Added 2026-09-18, **and it is an experiment**: a slider at the bottom of the frame,
+starting at 0, and 0 is exactly the piece as it was. `IMMERSION` in config.ts.
+
+**Distance is invisible here, and that is the finding the whole thing rests on.** Every
+object is drawn at `dir * SKY.radius` — one sphere, all 21k of them — and the camera sits
+at the origin and only ever rotates. A perspective projection from the origin sends
+`dir * r` to the same pixel for *every* r, which `picking.ts` has said out loud for
+months. So moving objects to their true ranges would change nothing whatsoever on
+screen: no parallax, no perspective, no growth. Parallax would need the camera to
+translate, and that would give the dome a scale the piece does not have.
+
+**So nothing moves.** The `range` column the shader already carries drives **size** and
+**defocus** directly, because from a fixed eyepoint that is the only way depth can show
+at all. The expensive version — real 3D positions, a depth buffer, a post-process DOF —
+is not merely deferred, it is unnecessary.
+
+**Defocus is nearly free here, for a reason that would not hold anywhere else.** Real
+depth of field needs a depth buffer and a screen-space gather. But a defocused point
+light **is** a soft disc, and every object here is a point sprite that already draws one
+— so widening its own falloff is per-object bokeh with no render target, no pass and no
+extra draw. The sprite is the bokeh. Out of focus a point does not become a *softer
+point*: it becomes a disc, nearly flat across its face with a soft rim, because the lens
+spreads the light evenly over the circle of confusion. That is what `POINT_FRAG` blends
+toward, and a shard just gets its antialias band widened until the triangle stops being
+one.
+
+**What comes close is decided by range alone**, and that single rule does both jobs:
+the belt sits at 36,000 km so `near` is flatly 0 and it stays small, sharp and in the
+background — excluded by arithmetic rather than by a special case — and anything else
+high enough is left alone too. It also means a pass arrives as it crosses overhead,
+because that is when it is genuinely nearest. Nothing about this is staged.
+
+**It blew out at catalogue scale, and the fix was to be physically right.** On
+`synthetic` (1,692 objects, ~100 above the horizon) it looked well at `dimPower: 1`. On
+20,582 objects, with 793 passing, the additive haloes summed into **one white cloud** —
+exactly the failure the config comment predicted. A defocused point conserves energy, so
+brightness has to fall as the *square* of the gain: 8× larger is 64× the area and 1/64
+the peak. `dimPower: 2` is that, and it holds total luminance roughly constant however
+many objects are in the effect. **Check this at both scales; `synthetic` will not show
+it.**
+
+**The cost is fill, it scales with the catalogue, and it is the largest single thing
+added so far.** A/B/A'd on a software rasteriser:
+
+| | immersion 0 | 0.5 | 1 | 0 again |
+|---|---|---|---|---|
+| `synthetic`, 1,692 | 84.1 ms | 86.4 | 87.1 | 84.4 |
+| `full`, 20,582 | 96.0 ms | 118.9 | **158.6** | 98.4 |
+
+So **+3 ms at synthetic scale and +62 ms at catalogue scale** — because far more objects
+fall inside `farKm` on the real sky. For comparison the backdrop's whole fullscreen pass
+costs +22 ms there, so this is about three fullscreen passes of fill; on a GPU it should
+be a fraction of a millisecond, but **that has not been checked on one.** `dimPower` does
+not change it — the sprites are the same size either way. The lever is `maxGain`, and
+area goes as its square, so 8 → 5 roughly halves the bill.
+
+**Markers leave, and picking stops.** A mark drawn eight times its size and spread into a
+soft disc is nowhere near where `picking.ts` projects it, so rings and tracks fade out by
+`markersGoneAt` and `piece.ts` stops picking above 0.02. A pointer that lies is worse
+than no pointer. Making picking follow the effect is the next step, not this one.
+
+**Its own control, not the scroll wheel.** Zoom and immersion are different axes and
+would fight over one gesture.
+
 ### The first screen
 
 Added 2026-09-18. The piece is meant to sit in a hero section on another page, and a
@@ -1598,6 +1664,10 @@ Anything that computes range rate by hand must not repeat the naive version.
   - [x] **Filling the frame.** Airglow and grain on a backdrop the haze shares its ramp
         with, a halo inside the sprite each object already draws, and a ground that is
         a different substance from the sky. See *Rendering*.
+  - [x] **Immersion.** A slider that brings the near things close and defocuses them,
+        leaving the belt small and sharp behind. Nothing moves - from a camera at the
+        origin every radius projects to the same pixel - so range drives size and bokeh
+        instead. Markers and picking are still to follow. See *Immersion*.
   - [x] **The glow pass.** Screen-space bloom over the whole finished frame, orbits and
         rings included — and it turned out not to need half-float targets after all,
         because working from a copy of the canvas keeps the whole chain in display

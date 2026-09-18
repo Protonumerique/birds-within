@@ -32,6 +32,11 @@ export interface HudSource {
   selection: Selection;
   /** The sound. The panel owns its one control; nothing else here knows about it. */
   audio: AudioEngine;
+  /**
+   * How immersed the sky is, 0-1. A callback rather than the scene itself, so the panel
+   * still knows nothing about three.js. See IMMERSION in config.ts.
+   */
+  immersion(amount: number): void;
 }
 
 const releaseBelow = (HIGHLIGHT.releaseBelowDeg * Math.PI) / 180;
@@ -105,6 +110,10 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
       <div class="spacer"></div>
       <div class="foot"></div>
     </div>
+    <div class="immerse">
+      <input id="immerse" type="range" min="0" max="100" step="1" value="0" title="immersion" />
+      <div class="immerse-label">IMMERSE</div>
+    </div>
     <div class="hints">
       <div class="hintline" id="hint"></div>
       <button id="full" type="button" hidden>FULL SCREEN</button>
@@ -171,6 +180,14 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
   };
   fullscreen.onchange = paintFullscreen;
   paintFullscreen();
+
+  /*
+   * Immersion, bottom centre and starting at 0 - which is the piece exactly as it was.
+   * Its own control rather than the scroll wheel, because zoom and immersion are
+   * different axes and would fight over one gesture. See IMMERSION in config.ts.
+   */
+  const immerse = $<HTMLInputElement>('immerse');
+  immerse.oninput = () => source.immersion(Number(immerse.value) / 100);
 
   let lastScrub = 0;
   scrub.oninput = () => {

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
-import { BLOOM, CHOIR, GHOST, GLOW, HIGHLIGHT, INTERFERENCE, KIND_LOOK, PALETTE, SKY, TRAIL } from './config';
+import { BLOOM, CHOIR, GHOST, GLOW, HIGHLIGHT, IMMERSION, INTERFERENCE, KIND_LOOK, PALETTE, SKY, TRAIL } from './config';
 import { NO_POSITION, directionFromAltAz, type SkyFrame } from './sky-frame';
 import type { FramePair } from './sky-stream';
 import { pickNearest } from './picking';
@@ -234,6 +234,10 @@ const POINT_VERT = /* glsl */ `
   uniform vec2 uViewport;
   /** GLOW: x how far the halo reaches as a multiple of the dot, y how bright it is. */
   uniform vec2 uHalo;
+  /** IMMERSION: x amount 0-1, y nearKm, z farKm, w how much larger at full. */
+  uniform vec4 uImmerse;
+  /** The exponent that dims a mark as it spreads. See IMMERSION.dimPower. */
+  uniform float uImmerseDim;
 
   varying float vAlpha;
   varying vec3 vColor;
@@ -251,6 +255,8 @@ const POINT_VERT = /* glsl */ `
   /** The DOT's own width in device pixels - the sprite is this plus its halo and its
       streak, and every shape below is measured against the dot rather than the sprite. */
   varying float vDotPx;
+  /** How far out of focus this mark is, 0-1. See IMMERSION. */
+  varying float vBlur;
 
   /** Where a blended direction lands on screen, in device pixels. */
   vec2 toScreen(vec3 dir) {
@@ -273,6 +279,7 @@ const POINT_VERT = /* glsl */ `
       vStreak = vec2(1.0, 0.0);
       vStreakPx = 0.0;
       vDotPx = 0.0;
+      vBlur = 0.0;
       return;
     }
 
@@ -295,6 +302,7 @@ const POINT_VERT = /* glsl */ `
       vStreak = vec2(1.0, 0.0);
       vStreakPx = 0.0;
       vDotPx = 0.0;
+      vBlur = 0.0;
       return;
     }
 
@@ -316,7 +324,24 @@ const POINT_VERT = /* glsl */ `
 
     // Nearer objects read as larger. Purely a depth cue - the dome has no scale.
     float nearness = clamp(1.0 - (range - 400.0) / 4000.0, 0.25, 1.0);
-    float dot16 = (above ? 16.0 : 8.0) * nearness * size * uPixelRatio * uGhostSize;
+
+    /*
+     * Immersion. Nothing moves - it cannot, because from a camera at the origin every
+     * radius projects to the same pixel - so the range column drives the size and the
+     * defocus instead. See IMMERSION in config.ts.
+     *
+     * Which objects take it is decided by range alone, and that one rule keeps the belt
+     * out by arithmetic: at 36,000 km near is flatly 0. It also means a pass arrives
+     * as it crosses overhead, because that is when it is actually nearest.
+     */
+    float near = 1.0 - smoothstep(uImmerse.y, uImmerse.z, range);
+    float immerse = uImmerse.x * near;
+    float gain = mix(1.0, uImmerse.w, immerse);
+    vBlur = immerse;
+    // A mark that spreads has to dim, or a sky of huge soft discs is one white field.
+    vColor *= pow(gain, -uImmerseDim);
+
+    float dot16 = (above ? 16.0 : 8.0) * nearness * size * uPixelRatio * uGhostSize * gain;
 
     // A ghost is a streak, not a dot: it covers the gap back to the ghost behind it,
     // so the trail joins up instead of reading as a row of beads. The span is worked
@@ -358,6 +383,7 @@ const POINT_FRAG = /* glsl */ `
   varying vec2 vStreak;
   varying float vStreakPx;
   varying float vDotPx;
+  varying float vBlur;
 
   uniform vec2 uHalo;
 
@@ -394,8 +420,10 @@ const POINT_FRAG = /* glsl */ `
       // Debris: a flat shard, turning. No core, no halo - it is not a light.
       vec2 p = mat2(vSpin.x, -vSpin.y, vSpin.y, vSpin.x) * d * (vSizePx / max(vDotPx, 1.0));
       float t = sdTriangle(p, 0.40);
-      // One-pixel edge, in sprite units, so it stays crisp at any size.
-      float aa = 1.5 / max(vSizePx, 1.0);
+      // One-pixel edge, in sprite units, so it stays crisp at any size - widened
+      // enormously as the shard goes out of focus, which is all a triangle needs to
+      // stop being a triangle.
+      float aa = mix(1.5, vSizePx * 0.30, vBlur) / max(vSizePx, 1.0);
       float fill = 1.0 - smoothstep(-aa, aa, t);
       if (fill <= 0.0) discard;
       gl_FragColor = vec4(vColor * vGlow * fill * vAlpha, 1.0);
@@ -420,7 +448,15 @@ const POINT_FRAG = /* glsl */ `
      * off the image directly, which is the thing this piece is about.
      */
     float halo = pow(max(1.0 - r / uHalo.x, 0.0), 2.0);
-    gl_FragColor = vec4(vColor * (0.22 * core + 1.9 * glow * vGlow + uHalo.y * halo * vGlow) * vAlpha, 1.0);
+    float focused = 0.22 * core + 1.9 * glow * vGlow + uHalo.y * halo * vGlow;
+    /*
+     * Out of focus, a point is not a softer point: it is a **disc**, nearly flat across
+     * its face with a soft rim, because the lens spreads the light evenly over the
+     * circle of confusion. Blending the focused profile toward that is the whole of the
+     * defocus - no depth buffer, no gather, no second pass. The sprite is the bokeh.
+     */
+    float disc = (1.0 - smoothstep(uHalo.x * 0.68, uHalo.x, r)) * 0.55;
+    gl_FragColor = vec4(vColor * mix(focused, disc, vBlur) * vAlpha, 1.0);
   }
 `;
 
@@ -460,6 +496,8 @@ const RING_VERT = /* glsl */ `
 
   uniform float uStrokePx;
   uniform float uChoirStrokePx;
+  /** 1 normally, falling to 0 as the sky is immersed. See IMMERSION.markersGoneAt. */
+  uniform float uMarkers;
 
   varying float vSizePx;
   varying vec3 vColor;
@@ -496,7 +534,10 @@ const RING_VERT = /* glsl */ `
     // keeps meaning "this one has a row" rather than doubling as a category.
     vec3 attention = aKind > 1.5 ? uDebrisColor : uMarkColor;
     vColor = choir ? uChoirColor : ((hovered || marked) ? attention : uRingColor);
-    vAlpha = choir ? 1.0 : (hovered ? 1.0 : (marked ? bright : 1.0));
+    // Markers leave as the sky is immersed: a mark eight times its size and gone soft
+    // is nowhere near where picking thinks it is, and a pointer that lies is worse than
+    // no pointer. See IMMERSION.markersGoneAt.
+    vAlpha = uMarkers * (choir ? 1.0 : (hovered ? 1.0 : (marked ? bright : 1.0)));
 
     vStrokePx = choir ? uChoirStrokePx : uStrokePx;
     vSizePx = (choir ? uChoirPx : uRingPx) * (hovered ? uHoverScale : 1.0) * uPixelRatio;
@@ -879,6 +920,15 @@ export class SkyScene {
      */
     uTime: { value: 0 },
     uHalo: { value: new THREE.Vector2(GLOW.haloScale, GLOW.haloGain) },
+    /**
+     * Immersion, shared with the ghosts so a streak can never disagree with the mark it
+     * follows about how near or how soft it is. x is the slider; the rest are constants
+     * lifted out of IMMERSION so the shader does no unit conversion.
+     */
+    uImmerse: {
+      value: new THREE.Vector4(0, IMMERSION.nearKm, IMMERSION.farKm, IMMERSION.maxGain),
+    },
+    uImmerseDim: { value: IMMERSION.dimPower },
   };
 
   /**
@@ -1087,6 +1137,7 @@ export class SkyScene {
       uHoverScale: { value: HIGHLIGHT.hoverScale },
       uDimAtHorizon: { value: HIGHLIGHT.dimAtHorizon },
       uFullBright: { value: THREE.MathUtils.degToRad(HIGHLIGHT.fullBrightDeg) },
+      uMarkers: { value: 1 },
     };
     this.rings = new THREE.Points(
       ringsGeom,
@@ -1247,6 +1298,28 @@ export class SkyScene {
    * in over the step above `fromRate` rather than appearing at full strength, so
    * changing rate does not flash the sky.
    */
+  /**
+   * How immersed the sky is, 0-1. See IMMERSION in config.ts for what that means and
+   * why nothing actually moves.
+   *
+   * The markers go with it. A mark drawn eight times its size and spread into a soft
+   * disc is nowhere near where `picking.ts` believes it is, so rings and tracks fade out
+   * and `piece.ts` stops picking while this is up - a pointer that lies is worse than no
+   * pointer. Dealing with that properly is the next step, not this one.
+   */
+  setImmersion(amount: number): void {
+    const a = THREE.MathUtils.clamp(amount, 0, 1);
+    this.immersion = a;
+    (this.uniforms.uImmerse!.value as THREE.Vector4).x = a;
+    const markers = 1 - Math.min(1, a / IMMERSION.markersGoneAt);
+    this.ringUniforms.uMarkers!.value = markers;
+    this.trackMaterial.opacity = TRAIL.opacity * markers;
+    this.tracks.visible = markers > 0;
+  }
+
+  /** What the last `setImmersion` was given. `piece.ts` reads it to gate picking. */
+  immersion = 0;
+
   setTimeRate(rate: number) {
     const r = Math.abs(rate);
     const on = r > GHOST.fromRate;
