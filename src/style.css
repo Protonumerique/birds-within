@@ -391,6 +391,7 @@ input[type="range"] {
  * touched. `accent` is attention, and only attention.
  */
 .row {
+  position: relative;
   padding: 1px 4px;
   color: var(--tone);
   font-size: 11px;
@@ -431,6 +432,43 @@ input[type="range"] {
   line-height: 1.3;
   opacity: 0.8;
   font-variant-numeric: tabular-nums;
+}
+
+/*
+ * The pulse: a bar at the right of the row, filling from the bottom with whatever the
+ * object is sounding right now. See AUDIO.performer.meter, and *The pulse* in CLAUDE.md.
+ *
+ * Drawn only for a row that has a voice. An object kept past `maxVoices` is silent, and
+ * an empty bar would claim it was sounding at zero rather than not sounding at all.
+ *
+ * `--lvl` is written by ui-group.ts and nothing else here moves, so a pulse costs one
+ * custom-property write on the rows that are actually making a noise.
+ */
+.row .rl {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  width: 3px;
+  height: 15px;
+  margin-top: -7.5px;
+  border-radius: 1px;
+  opacity: 0;
+  background: linear-gradient(
+    to top,
+    var(--accent) 0 calc(var(--lvl, 0) * 100%),
+    color-mix(in srgb, var(--accent) 18%, transparent) calc(var(--lvl, 0) * 100%) 100%
+  );
+}
+
+/* Only a sounding row shows one, and only an open row has the width to spare for it. */
+.row.open.sounding .rl {
+  opacity: 1;
+}
+
+/* Room for the bar, taken from the text rather than the box, so opening costs no layout. */
+.row.open.sounding .rn,
+.row.open.sounding .rd {
+  padding-right: 11px;
 }
 
 /*

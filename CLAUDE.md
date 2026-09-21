@@ -1058,11 +1058,74 @@ what is passing, what is wreckage, and the belt. `GROUP_LOOK` gives each one a g
   in its orbit and in the column. That lives in `ui-group.ts` rather than `GROUP_LOOK`,
   because it is one object *inside* a group rather than a group of its own.
 
-**Linking the sky to the column is the weakest reading in the piece, and it is open.**
-With no tags on the sky, a mark overhead and a name in the list are joined by colour and
-by nothing else — which works while one thing is touched and thins out fast beyond that.
-The ISS's cool white is one object's answer, not the general one. Whatever the general
-answer turns out to be, it has to obey *No tags on the sky*.
+**Linking the sky to the column is the weakest reading in the piece.** With no tags on
+the sky, a mark overhead and a name in the list were joined by colour and by nothing
+else — which works while one thing is touched and thins out fast beyond that. The ISS's
+cool white is one object's answer, not the general one. *The pulse*, below, is the first
+general one. Whatever else follows has to obey *No tags on the sky*.
+
+#### The pulse
+
+Added 2026-09-21. A bar at the right of every **sounding** row, filling from the bottom
+with what that object is actually making a noise with. `AUDIO.performer.meter`.
+
+**It is the strongest link the piece has between a mark and a name**, because it is the
+one thing that cannot be coincidence: the row moves when the sound does. Colour says
+*this is the same kind of thing*; a shared rhythm says *this is the same thing*.
+
+**It also names the texture without a word.** Measured over 4.8 s, `--lvl` sampled at
+25 Hz with one of each kept at once:
+
+| | min | max | mean | distinct values |
+|---|---|---|---|---|
+| bird | 0.00 | 0.56 | 0.07 | 6 — mostly empty, spikes on a phrase |
+| machine | 0.06 | 0.72 | 0.36 | 13 — knocking, never still |
+| shard | 0.20 | 0.47 | 0.34 | 13 — never silent, never full, breathing |
+| station (ISS) | 0.00 | 0.81 | — | 3 peaks in 10 s, against its 4.5 s period |
+
+Those are four plainly different shapes, and nothing in the panel distinguished them
+before.
+
+**It is read from the signal, never predicted from the schedule.** An `AnalyserNode` on
+each voice, RMS once a frame. Phrases are written up to `lookaheadSeconds` ahead on the
+audio context's clock, which is not the frame clock, so anything derived from the
+schedule would drift against what is audible. This cannot.
+
+**It has to be decibels, and that is the finding.** The first version scaled RMS
+linearly against a `fullRms` of 0.06 and read as a **blink**: `--lvl` took six distinct
+values across 70 samples, slamming between 0 and 1. Measuring the real voices says why:
+
+| | p50 | p90 | p99 | max |
+|---|---|---|---|---|
+| bird | 0.0002 | 0.0147 | 0.4167 | 0.4359 |
+| shard | 0.0286 | 0.0338 | 0.0374 | 0.0392 |
+
+A bird runs a factor of **two thousand** between its gaps and its notes; a shard sits
+flat because it is continuous and eventless. **No linear full-scale can serve both** —
+set it for the shard and every bird pins at full through its whole phrase. A window in
+dB (`floorDb` −50, `topDb` −8) puts a bird's gaps under the floor, its notes near the
+top, and a shard at about 0.45 with a slow breath. Same trap as `timbreGain`: what a
+texture *needs* bears no relation to what it looks like it needs.
+
+**Fast up, slow down** (20 ms, 220 ms), exponential so the smoothing is frame-rate
+independent. An onset has to land on the frame it happens or the bar reads as lagging;
+a decay has to outlast a frame or a chirp is a flash nobody sees.
+
+**A kept object with no voice gets no bar at all.** `maxVoices` is 8, so keeping ten
+leaves two silent — verified: eight rows `sounding`, two not. Drawing those an empty bar
+would claim they were sounding at zero rather than not sounding; the absence is the
+honest rendering, and it matches "past that a click still marks, it just does not sound".
+
+**This is the only thing in the app that flows from the sound back to the image.**
+Everything else goes one way, the frame driving the sound. The seam is deliberately
+narrow: `AudioEngine.level(index)`, one number, cached per update, and the panel is its
+only reader. `--lvl` is quantised to 64 steps so a still voice stops writing style at
+all.
+
+The belt's solos are **not** metered: they have grid squares rather than rows, so there
+is nothing to put a bar beside. The rings on the sky are not driven by this yet — that is
+the next piece of work, and it must not go through `aMark`, which re-uploads an 84 KB
+attribute and exists to be touched on a click.
 
 The glyph is the third piece: shape and hue together, which is the whole grammar in one
 character.
@@ -1414,6 +1477,10 @@ moment; sonifying what is merely *there* is the mush this piece exists to avoid.
 click is the instrument. A voice arrives over `attackSeconds`, leaves over
 `releaseSeconds`, and is let go the moment its object sets or loses its position — the
 same release the ring and the row already obey.
+
+**The panel reads what each voice is doing** and draws it as a bar beside the name —
+the one thing in the app that flows from the sound back to the image. See *The pulse*
+under **The panel**.
 
 **One exception, added 2026-09-21: the station.** A featured object sounds whenever it is
 above the horizon. The rule above is about a *thousand* objects; this is one, and it is
@@ -2129,6 +2196,10 @@ Anything that computes range rate by hand must not repeat the naive version.
         whenever it is above the horizon rather than waiting to be kept — the one
         exception to that rule, and the one voice that makes a pass an event. See
         *The station*.
+  - [x] **The pulse.** A bar beside each sounding name, filling with what that voice is
+        actually making — read from an analyser rather than the schedule, on a dB window
+        because the textures differ by three orders of magnitude. The first general
+        answer to linking the sky to the column. See *The pulse*.
   - [ ] **More of them.** Weather, telecoms and the navigation constellations are each
         a row in `FAMILIES` and a voice, now that the mechanism exists. And a wider
         vocabulary of calls than the four here — caw, cackle, the rest of it.

@@ -25,7 +25,11 @@ interface Row {
   el: HTMLElement;
   name: HTMLElement;
   data: HTMLElement;
+  /** The pulse: a bar beside the name, filling with whatever this object is sounding. */
+  level: HTMLElement;
   index: number;
+  /** Last level written, so an unchanged bar costs no style write. */
+  lastLevel: number;
 }
 
 /**
@@ -68,7 +72,9 @@ export class Group {
     private names: string[],
     private selection: Selection,
     /** 1 on a featured object, indexed like `names`. See FEATURED. */
-    private featured: Uint8Array
+    private featured: Uint8Array,
+    /** How loudly an object is sounding right now, 0-1. See AUDIO.performer.meter. */
+    private levelOf: (index: number) => number
   ) {
     this.rgb = channels(look.accent);
     this.featuredRgb = channels(FEATURED.color);
@@ -111,9 +117,16 @@ export class Group {
     if (!row) {
       const el = document.createElement('div');
       el.className = 'row';
-      el.innerHTML = `<span class="rn"></span><span class="rd"></span>`;
+      el.innerHTML = `<span class="rn"></span><span class="rd"></span><i class="rl"></i>`;
       this.rowsEl.append(el);
-      row = { el, name: el.firstElementChild as HTMLElement, data: el.lastElementChild as HTMLElement, index: -1 };
+      row = {
+        el,
+        name: el.querySelector('.rn') as HTMLElement,
+        data: el.querySelector('.rd') as HTMLElement,
+        level: el.querySelector('.rl') as HTMLElement,
+        index: -1,
+        lastLevel: -1,
+      };
       this.pool[n] = row;
     }
     return row;
@@ -159,6 +172,8 @@ export class Group {
         const row = this.pool[r];
         if (row) {
           row.index = -1;
+          row.lastLevel = -1;
+          row.el.classList.remove('sounding');
           row.el.hidden = true;
         }
         continue;
@@ -173,6 +188,29 @@ export class Group {
       // layout, so the row cannot move out from under the cursor that is on it.
       row.el.classList.toggle('lit', !isOpen && i === hovered);
       row.name.textContent = this.names[i] ?? '—';
+
+      /*
+       * **The pulse.** A bar beside the name, filling with whatever this object is
+       * *actually* sounding - see AUDIO.performer.meter. It is the strongest link the
+       * piece has between a mark overhead and a name in the column, because it is the
+       * one thing that could not be coincidence: the row moves when the sound does.
+       *
+       * It also says which *kind* of thing you kept without a word: a bird pulses in
+       * phrases, a machine knocks steadily, a shard breathes, the ISS thumps every few
+       * seconds. Nothing in the panel had that before.
+       *
+       * Quantised to 64 steps so a still voice stops writing style at all - the
+       * envelope moves continuously and the DOM does not need to know every value.
+       */
+      const raw = this.levelOf(i);
+      const lvl = Math.round(raw * 64) / 64;
+      if (lvl !== row.lastLevel) {
+        row.lastLevel = lvl;
+        row.el.style.setProperty('--lvl', String(lvl));
+        // No voice, no bar. An object past `maxVoices` is kept and silent, and drawing
+        // it an empty bar would claim it was sounding at zero.
+        row.el.classList.toggle('sounding', raw > 0);
+      }
 
       // A closed row drops its inline override and rests at the group's own colours.
       if (!isOpen) {

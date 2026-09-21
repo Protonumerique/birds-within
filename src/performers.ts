@@ -98,6 +98,10 @@ interface Voice {
   phrase: number;
   /** Context time this voice may be torn down, or Infinity while it is held. */
   endsAt: number;
+  /** Taps this voice's own output, so the panel can draw what it is doing. See AUDIO.performer.meter. */
+  analyser: AnalyserNode;
+  /** The smoothed level the panel reads, 0-1. Fast up, slow down. */
+  meterLevel: number;
   /** A per-voice correction where a texture measures quieter than it should sit. */
   boost: number;
 }
@@ -114,6 +118,8 @@ export class Performers {
   private shapers: WaveShaperNode[] = [];
   /** The station's tail. Built on first use, because most sessions never need it. */
   private reverbNode: ConvolverNode | null = null;
+  /** Scratch for the meter reads. One array, reused by every voice, every frame. */
+  private readonly meterBuf = new Float32Array(P.meter.fftSize);
 
   constructor(
     private ctx: AudioContext,
@@ -194,6 +200,41 @@ export class Performers {
       if (this.dying[n]!.endsAt > now) continue;
       this.stop(this.dying[n]!);
       this.dying.splice(n, 1);
+    }
+  }
+
+  /**
+   * Fill `out` with one level per sounding object, 0-1: what the panel draws as a pulse.
+   *
+   * **The only thing that flows back from the sound to the image.** It is read from
+   * each voice's own signal rather than worked out from the schedule, because phrases
+   * are written ahead on the audio clock and anything derived from them would drift
+   * against what is audible. See AUDIO.performer.meter.
+   *
+   * An object that is kept but has no voice - past `maxVoices` - simply is not in the
+   * map. The panel draws no bar for it, which is the honest rendering of a mark that
+   * is not sounding.
+   */
+  meter(out: Map<number, number>, dt: number): void {
+    const M = P.meter;
+    const buf = this.meterBuf;
+    // Exponential, so the smoothing is frame-rate independent: the same rise whether
+    // frames arrive at 60 Hz or 30.
+    const up = 1 - Math.exp(-dt / M.attackSeconds);
+    const down = 1 - Math.exp(-dt / M.releaseSeconds);
+    out.clear();
+    const span = M.topDb - M.floorDb;
+    for (const [i, v] of this.voices) {
+      v.analyser.getFloatTimeDomainData(buf);
+      let sum = 0;
+      for (let n = 0; n < buf.length; n++) sum += buf[n]! * buf[n]!;
+      const rms = Math.sqrt(sum / buf.length);
+      // In decibels, because the textures differ by three orders of magnitude - see
+      // AUDIO.performer.meter. The guard keeps a silent voice off log(0).
+      const db = 20 * Math.log10(Math.max(rms, 1e-7));
+      const target = clamp((db - M.floorDb) / span, 0, 1);
+      v.meterLevel += (target - v.meterLevel) * (target > v.meterLevel ? up : down);
+      out.set(i, v.meterLevel);
     }
   }
 
@@ -396,6 +437,12 @@ export class Performers {
     const level = ctx.createGain();
     level.gain.value = 0;
     level.connect(pan);
+    // The meter taps the voice's own output: after its envelope and its colour, before
+    // the pan and before the station's reverb send. What the bar shows is the voice
+    // doing its thing, not where it happens to be in the stereo field.
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = P.meter.fftSize;
+    level.connect(analyser);
     const filter = ctx.createBiquadFilter();
     filter.connect(level);
     const vca = ctx.createGain();
@@ -576,6 +623,8 @@ export class Performers {
       nextAt: now + 0.1 + hash(index, 13) * 0.5,
       phrase: 0,
       endsAt: Infinity,
+      analyser,
+      meterLevel: 0,
       boost,
     };
   }
@@ -637,6 +686,7 @@ export class Performers {
     v.vca.disconnect();
     v.filter.disconnect();
     v.level.disconnect();
+    v.analyser.disconnect();
     v.pan.disconnect();
   }
 }

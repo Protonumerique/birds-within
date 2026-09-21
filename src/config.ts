@@ -1284,6 +1284,46 @@ export const AUDIO = {
        */
       floor: 0.25,
     },
+    /**
+     * **The meter: what the panel reads to draw a voice's pulse.**
+     *
+     * Added 2026-09-21, and it is the first time anything has flowed *back* from the
+     * audio to the image. Everything else goes one way — the frame drives the sound —
+     * so this is a new seam, kept deliberately narrow: one number per sounding object,
+     * sampled once a frame, and the panel is the only thing that reads it.
+     *
+     * **It is measured from the signal, never predicted from the schedule.** Phrases
+     * are written up to `lookaheadSeconds` ahead on the audio context's own clock,
+     * which is not the frame clock; anything derived from the schedule would drift
+     * against what is actually audible. An `AnalyserNode` on each voice reads what is
+     * sounding *now*, so the bar cannot disagree with the ear.
+     */
+    meter: {
+      /** Samples per read. 256 is about 5 ms at 48 kHz: enough for an RMS, nothing to store. */
+      fftSize: 256,
+      /**
+       * Seconds. **Fast up, slow down** — an onset has to arrive on the frame it
+       * happens or the bar reads as lagging, and a decay has to be visible for longer
+       * than a frame or a chirp is a single-frame flash nobody sees.
+       */
+      attackSeconds: 0.02,
+      releaseSeconds: 0.22,
+      /**
+       * The window the bar spans, in **decibels**, and it has to be decibels.
+       *
+       * Measured on the real voices: a bird runs 0.0002 RMS in its gaps and 0.42 in a
+       * note - a factor of **two thousand** - while a shard sits flat at 0.03 because
+       * it is continuous and eventless. A linear full-scale cannot show both: set it
+       * for the shard and every bird pins at full through its whole phrase, which is
+       * what the first version did and it read as a blink rather than a pulse.
+       *
+       * On this window: a bird's gaps fall under the floor and read as nothing, its
+       * notes reach the top, and a shard settles around 0.45 and breathes. Which is
+       * exactly the three textures telling themselves apart in the panel.
+       */
+      floorDb: -50,
+      topDb: -8,
+    },
     /** A kept object arrives and leaves over these, seconds. */
     attackSeconds: 0.7,
     releaseSeconds: 1.6,

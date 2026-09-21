@@ -33,6 +33,13 @@ function rateScale(rate: number): number {
  * oscillators and the WASM-free cost of all of it are created on that press and not
  * before - a page nobody turns the sound on for pays nothing at all.
  */
+/**
+ * Seconds since the last meter read, kept sane. The first call has no previous read,
+ * and a backgrounded tab can return one of many seconds - either would make the very
+ * next bar jump to full.
+ */
+const clampDt = (dt: number) => (dt > 0 && dt < 0.25 ? dt : 1 / 60);
+
 export class AudioEngine {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
@@ -61,6 +68,14 @@ export class AudioEngine {
   /** What the performers are actually voicing: everything kept, plus a featured object
    *  that is above the horizon. Rebuilt per update, never reallocated. */
   private sounding: number[] = [];
+  /**
+   * One level per sounding object, 0-1, refreshed each update. **The only thing that
+   * flows back from the sound to the image** - see AUDIO.performer.meter. An object
+   * that is kept but not sounding is absent, not zero.
+   */
+  private levels = new Map<number, number>();
+  /** Context time of the last meter read, so the smoothing is frame-rate independent. */
+  private meteredAt = 0;
 
   /**
    * `choir` and `kind` are the worker's per-object bytes. Which bus an object belongs
@@ -148,7 +163,11 @@ export class AudioEngine {
     timeRate: number,
     paused: boolean
   ): void {
-    if (!this.on || !this.ctx || !this.drone || !this.performers) return;
+    if (!this.on || !this.ctx || !this.drone || !this.performers) {
+      // Nothing is sounding, so nothing may still be drawn as if it were.
+      this.levels.clear();
+      return;
+    }
 
     // The clock's two effects on the level, and neither of them is a mute. A fast
     // sky steps the sound back; a held one steps it further back and stops the
@@ -164,7 +183,10 @@ export class AudioEngine {
       this.scale = scale;
       this.applyMaster(AUDIO.duckSeconds);
     }
-    if (!frame) return;
+    if (!frame) {
+      this.levels.clear();
+      return;
+    }
 
     this.beltMarked.length = 0;
     this.passMarked.length = 0;
@@ -191,6 +213,21 @@ export class AudioEngine {
     // sweeps it across the field.
     this.drone.update(frame, belt, this.beltMarked, heading);
     this.performers.update(frame, this.sounding, heading, paused);
+
+    // And the one reading back: what each voice is actually doing, for the panel.
+    const at = this.ctx.currentTime;
+    const dt = clampDt(at - this.meteredAt);
+    this.meteredAt = at;
+    this.performers.meter(this.levels, dt);
+  }
+
+  /**
+   * How loudly the object at `index` is sounding right now, 0-1, or 0 for anything
+   * that is not. The panel draws this as a pulse beside the name - one number in two
+   * places, which is the same trick the attention colours use. See *The pulse*.
+   */
+  level(index: number): number {
+    return this.levels.get(index) ?? 0;
   }
 
   private build(): void {

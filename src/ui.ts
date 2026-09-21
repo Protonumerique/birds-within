@@ -204,8 +204,9 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
   // Three groups, because the sky holds three kinds of thing that do not compare.
   // Each rests at the colour its objects already wear and shows the mark's own shape
   // beside its name, so the legend lives where the thing it explains does.
-  const passingGroup = new Group('Passing', GROUP_LOOK.passing, READOUT.passingRows, names, selection, featured);
-  const debrisGroup = new Group('Debris', GROUP_LOOK.debris, READOUT.debrisRows, names, selection, featured);
+  const level = (i: number) => source.audio.level(i);
+  const passingGroup = new Group('Passing', GROUP_LOOK.passing, READOUT.passingRows, names, selection, featured, level);
+  const debrisGroup = new Group('Debris', GROUP_LOOK.debris, READOUT.debrisRows, names, selection, featured, level);
   const choirGrid = new ChoirGrid(names, selection);
   root.querySelector('.lists')!.append(passingGroup.element, debrisGroup.element);
   root.querySelector('.foot')!.append(choirGrid.element);
