@@ -54,6 +54,20 @@ const smoothstep = (t: number) => t * t * (3 - 2 * t);
 const byElevation = (elevation: number) =>
   lerp(HIGHLIGHT.dimAtHorizon, 1, clamp(elevation / FULL_BRIGHT, 0, 1));
 
+/**
+ * How far away it is, on a log ramp from `nearKm` down to `floor` at `farKm`.
+ *
+ * Elevation alone said nothing about distance, so something high and very far arrived
+ * at the same level as something low and close. See AUDIO.performer.byRange for why
+ * this is slant range, why the band is wide enough that a LEO pass barely feels it,
+ * and why the belt cannot reach this code at all.
+ */
+const byRange = (km: number) => {
+  const { nearKm, farKm, floor } = P.byRange;
+  const span = Math.log(farKm / nearKm);
+  return lerp(1, floor, clamp(Math.log(Math.max(km, nearKm) / nearKm) / span, 0, 1));
+};
+
 interface Voice {
   index: number;
   timbre: Timbre;
@@ -191,8 +205,15 @@ export class Performers {
 
   /** Everything continuous: level from elevation, pan from direction, colour from shadow. */
   private steer(v: Voice, frame: SkyFrame, i: number, rx: number, rz: number, now: number): void {
+    // Range is always valid here: the loop above releases a voice whose object has
+    // lost its position before steer is ever reached.
     const gain =
-      P.gain * P.timbreGain[v.timbre] * (v.look?.gain ?? 1) * v.boost * byElevation(frame.elevation[i]!);
+      P.gain *
+      P.timbreGain[v.timbre] *
+      (v.look?.gain ?? 1) *
+      v.boost *
+      byElevation(frame.elevation[i]!) *
+      byRange(frame.range[i]!);
     // The same ramp does two jobs: the voice's arrival, since `level` starts at zero,
     // and its swell as the object climbs. Elevation changes slowly enough that one
     // time constant covers both.

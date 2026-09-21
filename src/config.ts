@@ -1187,6 +1187,45 @@ export const AUDIO = {
      * the same loudness; a sawtooth through an open lowpass needs less.
      */
     timbreGain: { bird: 1, machine: 1, shard: 0.8 },
+    /**
+     * **Distance attenuates a voice**, added 2026-09-21. Level was elevation alone, and
+     * elevation is not distance: a navigation satellite at 20,000 km or a Molniya near
+     * apogee sits high in the sky for a long time and arrived at the *same* level as a
+     * Starlink at 550 km. Overhead and far is exactly the case that got invasive.
+     *
+     * **The belt is untouched, and not by a rule here.** `audio.ts` splits what is kept
+     * on the `choir` byte: belt objects go to `Drone` and never reach this class at all,
+     * so its bed keeps its own level whatever this does.
+     *
+     * **Slant range, not altitude**, which the frame does not carry - and the wide band
+     * is what makes that safe. A LEO pass runs about 550 km overhead to 2,300 km at the
+     * horizon, so the whole of it sits at the near end and comes through at 1.0 to 0.89:
+     * the dense sky is essentially untouched and there is no double-counting against the
+     * elevation curve. The ramp only bites on orbits that are genuinely far.
+     *
+     * **Logarithmic, because orbital distance is.** These span more than a decade, and a
+     * linear ramp would spend nearly all its travel between 1,500 and 8,000 km and then
+     * be flat across everything above. Per doubling is also roughly how loudness is
+     * heard.
+     *
+     * | slant range | gain |
+     * |---|---|
+     * | 550 km, LEO overhead | 1.00 |
+     * | 2,300 km, LEO setting | 0.89 |
+     * | 5,000 km | 0.70 |
+     * | 10,000 km | 0.53 |
+     * | 20,000 km, navigation | 0.36 |
+     * | 25,000 km and beyond | 0.30 |
+     *
+     * `nearKm` sits above the whole populated LEO shell - 550, 780 and 1,200 km - on
+     * purpose, so nothing in the sky the piece is actually about is attenuated at all.
+     */
+    byRange: {
+      nearKm: 1500,
+      farKm: 25000,
+      /** How far down the furthest things go. 0.3 is -10.5 dB: lighter, not absent. */
+      floor: 0.3,
+    },
     /** A kept object arrives and leaves over these, seconds. */
     attackSeconds: 0.7,
     releaseSeconds: 1.6,

@@ -1315,12 +1315,13 @@ kept at once drift apart instead of locking into one pulse, because their gaps d
 Pitches are quantised to a pentatonic over three octaves, so a handful kept together is a
 chord rather than a cluster.
 
-**Four mappings, and three of them are already the visual grammar:**
+**Five mappings, and three of them are already the visual grammar:**
 
 | | from | measured across a pass |
 |---|---|---|
 | pitch | range rate, exaggerated | +650 → 0 → −650 cents |
 | level | elevation, on `HIGHLIGHT`'s own curve | 0.11 at 3° → 0.33 at 62° → 0.11 |
+| distance | slant range, log ramp | 1.00 under 1,500 km → 0.36 at 20,000 → 0.30 past 25,000 |
 | pan | direction · camera right | −0.85 (east) → 0 (south) → +0.85 (west) |
 | timbre | shadow | 5.4 kHz sunlit → 700 Hz in umbra |
 
@@ -1328,6 +1329,51 @@ The level curve is `HIGHLIGHT.dimAtHorizon` and `fullBrightDeg` — literally th
 numbers that dim the ring — so a voice swells and fades in exact step with the mark on
 screen. Shadow is the one column nothing else in the audio path reads, and the ear takes
 it better as colour than the eye takes it as brightness.
+
+**Distance is the one mapping with no counterpart in the image**, added 2026-09-21, and
+that is the interesting part rather than an oversight. Level was elevation alone, and
+elevation is not distance: a navigation satellite at 20,000 km or a Molniya near apogee
+climbs high and *stays* there, and arrived at exactly the level of a Starlink at 550 km.
+Overhead and far is the case that got invasive.
+
+The eye cannot be given this. From a camera at the origin every radius projects to the
+same pixel — the finding *Immersion* rests on — so depth has no cheap visual channel
+here, and the expensive one was stashed for failing at catalogue scale. **The ear has
+no such problem**: level against distance is the most ordinary cue there is. So the
+sense that could carry it does, and the two readings of the geometry are allowed to
+differ, in the same way `INTERFERENCE` already lets reach be an angle in the ear and a
+screen radius in the eye.
+
+- **Slant range, not altitude**, which `SkyFrame` does not carry — and the **width of
+  the band is what makes that safe**. A LEO pass runs about 550 km overhead to 2,300 km
+  at the horizon, all of it at the near end of a ramp that reaches to 25,000, so it
+  comes through at 1.00 falling to 0.89. The dense sky the piece is actually about is
+  essentially untouched, and there is no meaningful double-count against the elevation
+  curve. `nearKm` of 1,500 sits above the whole populated LEO shell — 550, 780 and
+  1,200 km — deliberately.
+- **Logarithmic, because orbital distance is.** These span more than a decade. A linear
+  ramp would spend nearly all its travel between 1,500 and 8,000 km and be flat across
+  everything above, which is the opposite of what is wanted. Per doubling is also
+  roughly how loudness is heard.
+- **The floor is 0.3, −10.5 dB: lighter, not absent.** A far object is still a voice.
+- **The belt is untouched, and not by a rule in the audio at all.** `audio.ts` splits
+  what is kept on the `choir` byte — belt objects go to `Drone` and never reach
+  `Performers` — so this code structurally cannot reach the bed. Verified anyway by
+  rendering the same bed with its members at 1,000 km and at 36,000: **−21.82 dBFS
+  either way**, identical.
+
+Rendered offline, one bird held at 70° elevation, RMS against the same voice at 550 km —
+the ramp reaches the output exactly as computed, to a tenth of a decibel:
+
+| slant range | RMS | vs 550 km | peak |
+|---|---|---|---|
+| 550 km | −24.76 dBFS | 0.0 dB | 0.238 |
+| 1,200 km | −24.76 | 0.0 | 0.238 |
+| 2,300 km | −25.73 | −1.0 | 0.213 |
+| 5,000 km | −27.85 | −3.1 | 0.167 |
+| 10,000 km | −30.31 | −5.5 | 0.126 |
+| 20,000 km | −33.74 | −9.0 | 0.085 |
+| 36,000 km | −35.22 | −10.5 | 0.071 |
 
 **The shard, and the interference.** The first version fired short noise bursts, and that
 was exactly wrong: a repeating transient is the most attention-getting thing a mix can
@@ -1544,9 +1590,19 @@ put under the birdsong is simply absent. There is now a `SYNTH R/B` shell at ~9%
 over-represented on the same argument that put 240 belt objects in there — a dev sky has
 to show the thing being worked on.
 
-**The general lesson: check what the development catalogue actually contains before
-concluding something about how the piece sounds or looks.** `synthetic` is invented, and
-what it leaves out is invisible rather than wrong.
+**And it had nothing genuinely far away either**, found the same day and for the same
+reason. Every shell that *passed* topped out at 1,400 km, so `AUDIO.performer.byRange`
+— which does nothing under 1,500 km — was inaudible offline and could not be judged at
+all. There is now a `SYNTH NAV` shell at GPS altitude and inclination. At **2.004
+revolutions a day** it sits well outside `isGeosynchronous`'s 0.95–1.05 window, so it
+stays a pass and goes to the performers rather than the belt, which is the whole point
+of putting it there.
+
+**The general lesson, and it has now cost two findings in one day: check what the
+development catalogue actually contains before concluding something about how the piece
+sounds or looks.** `synthetic` is invented, and what it leaves out is invisible rather
+than wrong — a texture that never plays and a ramp that never engages both look exactly
+like a design that does not work.
 
 `synthetic.bin` carries the families too — its Starlink and Iridium shells are named so
 the *name* rules match them by exactly the path production takes, at the real altitudes

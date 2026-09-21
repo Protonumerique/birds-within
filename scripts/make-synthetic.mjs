@@ -80,6 +80,18 @@ const SHELLS = [
    * few per cent rocket bodies.
    */
   [120, null, null, 'SYNTH R/B', null],
+  /*
+   * **Semi-synchronous, and the only thing here that is genuinely far.** Everything
+   * else that passes tops out at 1,400 km, so `AUDIO.performer.byRange` - which only
+   * starts attenuating past 1,500 km - was inaudible on this sky and could not be
+   * judged offline at all. The real catalogue has the four navigation constellations
+   * at ~20,000 km, plus Molniya orbits reaching further at apogee.
+   *
+   * GPS altitude and inclination. At 2.004 revolutions a day it sits well outside
+   * `isGeosynchronous`'s 0.95-1.05 window, so it stays a **pass** and goes to the
+   * performers rather than the belt - which is the point of putting it here.
+   */
+  [60, 20200, 55.0, 'SYNTH NAV', null],
 ];
 
 const records = [];
