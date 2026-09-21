@@ -88,7 +88,13 @@ export function viewFrame(buffer: ArrayBuffer, count: number, time: number): Sky
 }
 
 export type ToWorker =
-  | { type: 'init'; bytes: ArrayBuffer; observer: GeodeticObserver }
+  | {
+      type: 'init';
+      bytes: ArrayBuffer;
+      observer: GeodeticObserver;
+      /** Catalog numbers to draw as featured. Passed in so the worker need not import config. */
+      featured: readonly number[];
+    }
   /** `recycle` hands spent frame buffers back so the worker need not allocate. */
   | { type: 'frame'; id: number; generation: number; time: number; recycle: ArrayBuffer[] }
   | {
@@ -111,6 +117,8 @@ export type FromWorker =
       /** Voice family per object, decided by the build. See FAMILY. */
       family: Uint8Array;
       choir: Uint8Array;
+      /** 1 where the object's catalog number is in FEATURED - the ISS, and whatever joins it. */
+      featured: Uint8Array;
       /** Element sets SGP4 rejected at init - decayed or corrupt. */
       dropped: number;
       generatedAt: number;

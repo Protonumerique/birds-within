@@ -85,15 +85,19 @@ const pool: ArrayBuffer[] = [];
 const post = (message: FromWorker, transfer: Transferable[] = []) =>
   (self as unknown as Worker).postMessage(message, transfer);
 
-async function init(bytes: ArrayBuffer, geodetic: GeodeticObserver) {
+async function init(bytes: ArrayBuffer, geodetic: GeodeticObserver, featuredCatnrs: readonly number[]) {
   const started = performance.now();
   const packed = decodeCatalog(bytes);
+  // Passed in rather than imported: config.ts is the render thread's, and pulling it
+  // in here would put the whole of it - AUDIO, SKY, the lot - into the worker chunk.
+  const featured = new Set(featuredCatnrs);
 
   const satrecs: SatRec[] = [];
   const names: string[] = [];
   const kinds: number[] = [];
   const families: number[] = [];
   const choirs: number[] = [];
+  const featureds: number[] = [];
   let dropped = 0;
   for (let i = 0; i < packed.count; i++) {
     const elements = packed.elementsAt(i);
@@ -109,6 +113,9 @@ async function init(bytes: ArrayBuffer, geodetic: GeodeticObserver) {
     // Read from the elements, here, because this is the only place they exist: the
     // render thread transfers the catalogue away and never sees a mean motion.
     choirs.push(isGeosynchronous(elements) ? 1 : 0);
+    // The featured join, for the same reason and in the same place: a catalog number
+    // exists here and nowhere downstream. By number, never by name - see FEATURED.
+    featureds.push(featured.has(packed.catnr[i]!) ? 1 : 0);
   }
 
   // Replacing a live propagator: its WASM memory is not garbage collected.
@@ -128,6 +135,7 @@ async function init(bytes: ArrayBuffer, geodetic: GeodeticObserver) {
   const kind = Uint8Array.from(kinds);
   const family = Uint8Array.from(families);
   const choir = Uint8Array.from(choirs);
+  const featuredFlags = Uint8Array.from(featureds);
   post(
     {
       type: 'ready',
@@ -136,11 +144,12 @@ async function init(bytes: ArrayBuffer, geodetic: GeodeticObserver) {
       kind,
       family,
       choir,
+      featured: featuredFlags,
       dropped,
       generatedAt: packed.generatedAt.getTime(),
       initMs: performance.now() - started,
     },
-    [kind.buffer, family.buffer, choir.buffer]
+    [kind.buffer, family.buffer, choir.buffer, featuredFlags.buffer]
   );
 }
 
@@ -200,7 +209,7 @@ self.onmessage = async (event: MessageEvent<ToWorker>) => {
   try {
     switch (msg.type) {
       case 'init':
-        await init(msg.bytes, msg.observer);
+        await init(msg.bytes, msg.observer, msg.featured);
         break;
 
       case 'frame': {

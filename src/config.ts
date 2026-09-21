@@ -328,6 +328,56 @@ export const KIND_LOOK = {
   },
 };
 
+/**
+ * **The one object with people in it.**
+ *
+ * Added 2026-09-21. The ISS has always been in the catalogue - `GROUP=active` carries
+ * 25544, so both `active` and `full` have it, and `scripts/fixtures/validation.tle` has
+ * propagated it on every run of `npm run validate` since Step 0. Nothing needed
+ * fetching. It was simply one warm-white dot among twenty thousand identical ones, and
+ * so it was never once seen.
+ *
+ * **Why this does not break "density beats identifiability".** That rule is about not
+ * drifting into being a tracker - no search, no info panels, no picking favourites out
+ * of a crowd. This is not a favourite. Every other object up there is uncrewed, and the
+ * piece is a sky of machinery with nobody in it; one mark that is different because
+ * there are *people inside it* is the counterpoint that makes the rest read as what it
+ * is. It also happens to be the brightest thing in the sky when it is lit, so a viewer
+ * who has ever watched it go over already knows this mark.
+ *
+ * **Joined on the catalog number, never the name** - the same argument as FAMILIES.
+ * `ISS (ZARYA)` is a name that can change and that `ISS DEB` would partly match; 25544
+ * is forever. The worker does the join at init, because the render thread transfers the
+ * catalogue away and never sees a catalog number - exactly why `choir` is computed
+ * there too.
+ *
+ * A list rather than one number, so Tiangong (48274) is one line when it is wanted.
+ */
+export const FEATURED = {
+  /** NORAD catalog numbers drawn as featured. 25544 is the ISS. */
+  catnrs: [25544],
+  /**
+   * How much larger the mark is. Well clear of the `KIND_LOOK` multipliers (0.9 for a
+   * rocket body, 1.2 for a shard), so size reads as identity here rather than as kind.
+   */
+  size: 2.0,
+  /**
+   * **A cool white, and deliberately not the belt's blue.** Blue means geostationary
+   * and means only that - see *Colour and visual conventions*. What this is instead is
+   * the **cool counterpart of the warm white that already means "a passing satellite"**:
+   * `#fff2d6` is 16% saturated toward warm, this is 15% toward cool. It is not a new
+   * hue in the two-axis sense, it is the same white with the cast reversed - which is
+   * right, because the ISS *is* a passing satellite, just the one that matters.
+   *
+   * At sixteen pixels against the belt's 46%-saturated `#8ad4ff` the two are plainly
+   * different things, which a true blue would not have been.
+   */
+  color: '#d8e8ff',
+  /** Its orbit: the same cool white, a little wider and a little more present. */
+  trackWidthPx: 3.2,
+  trackOpacity: 0.72,
+};
+
 export const SKY = {
   /** Radius of the dome in scene units. Arbitrary - the sky has no scale. */
   radius: 100,

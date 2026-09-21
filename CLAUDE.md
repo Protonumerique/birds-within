@@ -145,6 +145,82 @@ falls straight out of the geometry.
   offline. Deliberately over-represented at ~15% against a real few per cent: a dev sky
   has to show the thing being worked on.
 
+### The one with people in it
+
+Added 2026-09-21. `FEATURED` in config.ts. One object is drawn larger, in a cool white,
+with its orbit always on screen while it is up: the ISS.
+
+**It was always in the catalogue.** `GROUP=active` carries 25544, so both `active` and
+`full` have had it since Step 1, and `scripts/fixtures/validation.tle` has propagated
+`ISS (ZARYA)` on every run of `npm run validate` since Step 0. Nothing needed fetching
+and no source changed. It was simply one warm-white dot among twenty thousand identical
+ones — which is the whole reason it was never once seen.
+
+**Why this does not break "density beats identifiability".** That rule is about not
+drifting into being a tracker: no search, no info panels, no picking favourites out of a
+crowd. This is not a favourite. Every other object up there is uncrewed, and the piece is
+a sky of machinery with nobody in it — one mark that is different because there are
+*people inside it* is the counterpoint that makes the rest read as what it is. It is also
+the brightest thing in the sky when it is lit, so anyone who has watched it go over
+already knows this mark.
+
+**Joined on the catalog number, never the name** — the same argument as *Families*.
+`ISS (ZARYA)` is a name that can change and that `ISS DEB` would partly match; 25544 is
+forever. The worker does the join at init, for the same reason it computes `choir` there:
+the render thread transfers the catalogue away and never sees a catalog number.
+
+**The numbers are passed into the worker, not imported.** `init` carries
+`FEATURED.catnrs`, because importing `config.ts` in `sky.worker.ts` would pull the whole
+of it — AUDIO, SKY, the lot — into the worker chunk for the sake of one array. Verified:
+the worker chunk stayed at 37.7 KB.
+
+**A cool white, and deliberately not the belt's blue.** "Blueish-white" is the honest
+colour of the real thing, but blue here means geostationary and means only that. What
+`#d8e8ff` is instead is the **cool counterpart of the warm white that already means "a
+passing satellite"**: `#fff2d6` is 16% saturated toward warm, this is 15% toward cool. It
+is not a new hue in the two-axis sense — it is the same white with the cast reversed,
+which is right, because the ISS *is* a passing satellite, just the one that matters. At
+sixteen pixels against the belt's 46%-saturated `#8ad4ff` the two are plainly different
+things, which a true blue would not have been.
+
+**The hue only applies while it is sunlit.** Eclipsed it goes the same neutral grey as
+everything else, and below the horizon the same neutral dim. That keeps both axes intact
+— hue says what a thing is, value says what state it is in — and it is also simply true:
+you cannot see the ISS when it is in the Earth's shadow. What marks it out at *every*
+moment is its **size**, a third channel, at 2.0 against the kind multipliers of 0.9 and
+1.2.
+
+**Its orbit is drawn whenever it is above the horizon**, kept or not, which is the point
+of featuring it. `piece.ts` adds it to `tracked` before the ambient fallback, so a
+visible ISS also means the sky is never left without a track. Only while it is up: a
+track is cut at the horizon anyway, so one for an object on the far side of the world
+would be an empty request every frame. Keeping it still wins — a kept ISS turns amber
+like anything else, because attention is attention.
+
+**The wider orbit cost a second draw, and there was no way around it.**
+`LineMaterial.linewidth` is a **material** uniform — three's fat lines have no
+per-instance width — so a wider track is a second `LineSegments2` or it is nothing.
+`TrackLayer` and `makeTrackLayer` are that: same shader, same geometry shape, same
+horizon clipping and fade, different width and opacity. `setTracks` runs the same cutting
+loop over the list twice, once per layer, skipping what the other wants, so a track lands
+in exactly one of them. Both sit at `RENDER_ORDER.trail`.
+
+**Verified in a browser, and the first measurement was worthless.** A/B of
+`uFeaturedSize` between 1 and 2, with everything held still, reported **0 differing
+pixels** — because the ISS was not in frame at the opening camera angle. Pointing the
+camera at it first (yaw *is* azimuth, given how `render` builds the view direction) gives
+**11,116 differing pixels, every one brighter, deepest gain 534 of 765**. The same trap
+this file already records twice: a null result from a measurement that never looked at
+the thing.
+
+`synthetic.bin` carries a stand-in with the **real catalog number** and invented
+elements at ISS altitude and inclination, so the join runs offline by exactly the path
+production takes — the same trick the Starlink and Iridium shells use with their names.
+Without it nothing in development draws a featured mark, a featured orbit, or touches
+the second track layer at all.
+
+A list rather than one number, so Tiangong (48274) is one line when it is wanted.
+
 ### Propagation: all of it in the sky worker
 
 `src/sky.worker.ts` is the only place orbits are computed for display. The render thread
@@ -1884,6 +1960,9 @@ Anything that computes range rate by hand must not repeat the naive version.
   - [x] **Filling the frame.** Airglow and grain on a backdrop the haze shares its ramp
         with, a halo inside the sprite each object already draws, and a ground that is
         a different substance from the sky. See *Rendering*.
+  - [x] **The one with people in it.** The ISS drawn larger, in a cool white, with its
+        orbit on screen whenever it is up. Joined on catalog number 25544, which
+        `GROUP=active` has carried all along. See *The one with people in it*.
   - [ ] **Immersion.** A slider that brings the near things close and defocuses them,
         leaving the belt small and sharp behind. Nothing moves - from a camera at the
         origin every radius projects to the same pixel - so range drives size and bokeh

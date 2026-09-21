@@ -128,6 +128,34 @@ for (const [count, altitude, inclination, label, family] of SHELLS) {
   }
 }
 
+/*
+ * **A stand-in for the ISS, carrying the real catalog number.**
+ *
+ * `FEATURED` joins on 25544, and the join happens in the worker at init - so without a
+ * 25544 in here, nothing offline draws a featured mark, a featured orbit, or exercises
+ * the second track layer at all. The elements are invented like everything else in this
+ * file; the *number* is real, so the join runs by exactly the path production takes.
+ * That is the same trick the Starlink and Iridium shells use with their names.
+ *
+ * ISS altitude and inclination, so its passes look like the real thing's - high and
+ * frequent from the mid-latitudes, which is why it is worth featuring.
+ */
+records.push({
+  OBJECT_NAME: 'ISS (ZARYA)',
+  NORAD_CAT_ID: 25544,
+  FAMILY: familyOf('ISS (ZARYA)', 25544, () => false),
+  EPOCH: EPOCH.toISOString(),
+  INCLINATION: fixed(51.64, 4),
+  RA_OF_ASC_NODE: fixed(117.3, 4),
+  ARG_OF_PERICENTER: fixed(88.5, 4),
+  MEAN_ANOMALY: fixed(271.7, 4),
+  ECCENTRICITY: fixed(4.2e-4, 8),
+  MEAN_MOTION: fixed(meanMotion(420), 8),
+  BSTAR: 0,
+  MEAN_MOTION_DOT: 0,
+  MEAN_MOTION_DDOT: 0,
+});
+
 /**
  * The choir: a synthetic geosynchronous belt.
  *

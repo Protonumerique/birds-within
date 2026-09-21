@@ -1,4 +1,4 @@
-import { CLOCK } from './config';
+import { CLOCK, FEATURED } from './config';
 import {
   viewFrame,
   type FromWorker,
@@ -59,6 +59,8 @@ export class SkyStream {
   readonly family: Uint8Array;
   /** 1 where the object is in the geosynchronous belt: the choir, which never sets. */
   readonly choir: Uint8Array;
+  /** 1 where the object is featured - the ISS, and whatever joins it. See FEATURED. */
+  readonly featured: Uint8Array;
   readonly dropped: number;
   readonly generatedAt: Date;
   readonly initMs: number;
@@ -82,7 +84,7 @@ export class SkyStream {
         if (msg.type === 'ready') resolve(new SkyStream(worker, msg));
         else if (msg.type === 'error') reject(new Error(`sky worker: ${msg.message}`));
       };
-      post(worker, { type: 'init', bytes, observer }, [bytes]);
+      post(worker, { type: 'init', bytes, observer, featured: FEATURED.catnrs }, [bytes]);
     });
   }
 
@@ -95,6 +97,7 @@ export class SkyStream {
     this.kind = ready.kind;
     this.family = ready.family;
     this.choir = ready.choir;
+    this.featured = ready.featured;
     this.dropped = ready.dropped;
     this.generatedAt = new Date(ready.generatedAt);
     this.initMs = ready.initMs;

@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 
-import { DATASET, DEBUG, HIGHLIGHT, OBSERVER, TRAIL, catalogUrl, type Dataset } from './config';
+import { DATASET, DEBUG, FEATURED, HIGHLIGHT, OBSERVER, TRAIL, catalogUrl, type Dataset } from './config';
 import { fetchCatalog, type FetchedCatalog } from './catalog';
 import { KIND } from './catalog-format';
 import { geodeticObserver } from './sky-frame';
 import { SkyStream, type FramePair } from './sky-stream';
-import { SkyScene } from './scene';
+import { SkyScene, type Track } from './scene';
 import { Clock } from './clock';
 import { createHud } from './ui';
 import { Selection } from './selection';
@@ -74,7 +74,7 @@ export async function run(status: StatusFn): Promise<void> {
   // Keeping anything - from the sky or from the belt's grid - starts the sound, unless
   // the person has already worked the button themselves. See `armFromSelection`.
   selection.onMark = () => audio.armFromSelection();
-  scene.setClasses(stream.choir, stream.kind);
+  scene.setClasses(stream.choir, stream.kind, stream.featured);
   const hud = createHud(hudRoot, clock, {
     names: stream.names,
     dataset,
@@ -109,7 +109,7 @@ export async function run(status: StatusFn): Promise<void> {
   const trails = new Trails(stream);
   const tracked: number[] = [];
   const warping: number[] = [];
-  const tracks: { directions: Float32Array; color: THREE.Color }[] = [];
+  const tracks: Track[] = [];
   let lastTrailVersion = -1;
   let lastMarksVersion = -1;
   const markColor = new THREE.Color(HIGHLIGHT.markColor);
@@ -117,6 +117,11 @@ export async function run(status: StatusFn): Promise<void> {
   // thing drew it before you read the name at the other end of it.
   const debrisColor = new THREE.Color(HIGHLIGHT.debrisMarkColor);
   const trackColor = new THREE.Color(TRAIL.color);
+  /** A featured orbit is the mark's own cool white, so the line names it before the row does. */
+  const featuredColor = new THREE.Color(FEATURED.color);
+  /** The featured objects, found once - the catalogue cannot change under a running page. */
+  const featuredIndices: number[] = [];
+  for (let i = 0; i < stream.count; i++) if (stream.featured[i] === 1) featuredIndices.push(i);
 
   scene.setPointerHandlers({
     hover: (x, y) => {
@@ -192,6 +197,19 @@ export async function run(status: StatusFn): Promise<void> {
     } else if (selection.newest >= 0 && stream.choir[selection.newest] !== 1) {
       tracked.push(selection.newest);
     }
+    /*
+     * A featured object draws its orbit whenever it is up, kept or not - which is the
+     * whole point of featuring it. It is added before the fallback below, so a visible
+     * ISS also means the sky is never left without a track.
+     *
+     * Only while it is above the horizon: a track is cut at the horizon anyway, so one
+     * for an object on the far side of the world would be an empty request every frame.
+     */
+    if (pair) {
+      for (const i of featuredIndices) {
+        if (pair.to.range[i]! > 0 && pair.to.elevation[i]! > 0 && !tracked.includes(i)) tracked.push(i);
+      }
+    }
     if (tracked.length === 0) {
       // Never the choir: hud.selectedIndex already skips it, and this says so here too.
       const fallback = hud.selectedIndex();
@@ -217,8 +235,14 @@ export async function run(status: StatusFn): Promise<void> {
         const directions = trails.get(i);
         if (directions) {
           const kept = selection.isMarked(i);
-          const color = kept ? (stream.kind[i] === KIND.DEBRIS ? debrisColor : markColor) : trackColor;
-          tracks.push({ directions, color });
+          const featured = stream.featured[i] === 1;
+          // Kept still wins: attention is attention, and a ringed ISS should say so.
+          const color = kept
+            ? (stream.kind[i] === KIND.DEBRIS ? debrisColor : markColor)
+            : featured
+              ? featuredColor
+              : trackColor;
+          tracks.push({ directions, color, featured });
         }
       }
       scene.setTracks(tracks);

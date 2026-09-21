@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
-import { BLOOM, CHOIR, GHOST, GLOW, HIGHLIGHT, IMMERSION, INTERFERENCE, KIND_LOOK, PALETTE, SKY, TRAIL } from './config';
+import { BLOOM, CHOIR, FEATURED, GHOST, GLOW, HIGHLIGHT, IMMERSION, INTERFERENCE, KIND_LOOK, PALETTE, SKY, TRAIL } from './config';
 import { NO_POSITION, directionFromAltAz, type SkyFrame } from './sky-frame';
 import type { FramePair } from './sky-stream';
 import { pickNearest } from './picking';
@@ -199,6 +199,57 @@ function hash01(index: number, salt: number): number {
   return x - Math.floor(x);
 }
 
+/** One orbit handed to `setTracks`: where it goes, what colour, and which layer draws it. */
+export interface Track {
+  directions: Float32Array;
+  color: THREE.Color;
+  /** Drawn wider, in the featured layer. See FEATURED. */
+  featured?: boolean;
+}
+
+/**
+ * One draw of orbits: the buffers, the geometry and the material that decides how wide
+ * they are. There are two of these - the ordinary tracks and the featured ones - only
+ * because `LineMaterial.linewidth` is per material rather than per instance.
+ */
+interface TrackLayer {
+  mesh: LineSegments2;
+  material: LineMaterial;
+  positions: Float32Array;
+  colors: Float32Array;
+  buffer: THREE.InterleavedBuffer;
+  colorBuffer: THREE.InterleavedBuffer;
+  /** Segments this layer has room for. */
+  capacity: number;
+}
+
+function makeTrackLayer(capacity: number, widthPx: number, opacity: number): TrackLayer {
+  const positions = new Float32Array(capacity * 6);
+  const colors = new Float32Array(capacity * 6);
+  const geometry = new LineSegmentsGeometry();
+  geometry.setPositions(positions);
+  geometry.setColors(colors);
+  geometry.instanceCount = 0;
+  // Real pixel-width lines. GL's own `linewidth` is one pixel whatever you ask for on
+  // ANGLE, which is most of the desktop; these are instanced quads instead.
+  const material = new LineMaterial({
+    vertexColors: true,
+    linewidth: widthPx,
+    transparent: true,
+    opacity,
+    depthWrite: false,
+  });
+  return {
+    mesh: new LineSegments2(geometry, material),
+    material,
+    positions,
+    colors,
+    buffer: (geometry.attributes.instanceStart as THREE.InterleavedBufferAttribute).data,
+    colorBuffer: (geometry.attributes.instanceColorStart as THREE.InterleavedBufferAttribute).data,
+    capacity,
+  };
+}
+
 /** A track's last few degrees above the horizon, dissolving to nothing at it. */
 function fade(y: number, top: number): number {
   const t = Math.min(Math.max(y / top, 0), 1);
@@ -247,6 +298,8 @@ const POINT_VERT = /* glsl */ `
   attribute float aChoir;
   attribute float aKind;
   attribute float aIndex;
+  /** 1 on a featured object. See FEATURED. */
+  attribute float aFeatured;
 
   uniform float uRadius;
   uniform float uPixelRatio;
@@ -254,6 +307,9 @@ const POINT_VERT = /* glsl */ `
   uniform vec3 uColorEclipsed;
   uniform vec3 uColorBelow;
   uniform vec3 uColorChoir;
+  /** A featured object's sunlit colour, and how much larger it is drawn. See FEATURED. */
+  uniform vec3 uColorFeatured;
+  uniform float uFeaturedSize;
   uniform vec2 uRocketLook;
   uniform vec3 uDebrisLook;
   uniform float uTime;
@@ -344,7 +400,18 @@ const POINT_VERT = /* glsl */ `
       return;
     }
 
-    vColor = choir ? uColorChoir : (above ? (lit ? uColorLit : uColorEclipsed) : uColorBelow);
+    /*
+     * A featured object is a cool white while it is SUNLIT, and otherwise exactly what
+     * anything else in that state is. That keeps the two axes intact: hue still says
+     * what a thing is, value still says what state it is in - so the ISS goes grey in
+     * the Earth's shadow like everything else, which is also simply true. You cannot
+     * see it when it is eclipsed. What marks it out at every moment is its SIZE, which
+     * is a third channel and well clear of the kind multipliers.
+     */
+    bool featured = aFeatured > 0.5;
+    vColor = choir
+      ? uColorChoir
+      : (above ? (lit ? (featured ? uColorFeatured : uColorLit) : uColorEclipsed) : uColorBelow);
     vAlpha = above ? (choir ? 1.0 : (lit ? 1.0 : 0.6)) : 0.3;
     vColor *= uGhostLevel;
 
@@ -352,6 +419,7 @@ const POINT_VERT = /* glsl */ `
     // turning triangle drawn in the fragment shader, so it costs no geometry.
     vShard = aKind > 1.5 ? 1.0 : 0.0;
     float size = aKind > 1.5 ? uDebrisLook.x : (aKind > 0.5 ? uRocketLook.x : 1.0);
+    if (featured) size *= uFeaturedSize;
     vGlow = aKind > 1.5 ? uDebrisLook.y : (aKind > 0.5 ? uRocketLook.y : 1.0);
 
     // A hash off the object's own index: every fragment tumbles at its own rate, from
@@ -947,6 +1015,8 @@ const COLOR_ECLIPSED = new THREE.Color(PALETTE.eclipsed);
 const COLOR_BELOW = new THREE.Color(PALETTE.below);
 /** The geosynchronous belt, in every state. */
 const COLOR_CHOIR = new THREE.Color(PALETTE.geostationary);
+/** A featured object while it is sunlit - the cool counterpart of COLOR_LIT. See FEATURED. */
+const COLOR_FEATURED = new THREE.Color(FEATURED.color);
 
 /** How far a press may travel, in CSS pixels, and still count as a click. */
 const DRAG_SLOP = 6;
@@ -1034,6 +1104,9 @@ export class SkyScene {
     uBody: { value: new THREE.Vector2(IMMERSION.bodyEdge, IMMERSION.bodyGain) },
     /** The shared block is the lights' draw; the shard pass and the ghosts override it. */
     uOnly: { value: 1 },
+    /** How much larger a featured mark is drawn, and its colour while sunlit. See FEATURED. */
+    uFeaturedSize: { value: FEATURED.size },
+    uColorFeatured: { value: COLOR_FEATURED },
   };
 
   /**
@@ -1057,6 +1130,8 @@ export class SkyScene {
   private choirAttribute: THREE.BufferAttribute;
   /** Per-object KIND: 0 payload, 1 rocket body, 2 debris. Set once. */
   private kindAttribute: THREE.BufferAttribute;
+  /** 1 on a featured object - the ISS, and whatever joins it. See FEATURED. */
+  private featuredAttribute: THREE.BufferAttribute;
   private marked: number[] = [];
   private readonly ringUniforms;
 
@@ -1091,14 +1166,17 @@ export class SkyScene {
   private ndc = new THREE.Vector3();
   private copyAt = new THREE.Vector2();
 
-  private tracks: LineSegments2;
-  private trackMaterial: LineMaterial;
-  private trackPositions: Float32Array;
-  private trackColors: Float32Array;
-  private trackBuffer: THREE.InterleavedBuffer;
-  private trackColorBuffer: THREE.InterleavedBuffer;
+  private tracks: TrackLayer;
+  /**
+   * A second layer for featured orbits. It exists because `linewidth` is a **material**
+   * uniform on LineMaterial - there is no per-instance width - so a wider orbit is a
+   * second draw or it is nothing. Same shader, same geometry shape, same fade; only the
+   * width and the opacity differ. See FEATURED.
+   */
+  private featuredTracks: TrackLayer;
+
   /** Segments, not samples: one track of N samples costs N-1 of these. */
-  private trackCapacity: number;
+
 
   // Compass bearing, not an arbitrary zero: see SKY.startFacingDeg for why the piece
   // opens facing south.
@@ -1149,6 +1227,7 @@ export class SkyScene {
     // and the rings, which must agree about which objects are the belt.
     this.choirAttribute = new THREE.BufferAttribute(new Float32Array(count), 1);
     this.kindAttribute = new THREE.BufferAttribute(new Float32Array(count), 1);
+    this.featuredAttribute = new THREE.BufferAttribute(new Float32Array(count), 1);
     // Its own vertex id. The rings compare it against the hover uniform; the points
     // hash it into a tumble phase, so every fragment of debris turns differently.
     const ids = new Float32Array(count);
@@ -1165,6 +1244,7 @@ export class SkyScene {
       geom.setAttribute('aState1', this.slots[1].state);
       geom.setAttribute('aChoir', this.choirAttribute);
       geom.setAttribute('aKind', this.kindAttribute);
+      geom.setAttribute('aFeatured', this.featuredAttribute);
       geom.setAttribute('aIndex', indexAttribute);
       return geom;
     };
@@ -1299,26 +1379,19 @@ export class SkyScene {
     // on ANGLE, which is most of the desktop; these are instanced quads instead, so
     // the width in TRAIL means something. Every track shares one draw.
     const samples = Math.ceil(((TRAIL.pastMinutes + TRAIL.futureMinutes) * 60) / TRAIL.stepSeconds) + 1;
-    this.trackCapacity = maxTracks * samples;
-    this.trackPositions = new Float32Array(this.trackCapacity * 6);
-    this.trackColors = new Float32Array(this.trackCapacity * 6);
-    const trackGeom = new LineSegmentsGeometry();
-    trackGeom.setPositions(this.trackPositions);
-    trackGeom.setColors(this.trackColors);
-    trackGeom.instanceCount = 0;
-    this.trackBuffer = (trackGeom.attributes.instanceStart as THREE.InterleavedBufferAttribute).data;
-    this.trackColorBuffer = (trackGeom.attributes.instanceColorStart as THREE.InterleavedBufferAttribute).data;
-    this.trackMaterial = new LineMaterial({
-      vertexColors: true,
-      linewidth: TRAIL.widthPx,
-      transparent: true,
-      opacity: TRAIL.opacity,
-      depthWrite: false,
-    });
-    this.tracks = new LineSegments2(trackGeom, this.trackMaterial);
-    this.tracks.frustumCulled = false;
-    this.tracks.renderOrder = RENDER_ORDER.trail;
-    this.scene.add(this.tracks);
+    this.tracks = makeTrackLayer(maxTracks * samples, TRAIL.widthPx, TRAIL.opacity);
+    // Only a handful can ever be featured, so this layer is sized for a few orbits
+    // rather than for the whole cap.
+    this.featuredTracks = makeTrackLayer(
+      Math.max(2, FEATURED.catnrs.length) * samples,
+      FEATURED.trackWidthPx,
+      FEATURED.trackOpacity
+    );
+    for (const layer of [this.tracks, this.featuredTracks]) {
+      layer.mesh.frustumCulled = false;
+      layer.mesh.renderOrder = RENDER_ORDER.trail;
+      this.scene.add(layer.mesh);
+    }
 
     // --- the glitch pass ------------------------------------------------------
     // The patch texture is made in `resize`, once the pixel ratio is known.
@@ -1454,8 +1527,10 @@ export class SkyScene {
     (this.uniforms.uImmerse!.value as THREE.Vector4).x = a;
     const markers = 1 - Math.min(1, a / IMMERSION.markersGoneAt);
     this.ringUniforms.uMarkers!.value = markers;
-    this.trackMaterial.opacity = TRAIL.opacity * markers;
-    this.tracks.visible = markers > 0;
+    this.tracks.material.opacity = TRAIL.opacity * markers;
+    this.featuredTracks.material.opacity = FEATURED.trackOpacity * markers;
+    this.tracks.mesh.visible = markers > 0;
+    this.featuredTracks.mesh.visible = markers > 0;
   }
 
   /** What the last `setImmersion` was given. `piece.ts` reads it to gate picking. */
@@ -1522,16 +1597,19 @@ export class SkyScene {
    * fixed by the catalogue, so this is called once and the shader does the rest -
    * the CPU never touches appearance again.
    */
-  setClasses(choir: Uint8Array, kind: Uint8Array): void {
+  setClasses(choir: Uint8Array, kind: Uint8Array, featured: Uint8Array): void {
     const choirFlags = this.choirAttribute.array as Float32Array;
     const kinds = this.kindAttribute.array as Float32Array;
+    const featuredFlags = this.featuredAttribute.array as Float32Array;
     const n = Math.min(choir.length, choirFlags.length);
     for (let i = 0; i < n; i++) {
       choirFlags[i] = choir[i]!;
       kinds[i] = kind[i] ?? 0;
+      featuredFlags[i] = featured[i] ?? 0;
     }
     this.choirAttribute.needsUpdate = true;
     this.kindAttribute.needsUpdate = true;
+    this.featuredAttribute.needsUpdate = true;
   }
 
   /**
@@ -1846,17 +1924,30 @@ export class SkyScene {
    * the ground are both within a shade of black, so darkening and dissolving look
    * the same, and this way one material draws every track at once.
    */
-  setTracks(tracks: readonly { directions: Float32Array; color: THREE.Color }[]): void {
+  setTracks(tracks: readonly Track[]): void {
+    this.fillTracks(this.tracks, tracks, false);
+    this.fillTracks(this.featuredTracks, tracks, true);
+  }
+
+  /**
+   * Cut one layer's worth of orbits into horizon-clipped segments.
+   *
+   * Called twice over the same list - once for the ordinary orbits and once for the
+   * featured ones - because their widths live on two different materials. Anything not
+   * wanted by this layer is skipped, so each track lands in exactly one of them.
+   */
+  private fillTracks(layer: TrackLayer, tracks: readonly Track[], wantFeatured: boolean): void {
     const R = SKY.radius * 0.995;
     const fadeTop = Math.sin(THREE.MathUtils.degToRad(TRAIL.fadeTopDeg));
-    const pos = this.trackPositions;
-    const col = this.trackColors;
+    const pos = layer.positions;
+    const col = layer.colors;
     let n = 0;
 
-    for (const { directions, color } of tracks) {
+    for (const { directions, color, featured } of tracks) {
+      if ((featured === true) !== wantFeatured) continue;
       const samples = Math.floor(directions.length / 3);
       for (let s = 0; s + 1 < samples; s++) {
-        if (n >= this.trackCapacity) break;
+        if (n >= layer.capacity) break;
 
         let ax = directions[s * 3]!;
         let ay = directions[s * 3 + 1]!;
@@ -1907,9 +1998,9 @@ export class SkyScene {
       }
     }
 
-    this.tracks.geometry.instanceCount = n;
-    this.trackBuffer.needsUpdate = true;
-    this.trackColorBuffer.needsUpdate = true;
+    layer.mesh.geometry.instanceCount = n;
+    layer.buffer.needsUpdate = true;
+    layer.colorBuffer.needsUpdate = true;
   }
 
   render() {
@@ -2054,7 +2145,8 @@ export class SkyScene {
     this.camera.updateProjectionMatrix();
     this.canvasRect = this.renderer.domElement.getBoundingClientRect();
     // Pixel-width lines need to know how large a pixel is, and so does the glitch.
-    this.trackMaterial.resolution.set(w, h);
+    this.tracks.material.resolution.set(w, h);
+    this.featuredTracks.material.resolution.set(w, h);
     // The patch is a fixed square in CSS pixels; only a change of device pixel ratio
     // can resize it, so it is built once and kept.
     // The glow's buffers follow the canvas, so they are rebuilt whenever it changes.
