@@ -1212,10 +1212,10 @@ export const AUDIO = {
      * |---|---|
      * | 550 km, LEO overhead | 1.00 |
      * | 2,300 km, LEO setting | 0.89 |
-     * | 5,000 km | 0.70 |
-     * | 10,000 km | 0.53 |
-     * | 20,000 km, navigation | 0.36 |
-     * | 25,000 km and beyond | 0.30 |
+     * | 5,000 km | 0.68 |
+     * | 10,000 km | 0.49 |
+     * | 20,000 km, navigation | 0.31 |
+     * | 25,000 km and beyond | 0.25 |
      *
      * `nearKm` sits above the whole populated LEO shell - 550, 780 and 1,200 km - on
      * purpose, so nothing in the sky the piece is actually about is attenuated at all.
@@ -1223,8 +1223,14 @@ export const AUDIO = {
     byRange: {
       nearKm: 1500,
       farKm: 25000,
-      /** How far down the furthest things go. 0.3 is -10.5 dB: lighter, not absent. */
-      floor: 0.3,
+      /**
+       * How far down the furthest things go. **0.25, which is −12 dB**, from 0.3 on
+       * listening: −10.5 still read as *near*. Lowering this deepens the whole ramp in
+       * proportion, since the curve is a lerp toward it - 20,000 km goes from −9.0 to
+       * −10.2 dB - so the floor is the one dial worth turning here. Still a voice,
+       * deliberately: a far object is quiet, not absent.
+       */
+      floor: 0.25,
     },
     /** A kept object arrives and leaves over these, seconds. */
     attackSeconds: 0.7,

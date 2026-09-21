@@ -1321,7 +1321,7 @@ chord rather than a cluster.
 |---|---|---|
 | pitch | range rate, exaggerated | +650 → 0 → −650 cents |
 | level | elevation, on `HIGHLIGHT`'s own curve | 0.11 at 3° → 0.33 at 62° → 0.11 |
-| distance | slant range, log ramp | 1.00 under 1,500 km → 0.36 at 20,000 → 0.30 past 25,000 |
+| distance | slant range, log ramp | 1.00 under 1,500 km → 0.31 at 20,000 → 0.25 past 25,000 |
 | pan | direction · camera right | −0.85 (east) → 0 (south) → +0.85 (west) |
 | timbre | shadow | 5.4 kHz sunlit → 700 Hz in umbra |
 
@@ -1355,7 +1355,10 @@ screen radius in the eye.
   ramp would spend nearly all its travel between 1,500 and 8,000 km and be flat across
   everything above, which is the opposite of what is wanted. Per doubling is also
   roughly how loudness is heard.
-- **The floor is 0.3, −10.5 dB: lighter, not absent.** A far object is still a voice.
+- **The floor is 0.25, −12 dB: lighter, not absent.** It was −10.5 and that still read
+  as *near*. Lowering it deepens the whole ramp in proportion, since the curve is a
+  lerp toward it — 20,000 km went from −9.0 to −10.2 dB — so the floor is the one dial
+  worth turning here rather than reshaping the curve. A far object is still a voice.
 - **The belt is untouched, and not by a rule in the audio at all.** `audio.ts` splits
   what is kept on the `choir` byte — belt objects go to `Drone` and never reach
   `Performers` — so this code structurally cannot reach the bed. Verified anyway by
@@ -1369,11 +1372,11 @@ the ramp reaches the output exactly as computed, to a tenth of a decibel:
 |---|---|---|---|
 | 550 km | −24.76 dBFS | 0.0 dB | 0.238 |
 | 1,200 km | −24.76 | 0.0 | 0.238 |
-| 2,300 km | −25.73 | −1.0 | 0.213 |
-| 5,000 km | −27.85 | −3.1 | 0.167 |
-| 10,000 km | −30.31 | −5.5 | 0.126 |
-| 20,000 km | −33.74 | −9.0 | 0.085 |
-| 36,000 km | −35.22 | −10.5 | 0.071 |
+| 2,300 km | −25.81 | −1.0 | 0.211 |
+| 5,000 km | −28.12 | −3.4 | 0.162 |
+| 10,000 km | −30.88 | −6.1 | 0.118 |
+| 20,000 km | −34.94 | −10.2 | 0.074 |
+| 36,000 km | −36.80 | −12.0 | 0.060 |
 
 **The shard, and the interference.** The first version fired short noise bursts, and that
 was exactly wrong: a repeating transient is the most attention-getting thing a mix can
