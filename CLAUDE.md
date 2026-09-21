@@ -130,8 +130,8 @@ falls straight out of the geometry.
 - **They are kept out of the lists entirely** — the readout's *Passing* and *Debris*
   groups count only passes. They get **no track**, kept or not — 70 minutes of a geosynchronous orbit
   is a few degrees of wobble around a fixed point, a smudge where the object already is.
-  They are **never the track's fallback** either, so keeping one does not take the
-  ambient track away from the sky.
+  (They were also never the ambient track's fallback, back when there was one — see
+  *No orbit belongs to nobody* under **The pointer**.)
 - **They are blue from the start**, points and rings alike — not only when touched. See
   *Colour and visual conventions*. Their ring is also **smaller** (`CHOIR`) and at a
   steady brightness rather than dimmed by elevation: they do not climb or descend, so
@@ -191,11 +191,11 @@ moment is its **size**, a third channel, at 2.0 against the kind multipliers of 
 1.2.
 
 **Its orbit is drawn whenever it is above the horizon**, kept or not, which is the point
-of featuring it. `piece.ts` adds it to `tracked` before the ambient fallback, so a
-visible ISS also means the sky is never left without a track. Only while it is up: a
-track is cut at the horizon anyway, so one for an object on the far side of the world
-would be an empty request every frame. Keeping it still wins — a kept ISS turns amber
-like anything else, because attention is attention.
+of featuring it. Only while it is up: a track is cut at the horizon anyway, so one for
+an object on the far side of the world would be an empty request every frame. Keeping it
+still wins — a kept ISS turns amber like anything else, because attention is attention.
+When it is below the horizon **nothing at all** is drawn; see *No orbit belongs to
+nobody*.
 
 **The wider orbit cost a second draw, and there was no way around it.**
 `LineMaterial.linewidth` is a **material** uniform — three's fat lines have no
@@ -1200,8 +1200,30 @@ about the mouse.
   it one. **On, and only while the pointer is out in the sky** — see *The panel*.
 - **Anything the pointer is on is ringed**, row or no row, group or no group. A ring
   must never be conditional on a row: the lists show ten objects out of a thousand.
-- **Every kept object gets a track** (`TRAIL.allMarked`), falling back to a single one
-  through whatever is highest when nothing is kept. See *Tracks* below.
+- **Every kept object gets a track** (`TRAIL.allMarked`), and so does the ISS whenever
+  it is up. Nothing else ever does — see *No orbit belongs to nobody* below.
+
+#### No orbit belongs to nobody
+
+Until 2026-09-21 an empty selection put a track on **whatever happened to be highest**,
+in `TRAIL.color`'s blue-grey, held on that object until it set. It had been there since
+tracks were added, and it was wrong in a way that only became obvious once the ISS had
+an orbit of its own:
+
+- It drew a line through a satellite **nobody had chosen**. An orbit is the strongest
+  mark the piece makes, and spending it on an arbitrary Starlink reads as a statement
+  about that object which is not one.
+- Once a featured orbit existed, the ambient one **read as the featured one**. Reported
+  from the live site as "a blueish thin orbit — but it belonged to a random Starlink,
+  not the ISS", which is worse than meaningless: it is a confident false label.
+
+So an orbit now means exactly one of two things: **you kept this**, or **it is the one
+with people in it**. At launch, with nothing kept and the ISS below the horizon, the sky
+carries no track at all — verified: 0 segments in both layers.
+
+That removal took `Hud.selectedIndex`, `trackTarget`, the sticky `fallback` index in
+`ui.ts` and `Selection.newestWhere` with it, all of which existed only to feed it.
+`TRAIL.color` survives because `poster.ts` still draws with it.
 
 ### The tick stream
 

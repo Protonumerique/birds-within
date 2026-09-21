@@ -116,7 +116,6 @@ export async function run(status: StatusFn): Promise<void> {
   // Wreckage keeps its own attention colour here too, so a track says what kind of
   // thing drew it before you read the name at the other end of it.
   const debrisColor = new THREE.Color(HIGHLIGHT.debrisMarkColor);
-  const trackColor = new THREE.Color(TRAIL.color);
   /** A featured orbit is the mark's own cool white, so the line names it before the row does. */
   const featuredColor = new THREE.Color(FEATURED.color);
   /** The featured objects, found once - the catalogue cannot change under a running page. */
@@ -199,21 +198,21 @@ export async function run(status: StatusFn): Promise<void> {
     }
     /*
      * A featured object draws its orbit whenever it is up, kept or not - which is the
-     * whole point of featuring it. It is added before the fallback below, so a visible
-     * ISS also means the sky is never left without a track.
+     * whole point of featuring it. Only while it is above the horizon: a track is cut
+     * at the horizon anyway, so one for an object on the far side of the world would be
+     * an empty request every frame.
      *
-     * Only while it is above the horizon: a track is cut at the horizon anyway, so one
-     * for an object on the far side of the world would be an empty request every frame.
+     * **There is no ambient track any more**, removed 2026-09-21. Nothing kept used to
+     * put one on whatever happened to be highest, in TRAIL's blue-grey - so the sky
+     * opened with an orbit drawn through a Starlink nobody had chosen, which read as a
+     * statement about that object and was not one. It also read as *the* featured
+     * orbit once the ISS existed, which is worse than meaningless. An orbit now means
+     * exactly one of two things: you kept this, or it is the one with people in it.
      */
     if (pair) {
       for (const i of featuredIndices) {
         if (pair.to.range[i]! > 0 && pair.to.elevation[i]! > 0 && !tracked.includes(i)) tracked.push(i);
       }
-    }
-    if (tracked.length === 0) {
-      // Never the choir: hud.selectedIndex already skips it, and this says so here too.
-      const fallback = hud.selectedIndex();
-      if (fallback >= 0 && stream.choir[fallback] !== 1) tracked.push(fallback);
     }
     trails.update(tracked, now);
 
@@ -236,12 +235,12 @@ export async function run(status: StatusFn): Promise<void> {
         if (directions) {
           const kept = selection.isMarked(i);
           const featured = stream.featured[i] === 1;
-          // Kept still wins: attention is attention, and a ringed ISS should say so.
+          // Exhaustive: `tracked` holds only what is kept and what is featured, so a
+          // track that is not kept is a featured one. Kept wins - attention is
+          // attention, and a ringed ISS should say so.
           const color = kept
             ? (stream.kind[i] === KIND.DEBRIS ? debrisColor : markColor)
-            : featured
-              ? featuredColor
-              : trackColor;
+            : featuredColor;
           tracks.push({ directions, color, featured });
         }
       }

@@ -11,7 +11,6 @@ const pad = (n: number) => String(n).padStart(2, '0');
 
 export interface Hud {
   update(date: Date, frame: SkyFrame | null): void;
-  selectedIndex(): number;
   /** What wears a ring on the sky: every row on show, plus anything kept or pointed at. */
   ringed(): readonly number[];
   /** Every belt object above the sky's floor - what the grid shows, and what sings. */
@@ -77,8 +76,6 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
   const { names, selection, choir, kind } = source;
   const isChoir = (i: number) => choir[i] === 1;
   const isDebris = (i: number) => kind[i] === 2;
-  /** What wears the track when nothing is kept: whatever is highest, held until it sets. */
-  let fallback = -1;
 
   const asOf = source.generatedAt.toISOString().slice(0, 10);
 
@@ -223,17 +220,7 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
    */
   let scanned: SkyFrame | null = null;
 
-  /**
-   * What wears the track. The newest mark that can have one - the belt cannot - and
-   * otherwise whatever is highest.
-   */
-  const trackTarget = () => {
-    const newest = selection.newestWhere((i) => !isChoir(i));
-    return newest >= 0 ? newest : fallback;
-  };
-
   return {
-    selectedIndex: trackTarget,
     ringed: () => ringed,
     belt: () => choirUp,
 
@@ -301,16 +288,6 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
       const hovered = selection.hovered;
       if (hovered >= 0 && frame.elevation[hovered]! > lowestVisible && ringed.indexOf(hovered) < 0) {
         ringed.push(hovered);
-      }
-
-      // Nothing kept: the track stays on whatever was highest until that one sets.
-      if (
-        fallback < 0 ||
-        isChoir(fallback) ||
-        frame.range[fallback]! < 0 ||
-        frame.elevation[fallback]! <= lowestVisible
-      ) {
-        fallback = passing[0] ?? -1;
       }
     },
   };
