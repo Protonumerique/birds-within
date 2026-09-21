@@ -219,6 +219,9 @@ production takes — the same trick the Starlink and Iridium shells use with the
 Without it nothing in development draws a featured mark, a featured orbit, or touches
 the second track layer at all.
 
+**It has a voice of its own too** — a slow low beat with a long tail, sounding whenever
+it is up rather than waiting to be kept. See *The station* under **Sound**.
+
 A list rather than one number, so Tiangong (48274) is one line when it is wanted.
 
 ### Propagation: all of it in the sky worker
@@ -1385,6 +1388,10 @@ click is the instrument. A voice arrives over `attackSeconds`, leaves over
 `releaseSeconds`, and is let go the moment its object sets or loses its position — the
 same release the ring and the row already obey.
 
+**One exception, added 2026-09-21: the station.** A featured object sounds whenever it is
+above the horizon. The rule above is about a *thousand* objects; this is one, and it is
+the same rule its mark and its orbit already follow. See *The station* below.
+
 **Synthesised, and synthesised first.** The name comes from what radio amateurs call
 satellites, and the 2010 original looped birdsong over a stereo field. A recorded bird
 sounds good on its own, so it would sound fine badly panned and badly gated, and a wrong
@@ -1392,8 +1399,9 @@ mapping would survive for months behind it. A swept sine is unforgiving, which i
 useful property right now. Samples are a later decision — and 831 KB is the whole
 catalogue, so they are not a cheap one.
 
-**Three textures, from the one byte the catalogue actually has.** `kind` is a name
-heuristic and nothing more, but it separates the three things that are up there:
+**Four textures.** Three come from `kind`, which is a name heuristic and nothing more
+but separates the three things that are up there; the fourth is the ISS, which is picked
+by catalog number and overrides `kind` entirely:
 
 - **bird** (payload) — phrases of two to five swept chirps, then a long gap. A sine.
 - **machine** (rocket body) — a spent stage is not a bird. Lower, a sawtooth, and
@@ -1405,6 +1413,8 @@ heuristic and nothing more, but it separates the three things that are up there:
   one voice in the piece you can count along with.
 - **shard** (debris) — a band of noise that is simply *there*: no phrase, no gap, nothing
   scheduled. See *The shard, and the interference* below.
+- **station** (featured) — a slow low beat with a long tail, for as long as it is over.
+  See *The station* below.
 
 **A given object always sings the same song.** Pitch, sweep direction, phrase length and
 gap all come from a hash of its index — the same `sin`-and-fract trick the point shader
@@ -1475,6 +1485,83 @@ the ramp reaches the output exactly as computed, to a tenth of a decibel:
 | 10,000 km | −30.88 | −6.1 | 0.118 |
 | 20,000 km | −34.94 | −10.2 | 0.074 |
 | 36,000 km | −36.80 | −12.0 | 0.060 |
+
+#### The station: the ISS, for as long as it is over
+
+Added 2026-09-21. A struck low tone every 4.5 seconds into a long reverb, sounding
+whenever the ISS is above the horizon. `AUDIO.performer.station`.
+
+**It does not wait to be kept, and that is the whole shape of it.** A pass becomes an
+*event*: the soundscape changes for the ten minutes the ISS is up and goes back when it
+sets. Waiting for a click would make it a thing you find rather than a thing that
+happens. Nothing is sprung on anyone — the audio context still only exists after LISTEN
+or a first click, so a page nobody turned the sound on for stays silent, and the
+convolver is built on the first hit rather than at startup. `audio.ts` puts it at the
+**front** of the sounding list, so `maxVoices` can never drop it in favour of a click.
+
+**The percussion is the pitch envelope**, not a sample and not a noise burst: 150 Hz
+falling to 52 Hz in 85 ms is what a struck thing does, and it is the whole difference
+between a beat and a bass note.
+
+**The reverb does the work, not the level** — and the brief is what forces that. "Change
+the whole soundscape" and "don't call all the attention to it" pull opposite ways if the
+answer is volume. A 3.6 s tail against a 4.5 s period fills the space *under* everything
+instead: the room changes, the foreground does not move. The send is taken **post-level**,
+so the tail swells as the ISS climbs and dies as it sets rather than hanging over a sky
+it has already left, and **pre-pan**, so the hit travels across the stereo field with the
+object while the space around it stays diffuse — which is what a room is.
+
+The impulse response is **made, not fetched**: decaying noise is close enough to a plate
+at this length, and an IR file would be the first audio asset in a project whose entire
+catalogue is 831 KB.
+
+**Regular, and slow enough not to be counted.** 4.5 s is about 13 to the minute, a
+heartbeat rather than a pulse. The machine voice is already the thing you can count along
+with.
+
+**No Doppler on it**, unlike every other pitched voice. Its oscillator's frequency is
+written per hit by the pitch envelope, and a detune riding under that would only make the
+beat sag and rise. The pass is already legible in its level and its pan. Wreckage passing
+close still chews its amplitude and its colour, but never its pitch — 320 cents on a
+struck bass reads as a warped tape rather than as interference.
+
+**The risk was masking, and it had to be measured rather than assumed.** The station is
+bass and so is the belt's bed — 98 Hz against 82 Hz, both with 96–98% of their energy
+under 250 Hz. They are in the same register, which is exactly where a new voice
+disappears. Rendered offline, `Performers` and `Drone` together over a 120-object belt:
+
+| | RMS | peak | centroid | bass | low-band swing | low-band Hz |
+|---|---|---|---|---|---|---|
+| station alone | −28.03 dBFS | 0.456 | 98 Hz | 0.96 | 1.00 | 0.28 |
+| one bird alone | −29.50 | 0.239 | 1,313 Hz | 0.04 | — | — |
+| bed alone | −23.63 | 0.295 | 82 Hz | 0.98 | 0.86 | 1.97 |
+| bed + three birds | −19.31 | 0.789 | 82 Hz | 0.98 | 0.84 | 1.69 |
+| **and the station** | **−19.12** | 0.775 | 88 Hz | 0.97 | **0.92** | **1.27** |
+
+Three things fall out of that, and they are the answer to the brief:
+
+- **It is noticeable.** 1.5 dB *above* a single bird on its own, and its peak (0.456)
+  stands well clear of the bed's (0.295) — a transient over a steady tone.
+- **It does not take over.** Adding it to a full mix moves the RMS by **+0.19 dB** and
+  the peak not at all. Whole-mix level is simply not where it acts.
+- **Where it acts is the low band**, which goes from 0.84 swing at 1.69 Hz to **0.92 at
+  1.27 Hz** — deeper, and pulled toward the station's own slower rhythm. That is
+  "the soundscape changes" in a number.
+
+It does not mask the foreground, because the foreground is not down there: a bird's
+centroid is 1,313 Hz against the station's 98, and 4% of a bird's energy is bass against
+the station's 96%. They are three and a half octaves apart.
+
+Across a pass it swells **8.4 dB**, −36.29 dBFS at 6° elevation to −27.89 at 80°, on
+`HIGHLIGHT`'s own curve like every other voice.
+
+**Measuring this needed two fixes.** Whole-mix RMS cannot see a sparse transient — it
+barely moves — so the low-band envelope measure above is what actually answers the
+question. And the first spectral centroid reported **11 kHz for a sub-bass drone**,
+because the probe strided its time samples by four and took every eighth bin, aliasing
+everything above 6 kHz into the answer. A direct DFT at log-spaced frequencies over a
+contiguous window gives 82 Hz, which is believable. **A centroid that disagrees with
+what a thing obviously is means the probe, not the sound.**
 
 **The shard, and the interference.** The first version fired short noise bursts, and that
 was exactly wrong: a repeating transient is the most attention-getting thing a mix can
@@ -2011,6 +2098,10 @@ Anything that computes range rate by hand must not repeat the naive version.
         radar as heavy squawks, everything else the original whistle. Tagged at build
         time and packed as a byte — by a join on catalog number against CelesTrak's own
         group lists, by name only for the megaconstellations. See *Families*.
+  - [x] **The station.** The ISS as a slow low beat into a long reverb, sounding
+        whenever it is above the horizon rather than waiting to be kept — the one
+        exception to that rule, and the one voice that makes a pass an event. See
+        *The station*.
   - [ ] **More of them.** Weather, telecoms and the navigation constellations are each
         a row in `FAMILIES` and a voice, now that the mechanism exists. And a wider
         vocabulary of calls than the four here — caw, cackle, the rest of it.

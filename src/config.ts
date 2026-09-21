@@ -1236,7 +1236,7 @@ export const AUDIO = {
      * most of its energy away, so a shard needs several times a sine's gain to reach
      * the same loudness; a sawtooth through an open lowpass needs less.
      */
-    timbreGain: { bird: 1, machine: 1, shard: 0.8 },
+    timbreGain: { bird: 1, machine: 1, shard: 0.8, station: 1 },
     /**
      * **Distance attenuates a voice**, added 2026-09-21. Level was elevation alone, and
      * elevation is not distance: a navigation satellite at 20,000 km or a Molniya near
@@ -1361,7 +1361,7 @@ export const AUDIO = {
         attack: 0.05,
         ring: 0,
         drive: 0.35,
-        gain: 1.35,
+        gain: 1.9,
       },
       /**
        * **Iridium: starlings.** Metallic chatter - many very short notes, wide sweeps,
@@ -1414,6 +1414,50 @@ export const AUDIO = {
     /** The inharmonic multiple the ring sits at, and how sharp it is. Bell, not tone. */
     ringRatio: 2.76,
     ringQ: 20,
+    /**
+     * **The station: a slow low beat under everything, for as long as it is over.**
+     *
+     * Added 2026-09-21, and the one voice that does **not** wait to be kept. Every
+     * other performer does - sonifying what is merely *there* is the mush this piece
+     * exists to avoid - but that rule is about a thousand objects, and this is one. It
+     * sounds whenever the ISS is above the horizon, which is the same rule its mark and
+     * its orbit already follow, and it is what makes a pass an *event*: the soundscape
+     * changes for the ten minutes it is up and then goes back.
+     *
+     * Nothing is sprung on anyone: the audio context still only exists after LISTEN or
+     * a first click, so a page nobody turned the sound on for stays silent.
+     *
+     * **The reverb does the work, not the level.** The brief was that it should change
+     * the whole soundscape without taking it over, and those pull opposite ways if the
+     * answer is volume. A tail nearly as long as the gap between hits fills the space
+     * *under* the birds instead: the room changes, the foreground does not move. Bass
+     * also barely competes with the birds, which sit two to five octaves above it.
+     *
+     * **Regular, and slow enough not to be counted.** 4.5 s is about 13 to the minute -
+     * a heartbeat rather than a pulse. The machine voice is already the thing you can
+     * count along with; this one should register as a presence.
+     */
+    station: {
+      /** Seconds between hits. */
+      periodSeconds: 4.5,
+      /** Where the pitch envelope starts and settles: the drop *is* the percussion. */
+      attackHz: 150,
+      baseHz: 52,
+      pitchDropSeconds: 0.085,
+      /** How long one hit rings before the reverb takes over. */
+      bodySeconds: 0.85,
+      attack: 0.004,
+      hold: 0.02,
+      /** How open the lowpass is, sunlit to eclipsed - the same mapping every voice has. */
+      cutoffHz: [140, 520],
+      /** The tail, in seconds, and how sharply it decays. Sent post-level, so it swells
+       *  with the pass and dies with it rather than hanging on after the ISS has set. */
+      reverbSeconds: 3.6,
+      reverbDecay: 2.4,
+      reverbSend: 0.5,
+      /** Measured, not nominal - see the table in CLAUDE.md. */
+      gain: 1.9,
+    },
     machine: {
       /** Lower than the birds, and it does not sweep. */
       octaveDown: 2,

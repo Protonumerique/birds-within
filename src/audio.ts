@@ -58,13 +58,22 @@ export class AudioEngine {
   /** The selection, split per update into the two buses. Reused, never reallocated. */
   private beltMarked: number[] = [];
   private passMarked: number[] = [];
+  /** What the performers are actually voicing: everything kept, plus a featured object
+   *  that is above the horizon. Rebuilt per update, never reallocated. */
+  private sounding: number[] = [];
 
   /**
    * `choir` and `kind` are the worker's per-object bytes. Which bus an object belongs
    * to, and what it sounds like, are facts about the object rather than the caller's
    * business, so the engine keeps them and does the splitting itself.
    */
-  constructor(private choir: Uint8Array, private kind: Uint8Array, private family: Uint8Array) {}
+  constructor(
+    private choir: Uint8Array,
+    private kind: Uint8Array,
+    private family: Uint8Array,
+    /** 1 on a featured object: it sounds whenever it is up, kept or not. See FEATURED. */
+    private featured: Uint8Array
+  ) {}
 
   /** Whether the user has asked for sound, whatever the time rate is doing to it. */
   get enabled(): boolean {
@@ -160,11 +169,28 @@ export class AudioEngine {
     this.beltMarked.length = 0;
     this.passMarked.length = 0;
     for (const i of marked) (this.choir[i] === 1 ? this.beltMarked : this.passMarked).push(i);
+
+    /*
+     * **A featured object sounds whenever it is up, kept or not**, which is the one
+     * exception to "nothing sounds until it is kept". That rule is about a thousand
+     * objects; this is one, and it is the same rule its mark and its orbit already
+     * follow. A pass becomes an event: the soundscape changes while the ISS is over
+     * and goes back when it sets.
+     *
+     * It goes in FIRST, so `maxVoices` can never drop it in favour of a click.
+     */
+    this.sounding.length = 0;
+    for (let i = 0; i < this.featured.length; i++) {
+      if (this.featured[i] === 1 && frame.range[i]! > 0 && frame.elevation[i]! > 0) {
+        this.sounding.push(i);
+      }
+    }
+    for (const i of this.passMarked) if (!this.sounding.includes(i)) this.sounding.push(i);
     // The belt is driven by membership and by where the camera points, neither of
     // which is time - so it runs on, held clock or not, and turning to look still
     // sweeps it across the field.
     this.drone.update(frame, belt, this.beltMarked, heading);
-    this.performers.update(frame, this.passMarked, heading, paused);
+    this.performers.update(frame, this.sounding, heading, paused);
   }
 
   private build(): void {
@@ -188,7 +214,7 @@ export class AudioEngine {
     this.ctx = ctx;
     this.master = master;
     this.drone = new Drone(ctx, master);
-    this.performers = new Performers(ctx, master, this.kind, this.family);
+    this.performers = new Performers(ctx, master, this.kind, this.family, this.featured);
   }
 
   /** `seconds` is how long the move takes: a deliberate fade, or a quick duck. */

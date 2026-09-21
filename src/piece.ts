@@ -70,7 +70,7 @@ export async function run(status: StatusFn): Promise<void> {
   const clock = new Clock();
   const scene = new SkyScene(canvas, stream.count);
   const selection = new Selection();
-  const audio = new AudioEngine(stream.choir, stream.kind, stream.family);
+  const audio = new AudioEngine(stream.choir, stream.kind, stream.family, stream.featured);
   // Keeping anything - from the sky or from the belt's grid - starts the sound, unless
   // the person has already worked the button themselves. See `armFromSelection`.
   selection.onMark = () => audio.armFromSelection();

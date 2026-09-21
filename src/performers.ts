@@ -32,7 +32,7 @@ const FULL_BRIGHT = (HIGHLIGHT.fullBrightDeg * Math.PI) / 180;
 const NEAR_COS = Math.cos((I.nearDeg * Math.PI) / 180);
 const FAR_COS = Math.cos((I.farDeg * Math.PI) / 180);
 
-type Timbre = 'bird' | 'machine' | 'shard';
+type Timbre = 'bird' | 'machine' | 'shard' | 'station';
 /** One family's whole parameter set - see AUDIO.performer.voices. */
 type BirdVoice = (typeof P.voices)['none'];
 
@@ -112,12 +112,16 @@ export class Performers {
   private curves = new Map<number, Float32Array<ArrayBuffer>>();
   /** Every shaper made, so `dispose` can let them go with the rest. */
   private shapers: WaveShaperNode[] = [];
+  /** The station's tail. Built on first use, because most sessions never need it. */
+  private reverbNode: ConvolverNode | null = null;
 
   constructor(
     private ctx: AudioContext,
     private out: AudioNode,
     private kind: Uint8Array,
-    private family: Uint8Array
+    private family: Uint8Array,
+    /** 1 on a featured object. The ISS sings the station, whatever its `kind` says. */
+    private featured: Uint8Array
   ) {}
 
   /**
@@ -199,6 +203,8 @@ export class Performers {
     this.dying.length = 0;
     for (const shaper of this.shapers) shaper.disconnect();
     this.shapers.length = 0;
+    this.reverbNode?.disconnect();
+    this.reverbNode = null;
   }
 
   // --- per frame -------------------------------------------------------------
@@ -210,6 +216,7 @@ export class Performers {
     const gain =
       P.gain *
       P.timbreGain[v.timbre] *
+      (v.timbre === 'station' ? P.station.gain : 1) *
       (v.look?.gain ?? 1) *
       v.boost *
       byElevation(frame.elevation[i]!) *
@@ -230,20 +237,30 @@ export class Performers {
 
     // Sunlit is bright, eclipsed is muffled. `shadow` is 0 in full sunlight and 1 in
     // the umbra, and it is the one column nothing else in the audio path reads.
-    const band = v.look ? v.look.cutoffHz : P.machine.cutoffHz;
+    const band = v.look
+      ? v.look.cutoffHz
+      : v.timbre === 'station'
+        ? P.station.cutoffHz
+        : P.machine.cutoffHz;
     const cutoff = pick(band, 1 - clamp(frame.shadow[i]!, 0, 1));
     v.filter.frequency.setTargetAtTime(cutoff, now, 0.4);
 
     // Doppler, exaggerated. Negative range rate is approaching, which shifts up.
-    v.osc!.detune.setTargetAtTime(-frame.rangeRate[i]! * P.dopplerCentsPerKmS, now, 0.12);
+    //
+    // Not on the station: its oscillator's frequency is written per hit by the pitch
+    // envelope, which is the percussion, and a detune riding under that would only
+    // make the beat sag and rise. The pass is already legible in its level and its pan.
+    if (v.timbre !== 'station') {
+      v.osc!.detune.setTargetAtTime(-frame.rangeRate[i]! * P.dopplerCentsPerKmS, now, 0.12);
+    }
 
     // And whatever wreckage is passing close to it in the sky. One wobble, three
     // destinations: pitch, amplitude and colour bending together is what reads as
     // damage - any one of them alone reads as vibrato, tremolo or a filter sweep.
     const near = this.nearestShard(frame, i);
-    v.warpPitch!.gain.setTargetAtTime(near * I.sound.detuneCents, now, 0.3);
-    v.warpAm!.gain.setTargetAtTime(near * I.sound.amDepth * gain, now, 0.3);
-    v.warpCut!.gain.setTargetAtTime(near * I.sound.cutoffDepth * cutoff, now, 0.3);
+    v.warpPitch?.gain.setTargetAtTime(near * I.sound.detuneCents, now, 0.3);
+    v.warpAm?.gain.setTargetAtTime(near * I.sound.amDepth * gain, now, 0.3);
+    v.warpCut?.gain.setTargetAtTime(near * I.sound.cutoffDepth * cutoff, now, 0.3);
   }
 
   /**
@@ -273,7 +290,27 @@ export class Performers {
 
   /** Writes one phrase from `at`, and answers when the next one should begin. */
   private schedule(v: Voice, at: number): number {
-    return v.timbre === 'bird' ? this.birdPhrase(v, at) : this.machinePulse(v, at);
+    if (v.timbre === 'bird') return this.birdPhrase(v, at);
+    if (v.timbre === 'station') return this.stationPulse(v, at);
+    return this.machinePulse(v, at);
+  }
+
+  /**
+   * One low hit, and then a long wait. The percussion is the **pitch envelope** - a
+   * fast drop from `attackHz` to `baseHz` is what a struck thing does, and it is the
+   * whole difference between a beat and a bass note.
+   *
+   * Strictly regular, because this is a heartbeat rather than a rhythm, and slow
+   * enough that nobody counts it.
+   */
+  private stationPulse(v: Voice, at: number): number {
+    const S = P.station;
+    const f = v.osc!.frequency;
+    f.cancelScheduledValues(at);
+    f.setValueAtTime(S.attackHz, at);
+    f.exponentialRampToValueAtTime(S.baseHz, at + S.pitchDropSeconds);
+    this.strike(v, at, S.bodySeconds, S.attack, S.hold);
+    return at + S.periodSeconds;
   }
 
   /**
@@ -346,7 +383,13 @@ export class Performers {
   private make(index: number, now: number): Voice {
     const { ctx } = this;
     const k = this.kind[index];
-    const timbre: Timbre = k === KIND.DEBRIS ? 'shard' : k === KIND.ROCKET_BODY ? 'machine' : 'bird';
+    const timbre: Timbre = this.featured[index] === 1
+      ? 'station'
+      : k === KIND.DEBRIS
+        ? 'shard'
+        : k === KIND.ROCKET_BODY
+          ? 'machine'
+          : 'bird';
 
     const pan = ctx.createStereoPanner();
     pan.connect(this.out);
@@ -400,7 +443,35 @@ export class Performers {
       return amount;
     };
 
-    if (timbre === 'shard') {
+    if (timbre === 'station') {
+      /*
+       * A struck low tone through a soft lowpass, with a send to the shared reverb.
+       *
+       * The send is taken **post-level**, so the tail swells as the ISS climbs and
+       * dies as it sets rather than hanging over a sky it has already left. It is also
+       * pre-pan and therefore diffuse, which is what a room is: the hit moves across
+       * the stereo field with the object, the space around it does not.
+       */
+      filter.type = 'lowpass';
+      filter.Q.value = 0.7;
+      baseHz = P.station.baseHz;
+      osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = baseHz;
+      osc.connect(vca);
+      osc.start();
+
+      const send = ctx.createGain();
+      send.gain.value = P.station.reverbSend;
+      level.connect(send);
+      send.connect(this.reverb());
+
+      // Wreckage passing close still chews it, but never bends its pitch: 320 cents on
+      // a struck bass reads as a warped tape rather than as interference.
+      const rate = pick(I.sound.wobbleHz, hash(index, 21));
+      warpAm = modulate(rate, 0, level.gain);
+      warpCut = modulate(rate, 0, filter.frequency);
+    } else if (timbre === 'shard') {
       // Noise through a wide band that drifts, gated by nothing and breathing under
       // its own LFOs: the swish and the pulse are both continuous, so there is no
       // scheduled event anywhere in it.
@@ -507,6 +578,30 @@ export class Performers {
       endsAt: Infinity,
       boost,
     };
+  }
+
+  /**
+   * The station's reverb: one convolver on a synthesised impulse, shared.
+   *
+   * Made rather than fetched - a decaying noise burst is what a plate sounds like
+   * closely enough at this length, and an impulse response file would be the first
+   * audio asset in a project whose entire catalogue is 831 KB.
+   */
+  private reverb(): ConvolverNode {
+    if (this.reverbNode) return this.reverbNode;
+    const S = P.station;
+    const rate = this.ctx.sampleRate;
+    const n = Math.max(1, Math.floor(rate * S.reverbSeconds));
+    const buffer = this.ctx.createBuffer(2, n, rate);
+    for (let c = 0; c < 2; c++) {
+      const d = buffer.getChannelData(c);
+      for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, S.reverbDecay);
+    }
+    const node = this.ctx.createConvolver();
+    node.buffer = buffer;
+    node.connect(this.out);
+    this.reverbNode = node;
+    return node;
   }
 
   /** One second of white noise, made once and shared by every shard voice. */
