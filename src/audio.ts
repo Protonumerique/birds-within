@@ -230,6 +230,14 @@ export class AudioEngine {
     return this.levels.get(index) ?? 0;
   }
 
+  /**
+   * The same numbers, whole, for the rings on the sky. Read once a frame and not
+   * copied: it is the engine's own map, and the scene only walks it.
+   */
+  get pulses(): ReadonlyMap<number, number> {
+    return this.levels;
+  }
+
   private build(): void {
     const ctx = new AudioContext();
     const master = ctx.createGain();

@@ -448,7 +448,7 @@ input[type="range"] {
   position: absolute;
   right: 4px;
   top: 50%;
-  width: 3px;
+  width: 6px;
   height: 15px;
   margin-top: -7.5px;
   border-radius: 1px;
@@ -468,7 +468,7 @@ input[type="range"] {
 /* Room for the bar, taken from the text rather than the box, so opening costs no layout. */
 .row.open.sounding .rn,
 .row.open.sounding .rd {
-  padding-right: 11px;
+  padding-right: 14px;
 }
 
 /*

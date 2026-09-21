@@ -668,6 +668,15 @@ const RING_VERT = /* glsl */ `
   /** 1 normally, falling to 0 as the sky is immersed. See IMMERSION.markersGoneAt. */
   uniform float uMarkers;
 
+  /**
+   * What each sounding object is making, as (object index, level) pairs. Short, and
+   * scanned per vertex - which costs nothing, because this draw's range is the dozen
+   * or so objects that actually wear a ring. See HIGHLIGHT.pulse.
+   */
+  uniform vec2 uPulses[${HIGHLIGHT.pulse.slots}];
+  uniform float uPulseCount;
+  uniform float uPulseSwell;
+
   varying float vSizePx;
   varying vec3 vColor;
   varying float vAlpha;
@@ -715,8 +724,24 @@ const RING_VERT = /* glsl */ `
     // no pointer. See IMMERSION.markersGoneAt.
     vAlpha = uMarkers * (choir ? 1.0 : (hovered ? 1.0 : (marked ? bright : 1.0)));
 
+    // The ring breathes with its voice. Radius rather than brightness, which already
+    // means elevation - see HIGHLIGHT.pulse. An object with no voice finds no slot and
+    // the swell stays exactly 1, so nothing that is silent moves.
+    float pulse = 0.0;
+    for (int i = 0; i < ${HIGHLIGHT.pulse.slots}; i++) {
+      if (float(i) >= uPulseCount) break;
+      if (abs(uPulses[i].x - aIndex) < 0.5) {
+        pulse = uPulses[i].y;
+        break;
+      }
+    }
+
     vStrokePx = choir ? uChoirStrokePx : uStrokePx;
-    vSizePx = (choir ? uChoirPx : uRingPx) * (hovered ? uHoverScale : 1.0) * uPixelRatio;
+    vSizePx =
+      (choir ? uChoirPx : uRingPx) *
+      (hovered ? uHoverScale : 1.0) *
+      (1.0 + pulse * uPulseSwell) *
+      uPixelRatio;
     gl_PointSize = vSizePx;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(dir * uRadius, 1.0);
   }
@@ -1144,6 +1169,13 @@ export class SkyScene {
   /** 1 on a featured object - the ISS, and whatever joins it. See FEATURED. */
   private featuredAttribute: THREE.BufferAttribute;
   private marked: number[] = [];
+  /**
+   * (object index, level) pairs for the rings that are sounding, read straight by the
+   * ring shader. Sized by HIGHLIGHT.pulse.slots and reused, so a frame of pulses is a
+   * few float writes and one small uniform upload.
+   */
+  private readonly pulseSlots = new Float32Array(HIGHLIGHT.pulse.slots * 2);
+  private pulseCount = 0;
   private readonly ringUniforms;
 
   /**
@@ -1371,6 +1403,9 @@ export class SkyScene {
       uDimAtHorizon: { value: HIGHLIGHT.dimAtHorizon },
       uFullBright: { value: THREE.MathUtils.degToRad(HIGHLIGHT.fullBrightDeg) },
       uMarkers: { value: 1 },
+      uPulses: { value: this.pulseSlots },
+      uPulseCount: { value: 0 },
+      uPulseSwell: { value: HIGHLIGHT.pulse.swell },
     };
     this.rings = new THREE.Points(
       ringsGeom,
@@ -1590,6 +1625,30 @@ export class SkyScene {
     this.highlightCount = n;
     this.highlightIndex.needsUpdate = true;
     this.rings.geometry.setDrawRange(0, n);
+  }
+
+  /**
+   * What each sounding object is making right now, 0 to 1. Its ring swells by it -
+   * see HIGHLIGHT.pulse, and *The pulse* in CLAUDE.md for where the number comes from.
+   *
+   * Objects with no voice are simply absent, and an absent object does not move. Past
+   * `slots` the rest are dropped rather than wrapping: the cap is above every voice
+   * limit in AUDIO, so this is a guard and not a policy.
+   */
+  setPulses(levels: ReadonlyMap<number, number>): void {
+    const slots = this.pulseSlots;
+    let n = 0;
+    for (const [index, level] of levels) {
+      if (n >= HIGHLIGHT.pulse.slots) break;
+      slots[n * 2] = index;
+      slots[n * 2 + 1] = level;
+      n++;
+    }
+    // Nothing to do when it was empty and still is - which is every frame of a page
+    // that has not turned the sound on.
+    if (n === 0 && this.pulseCount === 0) return;
+    this.pulseCount = n;
+    this.ringUniforms.uPulseCount.value = n;
   }
 
   /**

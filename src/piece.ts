@@ -255,6 +255,11 @@ export async function run(status: StatusFn): Promise<void> {
       scene.setTracks(tracks);
     }
 
+    // What the voices are doing reaches the rings here: `audio.update` runs after the
+    // draw, so these are last frame's levels. Sixteen milliseconds behind a sound is
+    // not a lag anyone can see, and the drone keeps reading the heading it was just
+    // drawn with, which is the ordering that does matter.
+    scene.setPulses(audio.pulses);
     scene.render();
 
     // The canvas now holds a sky. Whatever is covering it can go.

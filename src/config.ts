@@ -822,6 +822,34 @@ export const HIGHLIGHT = {
    * otherwise hold its row for the life of the page.
    */
   releaseBelowDeg: 5,
+  /**
+   * The ring breathes with what its object is sounding: the other half of *The pulse*,
+   * and the one thing in the piece that links a name in the column to a mark overhead
+   * by something that cannot be coincidence. The bar and the ring move together,
+   * because they are the same number - `AudioEngine.level`, read from an analyser.
+   *
+   * **Radius, not brightness.** A marked ring's brightness already means elevation,
+   * computed in the shader from the blended direction; pulsing it would put two
+   * meanings on one channel. Radius means nothing yet, and a ring that swells outward
+   * on a note reads as a ping, which is the "where is that coming from" affordance
+   * this exists to give. The dot's own size is likewise spoken for - kind, featured,
+   * range - so that was not available either.
+   *
+   * **It is cheap because the rings are an indexed draw.** The ring geometry holds
+   * every object but its draw range is the handful that are ringed, so the vertex
+   * shader runs perhaps twenty times a frame. A short uniform array scanned per vertex
+   * is nothing; what would have been expensive is a per-object *attribute*, which is
+   * 84 KB re-uploaded every frame for a value that changes on twenty of them.
+   */
+  pulse: {
+    /** How far the ring swells at full level, as a fraction of its diameter. */
+    swell: 0.55,
+    /**
+     * Slots in the shader's uniform array. Has to cover every voice that can sound at
+     * once - `AUDIO.performer.maxVoices`, plus the station - with room to grow.
+     */
+    slots: 16,
+  },
 };
 
 /**
@@ -1178,8 +1206,17 @@ export const AUDIO = {
     soloQ: 7,
     attackSeconds: 3,
     releaseSeconds: 4,
-    /** Kept belt objects that can sound at once. Past this, a click still marks. */
-    maxSolo: 12,
+    /**
+     * Kept belt objects that can sound at once. Past this, a click still marks.
+     *
+     * Raised from 12 on 2026-09-21. A kept object that cannot sound is the one place
+     * the grammar breaks - it takes the attention colour and its square lights, and
+     * nothing happens - so the cap wants to be past what anyone reaches by playing.
+     * `soloRamp` is saturated from ten upward, so every voice past that arrives at
+     * full and the sum climbs linearly; the master compressor is what takes the top
+     * off, which is why it is there.
+     */
+    maxSolo: 15,
     /** How often the slices are recut, ms. The belt barely moves; this is not a tick. */
     regroupMs: 2000,
     /** Hard left and right are unpleasant on headphones; the field stops here. */
@@ -1229,7 +1266,7 @@ export const AUDIO = {
    */
   performer: {
     /** Kept passes that can sound at once. Past this a click still marks. */
-    maxVoices: 8,
+    maxVoices: 10,
     /** Voice level before the elevation curve. */
     gain: 0.33,
     /**

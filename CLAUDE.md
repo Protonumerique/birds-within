@@ -1111,10 +1111,19 @@ texture *needs* bears no relation to what it looks like it needs.
 independent. An onset has to land on the frame it happens or the bar reads as lagging;
 a decay has to outlast a frame or a chirp is a flash nobody sees.
 
-**A kept object with no voice gets no bar at all.** `maxVoices` is 8, so keeping ten
-leaves two silent — verified: eight rows `sounding`, two not. Drawing those an empty bar
-would claim they were sounding at zero rather than not sounding; the absence is the
-honest rendering, and it matches "past that a click still marks, it just does not sound".
+**A kept object with no voice gets no bar at all.** Drawing one an empty bar would claim
+it was sounding at zero rather than not sounding; the absence is the honest rendering,
+and it matches "past that a click still marks, it just does not sound". Verified at the
+old cap of eight: keeping ten gave eight rows `sounding` and two not.
+
+**The caps went up on 2026-09-21** — `maxVoices` 8 → 10, the belt's `maxSolo` 12 → 15 —
+because a kept object that cannot sound is the one place the grammar breaks. It takes
+the attention colour, its row opens, its square lights, and nothing happens. That is not
+a bar worth drawing and it is not a state worth reaching by ordinary play, so the cap
+wants to sit past where anyone gets to. It is not free on the belt: `soloRamp` is
+saturated from ten upward, so voices eleven to fifteen arrive at full and the sum climbs
+linearly. Measured, 500 belt objects, RMS over the settled tail — see the table under
+*The drone*.
 
 **This is the only thing in the app that flows from the sound back to the image.**
 Everything else goes one way, the frame driving the sound. The seam is deliberately
@@ -1123,12 +1132,66 @@ only reader. `--lvl` is quantised to 64 steps so a still voice stops writing sty
 all.
 
 The belt's solos are **not** metered: they have grid squares rather than rows, so there
-is nothing to put a bar beside. The rings on the sky are not driven by this yet — that is
-the next piece of work, and it must not go through `aMark`, which re-uploads an 84 KB
-attribute and exists to be touched on a click.
+is nothing to put a bar beside.
 
 The glyph is the third piece: shape and hue together, which is the whole grammar in one
 character.
+
+#### The ring breathes with it
+
+Added 2026-09-21, and it is the other half of the pulse: the same number, on the sky.
+`HIGHLIGHT.pulse`. Without it the link ran one way — a bar in the column moved and
+nothing overhead answered — so the column still could not tell you *which* of six voices
+you were hearing. Now the ring on the object swells as its voice sounds, and the bar
+beside its name fills in the same instant, because both read `AudioEngine.level`.
+
+**Radius, not brightness, and that was the whole choice.** A marked ring's brightness
+already means elevation, computed in the shader from the blended direction; pulsing it
+would put two meanings on one channel and break the two-axis rule at the one place the
+piece most needs to be unambiguous. The dot's own size was not available either — it
+already carries kind (0.9 and 1.2), featured (2.0) and range. **Radius means nothing
+yet**, and a ring that swells outward on a note reads as a ping, which is exactly the
+"where is that coming from" affordance this exists to give.
+
+**It is cheap, and the earlier claim that it would not be was wrong.** The rings are an
+**indexed** draw: the geometry holds every object, but `setDrawRange` is the handful that
+are actually ringed, so `RING_VERT` runs perhaps twenty times a frame. A short uniform
+array of (index, level) pairs scanned per vertex is nothing at all. What would have been
+expensive is the path that was assumed — a per-object *attribute*, which is `aMark`'s 84
+KB re-uploaded every frame for a value that changes on twenty objects. Two different
+things; only one of them was ever costly.
+
+Measured with everything else hidden and one ring left in the scene, on a payload at
+66.6° — the diameter, in device pixels, against the level fed to it:
+
+| level | ring | lit pixels |
+|---|---|---|
+| not sounding | 29 px | 189 |
+| 0 | 29 | 189 |
+| 0.25 | 33 | 206 |
+| 0.5 | 37 | 240 |
+| 1 | 45 | 292 |
+
+Monotonic, and **silent is pixel-identical to before** — an object with no voice finds no
+slot and its swell stays exactly 1. The lit count rises by the same factor as the
+diameter (1.55), which is the check that the *stroke* did not thicken: it is computed in
+device pixels against `vSizePx`, so a swelling ring gets larger, not fatter, and reads as
+a ripple leaving the mark rather than as the mark getting brighter.
+
+The measurement needed the trap this file already records twice. A whole-frame bounding
+box moved **not one pixel** across every level, because the graticule is most of the lit
+pixels and never moves; hiding every child but the rings is what made a bounding box mean
+the ring. And `piece.ts` writes pulses every frame, so a value poked from the console is
+gone before the next draw — **stub the setter, not the value**.
+
+The levels reach the scene one frame late, deliberately: `audio.update` runs *after*
+`scene.render()`, so the drone pans against the heading the frame was just drawn with.
+Sixteen milliseconds behind a sound is not a lag anyone can see; the drone reading a
+stale heading would have been.
+
+**The belt's rings do not pulse**, for the same reason its rows do not: the drone's solos
+have no analyser. They are a bed being played rather than voices to be picked out of one,
+and the grid square already answers "which one did I click".
 
 **A row is a name until you keep it.** Default rows sort themselves by elevation and
 show nothing else; they churn, and that is what they are for. Keeping one **opens** it:
@@ -1422,8 +1485,9 @@ a rewrite of the mapping.
 octave above *its own slice's* pitch, through a resonant lowpass that opens as it arrives,
 detuned by where it sits inside that slice — so two neighbours kept together beat against
 each other. It is in tune with the bed because it is the bed's pitch: the voice steps
-forward rather than arriving from somewhere else. Twelve at once is the cap; past that a
-click still marks, it just does not sound.
+forward rather than arriving from somewhere else. Fifteen at once is the cap — raised
+from twelve on 2026-09-21, see *The pulse* — and past that a click still marks, it just
+does not sound.
 
 **How loud a voice is depends on how many voices there are** (`soloRamp`, 2026-09-17).
 One on its own was overpowering: it arrived at full strength over a bed deliberately
@@ -1455,6 +1519,25 @@ Mild and permanent at the bottom — one voice is now barely above the bed — i
 the top, monotonic, and nowhere near clipping before the master compressor even acts.
 That compressor is there rather than a lower voice cap because the brief asks for it to
 be *able* to get invasive.
+
+**Raising the cap to fifteen, measured 2026-09-21**, because past `soloRamp`'s `fullAt`
+of ten every further voice arrives at full and simply adds. Rendered offline, 500 belt
+objects, RMS over the settled tail — and **where** the kept objects sit turns out to
+matter more than how many there are:
+
+| kept | adjacent (all in two slices) | spread across the belt |
+|---|---|---|
+| 10 | −19.88 dBFS, peak 0.716 | −13.41 dBFS, peak 0.938 |
+| 12 | −17.20, peak 0.812 | −12.92, peak 0.987 |
+| 15 | −17.39, peak 0.905 | −12.27, peak **1.399** |
+
+Adjacent voices share a slice pitch and beat rather than sum, so twelve to fifteen there
+is **nothing at all** in RMS. Spread across the arc they are in different pitches and
+panned apart, and fifteen peaks past full scale — but **these are the harness's numbers,
+not the chain's**: it renders `Drone` straight into `destination`, with neither
+`AUDIO.masterGain` (0.45) nor the compressor after it. 1.399 arrives at the compressor as
+0.63, under a threshold of −18 with a 24 dB knee. Nothing clips, and the 0.65 dB that
+twelve to fifteen gains is most of the way shaved by the time it is heard.
 
 **Measure it at both belt sizes.** `synthetic` carries 240 objects, so its slices sit at
 half occupancy and its bed is 4 dB quieter than `full`, where every slice saturates — the
