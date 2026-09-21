@@ -68,6 +68,18 @@ const SHELLS = [
   [200, 1200, 87.9, 'COSMOS', FAMILY.MILITARY], // near-polar; stands in for the group join
   [150, 800, 98.6, 'SSO', null], // sun-synchronous, untagged: the default whistle
   [200, null, null, 'SYNTH DEB', null], // broad spread; named so kindFromName reads it as debris
+  /*
+   * **Spent stages, and this file had none until 2026-09-21.** `kindFromName` reads
+   * R/B, nothing here carried it, and the consequence was that the `machine` voice -
+   * the regular knock under the birdsong - could not be heard offline at all. Anyone
+   * developing against the synthetic sky heard payloads and debris and concluded the
+   * wreckage was all one calm texture, which is exactly what happened.
+   *
+   * Over-represented at ~9%, on the same argument that put 240 belt objects in here:
+   * a dev sky has to show the thing being worked on. The real `full` catalogue is a
+   * few per cent rocket bodies.
+   */
+  [120, null, null, 'SYNTH R/B', null],
 ];
 
 const records = [];

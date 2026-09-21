@@ -84,6 +84,8 @@ interface Voice {
   phrase: number;
   /** Context time this voice may be torn down, or Infinity while it is held. */
   endsAt: number;
+  /** A per-voice correction where a texture measures quieter than it should sit. */
+  boost: number;
 }
 
 export class Performers {
@@ -190,7 +192,7 @@ export class Performers {
   /** Everything continuous: level from elevation, pan from direction, colour from shadow. */
   private steer(v: Voice, frame: SkyFrame, i: number, rx: number, rz: number, now: number): void {
     const gain =
-      P.gain * P.timbreGain[v.timbre] * (v.look?.gain ?? 1) * byElevation(frame.elevation[i]!);
+      P.gain * P.timbreGain[v.timbre] * (v.look?.gain ?? 1) * v.boost * byElevation(frame.elevation[i]!);
     // The same ramp does two jobs: the voice's arrival, since `level` starts at zero,
     // and its swell as the object climbs. Elevation changes slowly enough that one
     // time constant covers both.
@@ -284,12 +286,16 @@ export class Performers {
     return t + pick(look.gapMs, hash(i, 6)) / 1000;
   }
 
-  /** A spent stage is not a bird: lower, duller and regular, which is the point. */
+  /**
+   * A spent stage is not a bird: lower, harder and **regular**, which is the point.
+   * The pulse and the gap come from the object's own hash and are never jittered, so
+   * this is the one voice in the piece you can count along with.
+   */
   private machinePulse(v: Voice, at: number): number {
     const i = v.index;
     const dur = pick(P.machine.pulseMs, hash(i, 2)) / 1000;
     v.osc!.frequency.setValueAtTime(v.baseHz, at);
-    this.strike(v, at, dur, 0.03, 0.55);
+    this.strike(v, at, dur, P.machine.attack, P.machine.hold);
     return at + dur + pick(P.machine.gapMs, hash(i, 6)) / 1000;
   }
 
@@ -340,15 +346,28 @@ export class Performers {
     let ring: BiquadFilterNode | null = null;
     const lfos: OscillatorNode[] = [];
     let baseHz = 0;
+    let boost = 1;
 
     // A payload's family only refines a bird. A machine and a shard are what `kind`
     // says they are whatever constellation they were launched with.
     const look: BirdVoice | null =
       timbre === 'bird' ? P.voices[P.familyVoice[(this.family[index] ?? FAMILY.NONE) as Family]] : null;
 
-    /** An LFO driving an AudioParam, at `depth` either side of whatever that param is. */
-    const modulate = (rateHz: number, depth: number, target: AudioParam): GainNode => {
+    /**
+     * An LFO driving an AudioParam, at `depth` either side of whatever that param is.
+     *
+     * The waveform matters for one caller: a sawtooth at *negative* depth snaps to
+     * full and decays linearly, which is an impulse. A sine at the same rate and depth
+     * is a wobble. See AUDIO.performer.shard.agitated.
+     */
+    const modulate = (
+      rateHz: number,
+      depth: number,
+      target: AudioParam,
+      wave: OscillatorType = 'sine'
+    ): GainNode => {
       const lfo = ctx.createOscillator();
+      lfo.type = wave;
       lfo.frequency.value = rateHz;
       // A quarter turn of phase per voice, so several shards never breathe in step.
       const amount = ctx.createGain();
@@ -361,17 +380,32 @@ export class Performers {
     };
 
     if (timbre === 'shard') {
-      // Noise through a wide band that drifts, gated by nothing and breathing slowly:
-      // the swish and the pulse are both LFOs, so there is no event anywhere in it.
+      // Noise through a wide band that drifts, gated by nothing and breathing under
+      // its own LFOs: the swish and the pulse are both continuous, so there is no
+      // scheduled event anywhere in it.
+      //
+      // How fast it breathes, and how hard, is the fragment's own business. Most drift;
+      // a share of them are agitated instead and pulse in the rhythm range off a
+      // sawtooth, which gives each cycle an attack. See AUDIO.performer.shard.
+      const agitated = hash(index, 23) < P.shard.agitatedShare;
+      if (agitated) boost = P.shard.agitated.gain;
+      // Not `look` - that name is the bird's family voice in the scope above.
+      const temper = agitated ? P.shard.agitated : P.shard;
       filter.type = 'bandpass';
-      filter.Q.value = P.shard.q;
+      filter.Q.value = agitated ? P.shard.agitated.q : P.shard.q;
       const mid = (P.shard.bandHz[0]! + P.shard.bandHz[1]!) / 2;
       const span = (P.shard.bandHz[1]! - P.shard.bandHz[0]!) / 2;
       filter.frequency.value = mid;
-      modulate(pick(P.shard.swishHz, hash(index, 17)), span, filter.frequency);
+      modulate(pick(temper.swishHz, hash(index, 17)), span, filter.frequency);
 
-      vca.gain.value = 1 - P.shard.pulseDepth;
-      modulate(pick(P.shard.pulseHz, hash(index, 19)), P.shard.pulseDepth, vca.gain);
+      const depth = pick(temper.pulseDepth, hash(index, 19));
+      vca.gain.value = 1 - depth;
+      modulate(
+        pick(temper.pulseHz, hash(index, 25)),
+        agitated ? -depth : depth,
+        vca.gain,
+        agitated ? 'sawtooth' : 'sine'
+      );
 
       noise = ctx.createBufferSource();
       noise.buffer = this.noise();
@@ -395,9 +429,10 @@ export class Performers {
 
       // Soft clipping, where a family should sound forced rather than blown. It sits
       // before the envelope so the drive is constant and only the level moves.
-      if (look && look.drive > 0) {
+      const drive = look ? look.drive : timbre === 'machine' ? P.machine.drive : 0;
+      if (drive > 0) {
         const shaper = ctx.createWaveShaper();
-        shaper.curve = this.driveCurve(look.drive);
+        shaper.curve = this.driveCurve(drive);
         osc.connect(shaper);
         shaper.connect(vca);
         this.shapers.push(shaper);
@@ -449,6 +484,7 @@ export class Performers {
       nextAt: now + 0.1 + hash(index, 13) * 0.5,
       phrase: 0,
       endsAt: Infinity,
+      boost,
     };
   }
 

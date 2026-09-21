@@ -1322,9 +1322,28 @@ export const AUDIO = {
     machine: {
       /** Lower than the birds, and it does not sweep. */
       octaveDown: 2,
-      pulseMs: [110, 300],
-      gapMs: [190, 620],
-      cutoffHz: [320, 1900],
+      /**
+       * **A spent stage knocks; it does not sing.** Sharpened 2026-09-21, on the note
+       * that the wreckage all read as calm sea-waves and the rocket bodies wanted a
+       * more disruptive presence - faster, and more regular.
+       *
+       * A pulse and its gap are picked once per object and never jittered, so a
+       * machine is a metronome where a bird deliberately is not. The period lands at
+       * 170-460 ms, which is 2-6 Hz: fast enough to read as a mechanism running rather
+       * than as a slow tolling, and the one texture in the piece you can count.
+       */
+      pulseMs: [60, 160],
+      gapMs: [110, 300],
+      cutoffHz: [400, 2600],
+      /**
+       * Short attack, flat hold, and the rest is release: a knock rather than a note.
+       * The hold still matters - see `strike` - but a machine wants much less of it
+       * than a bird, which is most of what separates the two.
+       */
+      attack: 0.004,
+      hold: 0.32,
+      /** Soft clipping, so it reads as machinery being driven rather than as a tone. */
+      drive: 0.45,
     },
     /**
      * **Continuous, and eventless.** The first version fired short noise bursts, which
@@ -1339,11 +1358,57 @@ export const AUDIO = {
       bandHz: [900, 4200],
       /** Wide. A hiss, not a rattle; the burst version used 4 and rang like a snare. */
       q: 1.2,
-      /** How fast the band sweeps, per object. Slow enough to read as drift. */
-      swishHz: [0.05, 0.13],
-      /** How fast it breathes, and how deep. This is the pulsating part. */
-      pulseHz: [0.09, 0.27],
-      pulseDepth: 0.38,
+      /**
+       * How fast the band sweeps and how fast it breathes, per object, and how deep
+       * the breathing goes. **Widened 2026-09-21**: these were [0.05, 0.13] and
+       * [0.09, 0.27] at a fixed depth of 0.38, which is one cycle every four to
+       * twenty seconds at one intensity - so every fragment in the sky was the same
+       * calm sea-wave and the per-object hash had nothing audible to vary.
+       *
+       * `pulseDepth` is half the swing: the gain rides `1 - depth` plus or minus
+       * `depth`, so 0.5 is total modulation and anything above it would drive the
+       * trough negative.
+       */
+      swishHz: [0.04, 0.22],
+      pulseHz: [0.06, 0.4],
+      pulseDepth: [0.22, 0.46],
+      /**
+       * **Some wreckage is agitated, and that is the other half of the answer.**
+       * Widening the calm range alone still gives one kind of thing moving at
+       * different speeds. A share of fragments instead get a different character:
+       * a pulse in the *audible rhythm* range rather than the drift range, nearly
+       * total depth, and a tighter band so it bites rather than washes.
+       *
+       * **The LFO is a sawtooth at negative depth**, which is what makes these read
+       * as impulses rather than as fast tremolo: the ramp snaps to full and decays
+       * linearly, so each cycle has an attack. A sine at the same rate and depth is
+       * a wobble, and a wobble is not a presence.
+       *
+       * This is a deliberate reversal of the note under `shard` above, which argued
+       * that a repeating transient is the most attention-getting thing a mix can
+       * hold. It still is. The difference is that this is a *minority* of fragments
+       * and it is still one continuous band of noise with an LFO on it - there is no
+       * scheduled event anywhere in it, so it stays eventless in the way that
+       * mattered, while having something to hear.
+       */
+      agitatedShare: 0.3,
+      agitated: {
+        q: 3.6,
+        swishHz: [0.3, 1.1],
+        pulseHz: [1.7, 5.2],
+        pulseDepth: [0.4, 0.5],
+        /**
+         * **Measured, not nominal**, and it is the same trap `timbreGain` carries a
+         * note about: a tighter band throws more energy away, and a sawtooth at this
+         * depth spends most of each cycle decaying. Rendered offline the agitated
+         * shards came out **5 dB under the calm ones** - so the fragment meant to be
+         * the more present of the two was the quietest thing in the mix.
+         *
+         * This puts them a shade above the calm ones instead, which is where a
+         * disruption belongs. Peaks stay at 0.15-0.17, level with a calm shard.
+         */
+        gain: 2,
+      },
     },
   },
 };

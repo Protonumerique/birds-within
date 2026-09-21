@@ -25,7 +25,19 @@ const RENDER_ORDER = {
    * the orbit is where it has been. They shared an order before and the tie was broken
    * by whichever material three sorted first, which is not a decision anyone made.
    */
-  trail: -2,
+  trail: -3,
+  /**
+   * **The wreckage, alpha-blended, between the orbits and the lights.** Everything
+   * else in this scene is additive, and additive blending *cannot* cover what is
+   * behind it - it adds to it - so render order buys occlusion for exactly nothing.
+   * A track drawn under a shard still showed straight through the shard.
+   *
+   * Debris is the one thing up there that is not a light: it emits nothing and it is
+   * a lump of matter. So it gets its own draw, with ordinary source-over blending,
+   * and it is the only mark in the piece that actually blocks what it passes in front
+   * of. The lights go down after it and sum over it as lights should.
+   */
+  shards: -2,
   points: -1,
   rings: 0,
   haze: 1,
@@ -194,7 +206,30 @@ function fade(y: number, top: number): number {
 }
 
 /** Outside clip space with zero size: the vertex draws nothing. */
-const HIDE_GLSL = /* glsl */ `gl_Position = vec4(2.0, 2.0, 2.0, 1.0); gl_PointSize = 0.0;`;
+const HIDE_POS_GLSL = /* glsl */ `gl_Position = vec4(2.0, 2.0, 2.0, 1.0); gl_PointSize = 0.0;`;
+
+/**
+ * The same, as a function, plus a harmless value for every one of the point shader's
+ * varyings - it is called from three places and the list is long enough to get wrong.
+ * The rings keep the bare statement above, because their varyings are not these.
+ */
+const HIDE_GLSL = /* glsl */ `
+  void hide() {
+    ${HIDE_POS_GLSL}
+    vAlpha = 0.0;
+    vColor = vec3(0.0);
+    vGlow = 0.0;
+    vShard = 0.0;
+    vSpin = vec2(1.0, 0.0);
+    vSizePx = 0.0;
+    vStreak = vec2(1.0, 0.0);
+    vStreakPx = 0.0;
+    vDotPx = 0.0;
+    vBlur = 0.0;
+    vGain = 1.0;
+    vSolid = 0.0;
+  }
+`;
 
 /**
  * Appearance - what a thing is, what state it is in, size by range - is decided from
@@ -238,6 +273,12 @@ const POINT_VERT = /* glsl */ `
   uniform vec4 uImmerse;
   /** x bokeh width for a far mark, y nearDim, z farDim. See IMMERSION. */
   uniform vec3 uImmerseLook;
+  /**
+   * Which half of the catalogue this draw is for: 1 the lights, 2 the shards, 0 both.
+   * The wreckage is drawn in its own alpha-blended pass so it can cover what is behind
+   * it, which additive blending can never do. Ghosts pass 0 and draw the lot.
+   */
+  uniform float uOnly;
 
   varying float vAlpha;
   varying vec3 vColor;
@@ -262,6 +303,8 @@ const POINT_VERT = /* glsl */ `
   /** How near-and-immersed this mark is, 0-1: how much of a solid body it has become. */
   varying float vSolid;
 
+  ${HIDE_GLSL}
+
   /** Where a blended direction lands on screen, in device pixels. */
   vec2 toScreen(vec3 dir) {
     vec4 clip = projectionMatrix * modelViewMatrix * vec4(dir * uRadius, 1.0);
@@ -269,23 +312,22 @@ const POINT_VERT = /* glsl */ `
   }
 
   void main() {
+    /*
+     * This draw is the lights or the wreckage, never both. Splitting them is what lets
+     * a shard be drawn with ordinary alpha blending in its own pass and actually cover
+     * the track behind it; see RENDER_ORDER.shards. Ghosts pass 0 and draw everything,
+     * because a smear behind a moving mark is meant to be see-through.
+     */
+    if (uOnly > 0.5 && (aKind > 1.5) != (uOnly > 1.5)) {
+      hide();
+      return;
+    }
+
     vec3 dir;
     float shadow;
     float range;
     if (!blendTicks(dir, shadow, range)) {
-      ${HIDE_GLSL}
-      vAlpha = 0.0;
-      vColor = vec3(0.0);
-      vGlow = 0.0;
-      vShard = 0.0;
-      vSpin = vec2(1.0, 0.0);
-      vSizePx = 0.0;
-      vStreak = vec2(1.0, 0.0);
-      vStreakPx = 0.0;
-      vDotPx = 0.0;
-      vBlur = 0.0;
-      vGain = 1.0;
-      vSolid = 0.0;
+      hide();
       return;
     }
 
@@ -298,19 +340,7 @@ const POINT_VERT = /* glsl */ `
     // would flare as the clock sped up. Instead the still things stay still while
     // everything else smears, which is the contrast the piece already trades on.
     if (uGhostLevel < 1.0 && choir) {
-      ${HIDE_GLSL}
-      vAlpha = 0.0;
-      vColor = vec3(0.0);
-      vGlow = 0.0;
-      vShard = 0.0;
-      vSpin = vec2(1.0, 0.0);
-      vSizePx = 0.0;
-      vStreak = vec2(1.0, 0.0);
-      vStreakPx = 0.0;
-      vDotPx = 0.0;
-      vBlur = 0.0;
-      vGain = 1.0;
-      vSolid = 0.0;
+      hide();
       return;
     }
 
@@ -407,6 +437,8 @@ const POINT_FRAG = /* glsl */ `
   varying float vSolid;
 
   uniform vec2 uHalo;
+  /** 1 the lights, 2 the shards, 0 both. See RENDER_ORDER.shards. */
+  uniform float uOnly;
   /** How much the core tightens as a near mark is magnified. See IMMERSION.coreTighten. */
   uniform float uCoreTighten;
   /** x the body's edge as a fraction of the dot radius, y how bright it is. */
@@ -453,7 +485,22 @@ const POINT_FRAG = /* glsl */ `
       if (fill <= 0.0) discard;
       // A near shard is a body too - the triangle is already hard-edged, it only needs
       // the brightness to saturate against the sky the way a near light does.
-      gl_FragColor = vec4(vColor * vGlow * fill * vAlpha * mix(1.0, uBody.y, vSolid), 1.0);
+      vec3 rgb = vColor * vGlow * mix(1.0, uBody.y, vSolid);
+      /*
+       * **In its own pass the shard is opaque, and that is the whole point of the
+       * pass.** Source-over blending puts the shape in the ALPHA channel and leaves
+       * the colour at full, so the triangle covers the track behind it instead of
+       * adding to it. vAlpha still carries the fade - below the horizon, or hazed -
+       * because a mark on its way out of the image should dissolve, not vanish.
+       *
+       * Drawn additively - which is what the ghosts do - the same shard goes back to
+       * being a smear, which is right for a smear.
+       */
+      if (uOnly > 1.5) {
+        gl_FragColor = vec4(rgb, fill * vAlpha);
+        return;
+      }
+      gl_FragColor = vec4(rgb * fill * vAlpha, 1.0);
       return;
     }
 
@@ -559,7 +606,7 @@ const RING_VERT = /* glsl */ `
     float shadow;
     float range;
     if (!blendTicks(dir, shadow, range)) {
-      ${HIDE_GLSL}
+      ${HIDE_POS_GLSL}
       vSizePx = 0.0;
       vColor = vec3(0.0);
       vAlpha = 0.0;
@@ -930,6 +977,8 @@ export class SkyScene {
 
   private slots: [TickSlot, TickSlot];
   readonly points: THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>;
+  /** The wreckage, in its own opaque pass. See RENDER_ORDER.shards. */
+  readonly shards: THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>;
   /** Where each object has just been: one draw each, furthest back first. */
   private ghosts: THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>[] = [];
   /**
@@ -983,6 +1032,8 @@ export class SkyScene {
     },
     uCoreTighten: { value: IMMERSION.coreTighten },
     uBody: { value: new THREE.Vector2(IMMERSION.bodyEdge, IMMERSION.bodyGain) },
+    /** The shared block is the lights' draw; the shard pass and the ghosts override it. */
+    uOnly: { value: 1 },
   };
 
   /**
@@ -1135,6 +1186,40 @@ export class SkyScene {
     this.points.renderOrder = RENDER_ORDER.points;
     this.scene.add(this.points);
 
+    /*
+     * --- the wreckage, drawn opaque ----------------------------------------
+     *
+     * The same geometry and the same pair of shaders, drawn again with ordinary
+     * source-over blending and `uOnly` set to the shards - so this pass draws the
+     * fragments and the pass above draws everything else.
+     *
+     * It exists because **render order cannot buy occlusion under additive
+     * blending.** Tracks have been drawn before the objects since 2026-09-18, and a
+     * shard still had its own orbit printed straight through it, because additive
+     * blending adds to what is behind rather than covering it - the order of the two
+     * makes no difference whatsoever to the result. The only way a mark covers
+     * anything here is to stop being additive.
+     *
+     * Debris is the right mark to spend that on. Everything else in this sky is a
+     * light, and a light summing with what is behind it is correct; a fragment of
+     * metal is the one thing up there that emits nothing and is simply a solid
+     * object in the way.
+     */
+    this.shards = new THREE.Points(
+      pointsGeom,
+      new THREE.ShaderMaterial({
+        vertexShader: POINT_VERT,
+        fragmentShader: POINT_FRAG,
+        uniforms: { ...this.uniforms, uOnly: { value: 2 } },
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.NormalBlending,
+      })
+    );
+    this.shards.frustumCulled = false;
+    this.shards.renderOrder = RENDER_ORDER.shards;
+    this.scene.add(this.shards);
+
     // --- ghosts -------------------------------------------------------------
     // The same geometry and the same shader, drawn again at a `uT` that has been run
     // backwards past the older tick. Spreading `this.uniforms` copies the references,
@@ -1150,6 +1235,8 @@ export class SkyScene {
           uniforms: {
             ...this.uniforms,
             uT: { value: 0 },
+            /** A ghost is a smear of everything, shards included, and stays additive. */
+            uOnly: { value: 0 },
             uGhostLevel: { value: GHOST.level * Math.pow(GHOST.falloff, k) },
             uGhostSize: { value: GHOST.size },
             uGhostStreak: { value: 0 },

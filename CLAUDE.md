@@ -258,6 +258,33 @@ an unnamed fragment therefore reads as a payload. Good enough to read density
 composition, which is what the image needs; not a classification. `full` is the default precisely so this is
 visible; `?catalog=active` is payloads only and shows almost none of it.
 
+**The shard is the one opaque mark in the piece**, since 2026-09-21, and it took its
+own draw to get there. Everything here blends additively, and **additive blending
+cannot cover what is behind it** — it adds to it — so a shard had its own orbit
+printed straight through the middle of it. Moving tracks under the objects, which
+happened on 2026-09-18, did nothing for this and could not have: under additive
+blending the order of two layers makes no difference to the result at all. The only
+way a mark covers anything is to stop being additive.
+
+So `RENDER_ORDER.shards` is a second draw of the same points with ordinary
+source-over blending and `uOnly` set to the wreckage, sitting between the tracks and
+the lights. The triangle's shape moves into the **alpha** channel and the colour
+stays at full, so it blocks rather than sums. `vAlpha` still carries the fade, so a
+shard on its way out of the image dissolves instead of vanishing. Ghosts pass
+`uOnly = 0` and stay additive, because a smear is meant to be see-through.
+
+Debris is the right mark to spend a draw on: everything else in this sky is a light,
+and a light summing with what is behind it is correct. A fragment of metal is the one
+thing up there that emits nothing and is simply solid and in the way — so the mark
+that occludes is the mark for the object that occludes.
+
+**It costs no brightness, which is the point.** Measured by rendering the same frozen
+frame twice, once source-over and once additive, with three fragments kept so each had
+a track and a ring behind it: **6,379 pixels differ, every one of them darker**, none
+brighter, and the deepest drop is 318 of a possible 765. With nothing kept it is 1,054
+pixels and a drop of 30 — that residue is the airglow the shards were adding to
+themselves. The shard did not get brighter; it stopped being transparent.
+
 A fragment can be **both** — there is debris in the geosynchronous belt — and it draws as
 a blue shard. The two axes compose rather than compete, which is the test of the rule.
 
@@ -1272,7 +1299,12 @@ heuristic and nothing more, but it separates the three things that are up there:
 
 - **bird** (payload) — phrases of two to five swept chirps, then a long gap. A sine.
 - **machine** (rocket body) — a spent stage is not a bird. Lower, a sawtooth, and
-  **regular** where the bird is not. The industrial chant under the birdsong.
+  **regular** where the bird is not. The industrial chant under the birdsong. Sharpened
+  2026-09-21: the period came down from 300–920 ms to **170–460 ms**, which is 2–6 Hz,
+  and the envelope from 30 ms attack and 0.55 hold to 4 ms and 0.32 — a knock rather
+  than a note — with soft clipping added so it reads as machinery being driven. The
+  pulse and its gap are picked once per object and **never jittered**, so this is the
+  one voice in the piece you can count along with.
 - **shard** (debris) — a band of noise that is simply *there*: no phrase, no gap, nothing
   scheduled. See *The shard, and the interference* below.
 
@@ -1309,6 +1341,53 @@ edge of the image; several sum into a wash rather than a pattern. Measured alone
 −40.9 dBFS with a peak of 0.07, against the burst version's −39.7 and **0.21**: the
 energy barely moved, but the transients are a third of what they were, and that is the
 whole of the difference.
+
+**Some wreckage is agitated, added 2026-09-21, and it is a deliberate partial reversal
+of the paragraph above.** The rates were `swishHz` 0.05–0.13 and `pulseHz` 0.09–0.27 at
+a fixed depth of 0.38 — one cycle every four to twenty seconds, at one intensity — so
+every fragment in the sky was the same calm sea-wave and the per-object hash had nothing
+audible to vary. Two changes:
+
+- **The calm range is wider**, and the depth is now per object too (0.22–0.46 rather
+  than a constant), so no two drifting fragments breathe alike.
+- **A share of fragments (`agitatedShare`, 0.3) are a different character**: a pulse in
+  the *rhythm* range rather than the drift range, nearly total depth, and a tighter band
+  so it bites rather than washes.
+
+**The LFO shape is what makes that work.** An agitated shard runs a **sawtooth at
+negative depth**, so its gain snaps to full and decays linearly and every cycle has an
+attack. A sine at the same rate and depth is a fast tremolo, and a tremolo is a wobble
+rather than a presence. The earlier argument still holds — a repeating transient is the
+most attention-getting thing a mix can hold — but this is a minority of fragments and it
+is still one continuous band of noise with an LFO on it. Nothing is scheduled, so it
+stays eventless in the way that actually mattered.
+
+**And the agitated ones had to be made louder, which was the opposite of the guess.**
+Rendered offline they came out **5 dB under the calm ones**: a tighter band throws more
+energy away, and a sawtooth at this depth spends most of each cycle decaying. The
+fragment meant to be the more present of the two was the quietest thing in the mix.
+`agitated.gain` of 2 puts them a shade above instead. Same trap as `timbreGain` — what a
+bandpassed texture *needs* bears no relation to what it looks like it needs.
+
+Measured offline, one voice at a time, held mid-pass at 45°, with a two-stage envelope
+follower (25 ms against 1.2 s) reading the pulse rate:
+
+| | rate | RMS | peak | envelope depth |
+|---|---|---|---|---|
+| calm shard | 0.25–0.5 Hz | −31 to −34.3 dBFS | 0.09–0.14 | 0.44–0.90 |
+| agitated shard | 2–2.5 Hz | −32.4 to −32.9 | 0.147–0.159 | 0.83–0.86 |
+| machine | 4.75 Hz | −23.3 | 0.284 | 1 |
+| bird | 1.75 Hz | −26.2 | 0.207 | 1 |
+
+Four of fourteen sampled fragments came out agitated, against the 0.3 share. **These are
+this harness's numbers, not the master chain's** — it renders `Performers` alone into an
+`OfflineAudioContext` with no drone, no compressor and no rate duck, so compare them with
+each other and not with the balance table above.
+
+**A single envelope follower cannot measure this and will lie confidently.** A 10 ms
+follower on a hiss tracks the noise rather than the drift and reports 50–100 Hz. The fast
+one is the envelope, the slow one is the level it is pulsing *about*, and the rate is
+upward crossings of one past the other with hysteresis.
 
 **And it deforms what it passes**, in both senses at once. All of it lives in
 `INTERFERENCE`, which is deliberately *not* inside `AUDIO`: the sound and the image are
@@ -1454,6 +1533,20 @@ too — `STARLINK-30000` appears in the military list and must still come out St
 real per-family counts appear in `check:catalog`'s output on the next CI run, which is
 also the gate: all families empty on `full` fails the deploy, a thin one does not,
 because an untagged object sings the default voice and that is not wrong.
+
+**`synthetic.bin` had no rocket bodies at all until 2026-09-21, and that was a real
+hole rather than a detail.** `kindFromName` reads `R/B`, nothing in `make-synthetic.mjs`
+carried it, so the **`machine` voice could not be heard offline** — anyone developing
+against the synthetic sky got payloads and debris and nothing else. The symptom is
+exactly what you would expect and not at all obviously a data problem: the wreckage all
+sounds like one calm texture, and the regular knock the rocket bodies are supposed to
+put under the birdsong is simply absent. There is now a `SYNTH R/B` shell at ~9%,
+over-represented on the same argument that put 240 belt objects in there — a dev sky has
+to show the thing being worked on.
+
+**The general lesson: check what the development catalogue actually contains before
+concluding something about how the piece sounds or looks.** `synthetic` is invented, and
+what it leaves out is invisible rather than wrong.
 
 `synthetic.bin` carries the families too — its Starlink and Iridium shells are named so
 the *name* rules match them by exactly the path production takes, at the real altitudes
