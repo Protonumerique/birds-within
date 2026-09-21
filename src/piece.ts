@@ -82,6 +82,7 @@ export async function run(status: StatusFn): Promise<void> {
     selection,
     choir: stream.choir,
     kind: stream.kind,
+    featured: stream.featured,
     audio,
     immersion: (amount) => scene.setImmersion(amount),
   });
@@ -233,14 +234,21 @@ export async function run(status: StatusFn): Promise<void> {
       for (const i of tracked) {
         const directions = trails.get(i);
         if (directions) {
-          const kept = selection.isMarked(i);
           const featured = stream.featured[i] === 1;
-          // Exhaustive: `tracked` holds only what is kept and what is featured, so a
-          // track that is not kept is a featured one. Kept wins - attention is
-          // attention, and a ringed ISS should say so.
-          const color = kept
-            ? (stream.kind[i] === KIND.DEBRIS ? debrisColor : markColor)
-            : featuredColor;
+          /*
+           * **Featured wins over kept**, which reverses what shipped first. Attention
+           * is amber everywhere else, but the ISS keeps its cool white in all three
+           * places it appears - the mark, the orbit and the row - so that one colour
+           * is the whole link between a thing overhead and a name in the column. With
+           * no tags on the sky that link has only colour to carry it, and turning the
+           * orbit amber on a click would have said "something is selected" while
+           * throwing away the one thing that said *which*.
+           */
+          const color = featured
+            ? featuredColor
+            : stream.kind[i] === KIND.DEBRIS
+              ? debrisColor
+              : markColor;
           tracks.push({ directions, color, featured });
         }
       }

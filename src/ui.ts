@@ -27,6 +27,8 @@ export interface HudSource {
   choir: Uint8Array;
   /** KIND per object: 0 payload, 1 rocket body, 2 debris. */
   kind: Uint8Array;
+  /** 1 on a featured object: its row wears the cool white, not amber. See FEATURED. */
+  featured: Uint8Array;
   /** What the pointer is touching and what it has stuck to. Shared with the scene. */
   selection: Selection;
   /** The sound. The panel owns its one control; nothing else here knows about it. */
@@ -73,7 +75,7 @@ function thinBarWidth(): number {
  * along the bottom is a CSS change, not a rewrite.
  */
 export function createHud(root: HTMLElement, clock: Clock, source: HudSource): Hud {
-  const { names, selection, choir, kind } = source;
+  const { names, selection, choir, kind, featured } = source;
   const isChoir = (i: number) => choir[i] === 1;
   const isDebris = (i: number) => kind[i] === 2;
 
@@ -202,8 +204,8 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
   // Three groups, because the sky holds three kinds of thing that do not compare.
   // Each rests at the colour its objects already wear and shows the mark's own shape
   // beside its name, so the legend lives where the thing it explains does.
-  const passingGroup = new Group('Passing', GROUP_LOOK.passing, READOUT.passingRows, names, selection);
-  const debrisGroup = new Group('Debris', GROUP_LOOK.debris, READOUT.debrisRows, names, selection);
+  const passingGroup = new Group('Passing', GROUP_LOOK.passing, READOUT.passingRows, names, selection, featured);
+  const debrisGroup = new Group('Debris', GROUP_LOOK.debris, READOUT.debrisRows, names, selection, featured);
   const choirGrid = new ChoirGrid(names, selection);
   root.querySelector('.lists')!.append(passingGroup.element, debrisGroup.element);
   root.querySelector('.foot')!.append(choirGrid.element);

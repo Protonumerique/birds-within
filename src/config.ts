@@ -861,11 +861,13 @@ function dimmed(hex: string, k: number): string {
  * - **`tone` is the colour the object already is on the sky.** It is what a row rests
  *   at, so a name in the list and a mark in the sky are the same colour before anything
  *   is touched. The row carries the grammar, not the panel's own idea of "info text".
- * - **`accent` is attention**, and it is amber for both lists because that is what the
- *   *ring* turns when you touch an object — anything not in the belt gets `uMarkColor`.
- *   A second highlight hue for debris would have to disagree with its own ring. A
- *   distinct blue for it was considered and deferred - not rejected, but any blue has
- *   to survive sitting next to the belt's, and nothing needs it yet.
+ * - **`accent` is attention**, and it is whatever the *ring* turns when you touch that
+ *   object: amber for a satellite, pink for wreckage. An accent that disagreed with its
+ *   own ring would break the one link the panel has to the sky.
+ *
+ *   **A featured object overrides this per row**, in `ui-group.ts` rather than here,
+ *   because it is one object inside a group rather than a group of its own: the ISS
+ *   keeps its cool white. See FEATURED, and *No tags on the sky*.
  *
  * `shape` is the mark's own form, in the mark's own colour: the legend, folded into the
  * heading, where it sits next to the thing it explains instead of underneath everything.

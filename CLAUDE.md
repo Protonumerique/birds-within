@@ -193,9 +193,24 @@ moment is its **size**, a third channel, at 2.0 against the kind multipliers of 
 **Its orbit is drawn whenever it is above the horizon**, kept or not, which is the point
 of featuring it. Only while it is up: a track is cut at the horizon anyway, so one for
 an object on the far side of the world would be an empty request every frame. Keeping it
-still wins — a kept ISS turns amber like anything else, because attention is attention.
 When it is below the horizon **nothing at all** is drawn; see *No orbit belongs to
 nobody*.
+
+**Keeping it does not turn it amber**, which reverses what shipped first and is the one
+place the attention rule bends. Every other object turns its attention colour when
+touched or kept — amber for a satellite, pink for wreckage — and that colour says *what
+kind of thing you touched*. The ISS keeps its cool white in all **three** places it
+appears: the mark, the orbit, and the row in the panel.
+
+The reason is the rule at the top of this file. **With no tags on the sky, colour is the
+only thing linking a mark overhead to a name in the column**, and that link is the
+piece's weakest reading — turning the ISS amber on a click would have said "something is
+selected", which is already obvious, while throwing away the one thing that said
+*which*. Amber is still attention; for this object, identity outranks it.
+
+Verified by keeping the ISS and an ordinary payload at the same instant and sampling the
+ring pixels: **(177, 210, 255)** against **(228, 118, 36)** — blue-dominant against
+red-dominant, plainly two hues.
 
 **The wider orbit cost a second draw, and there was no way around it.**
 `LineMaterial.linewidth` is a **material** uniform — three's fat lines have no
@@ -426,7 +441,8 @@ uniform; a tick arriving uploads into whichever of the two GPU slots is stale.
   actually behind it. Not everything being visible is deliberate.
 - **Highlight rings** (`HIGHLIGHT`): a white ring around each object the readout lists —
   the rows its groups are showing — and an **attention** ring around whatever the pointer
-  is touching or has kept: amber for a satellite, pink for wreckage, blue for the belt.
+  is touching or has kept: amber for a satellite, pink for wreckage, blue for the belt,
+  and its own cool white for a featured object — see *The one with people in it*.
   Merely being listed stays white for every kind, so the readout's own ring goes on
   meaning "this one has a row" rather than doubling as a category. Tracks follow the same
   rule, so a kept orbit says what drew it before you read the name at the end of it. The rings
@@ -1036,6 +1052,17 @@ what is passing, what is wreckage, and the belt. `GROUP_LOOK` gives each one a g
   it. What the piece gained is that a **collision of kinds** is now visible — keep a
   fragment beside a satellite and the two marks are plainly not the same sort of thing,
   before either of them moves or makes a sound.
+
+  **One object overrides its group**, since 2026-09-21: a featured row keeps the cool
+  white rather than taking the group's amber, so the ISS is the same colour in the sky,
+  in its orbit and in the column. That lives in `ui-group.ts` rather than `GROUP_LOOK`,
+  because it is one object *inside* a group rather than a group of its own.
+
+**Linking the sky to the column is the weakest reading in the piece, and it is open.**
+With no tags on the sky, a mark overhead and a name in the list are joined by colour and
+by nothing else — which works while one thing is touched and thins out fast beyond that.
+The ISS's cool white is one object's answer, not the general one. Whatever the general
+answer turns out to be, it has to obey *No tags on the sky*.
 
 The glyph is the third piece: shape and hue together, which is the whole grammar in one
 character.

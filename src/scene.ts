@@ -626,9 +626,9 @@ const POINT_FRAG = /* glsl */ `
 `;
 
 /**
- * Three kinds of ring share one draw, because they are all the same ring: the plain
- * white one the readout puts on whatever is highest, the amber one the pointer puts
- * on what it is touching, and the amber one a click leaves behind.
+ * Every ring shares one draw, because they are all the same ring: the plain white one
+ * the readout puts on a listed object, the attention colour the pointer puts on what
+ * it is touching, and the same colour a click leaves behind.
  *
  * Hover is a uniform compared against a static per-object index, so sweeping the
  * pointer across the sky uploads nothing at all. Marks are a per-object attribute,
@@ -645,6 +645,8 @@ const RING_VERT = /* glsl */ `
   attribute float aMark;
   attribute float aChoir;
   attribute float aKind;
+  /** 1 on a featured object. See FEATURED. */
+  attribute float aFeatured;
 
   uniform float uRadius;
   uniform float uPixelRatio;
@@ -656,6 +658,8 @@ const RING_VERT = /* glsl */ `
   uniform vec3 uMarkColor;
   uniform vec3 uDebrisColor;
   uniform vec3 uChoirColor;
+  /** A featured object's attention colour: its own cool white, never amber. */
+  uniform vec3 uFeaturedColor;
   uniform float uDimAtHorizon;
   uniform float uFullBright;
 
@@ -697,7 +701,14 @@ const RING_VERT = /* glsl */ `
     // attention colour says what kind of thing it is: amber for a satellite, pink for
     // wreckage. Merely being listed stays white for both, so the readout's own ring
     // keeps meaning "this one has a row" rather than doubling as a category.
-    vec3 attention = aKind > 1.5 ? uDebrisColor : uMarkColor;
+    //
+    // A featured object is the exception and keeps its own cool white. Amber would say
+    // "something is selected", which is the thing that is already legible; the cool
+    // white says *which*, and says it in the same colour as the mark, the orbit and
+    // the row. With no tags on the sky, colour is the only thing carrying that link.
+    vec3 attention = aFeatured > 0.5
+      ? uFeaturedColor
+      : (aKind > 1.5 ? uDebrisColor : uMarkColor);
     vColor = choir ? uChoirColor : ((hovered || marked) ? attention : uRingColor);
     // Markers leave as the sky is immersed: a mark eight times its size and gone soft
     // is nowhere near where picking thinks it is, and a pointer that lies is worse than
@@ -1347,6 +1358,7 @@ export class SkyScene {
       uRadius: this.uniforms.uRadius,
       uPixelRatio: this.uniforms.uPixelRatio,
       uRingPx: { value: HIGHLIGHT.diameterPx },
+      uFeaturedColor: { value: COLOR_FEATURED },
       uStrokePx: { value: HIGHLIGHT.strokePx },
       uChoirPx: { value: CHOIR.diameterPx },
       uChoirStrokePx: { value: CHOIR.strokePx },

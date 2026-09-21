@@ -1,4 +1,4 @@
-import { HIGHLIGHT, READOUT } from './config';
+import { FEATURED, HIGHLIGHT, READOUT } from './config';
 import type { SkyFrame } from './sky-frame';
 import type { Selection } from './selection';
 
@@ -49,6 +49,15 @@ export class Group {
   private countEl: HTMLElement;
   private pool: Row[] = [];
   private readonly rgb: string;
+  /**
+   * What a featured object's row turns instead. **The exception to "accent is amber"**,
+   * added 2026-09-21: the ISS keeps the cool white it wears on the sky and in its orbit,
+   * so one colour in three places is the whole link between a mark overhead and a name
+   * in the column. With no tags on the sky that link is carried by colour alone, and
+   * amber would have said only "something is selected" — which is the thing that was
+   * already hard to read.
+   */
+  private readonly featuredRgb: string;
   /** Is the pointer in this list right now. See `update` for what it decides. */
   private pointerInside = false;
 
@@ -57,9 +66,12 @@ export class Group {
     look: { shape: string; tone: string; accent: string },
     private defaultRows: number,
     private names: string[],
-    private selection: Selection
+    private selection: Selection,
+    /** 1 on a featured object, indexed like `names`. See FEATURED. */
+    private featured: Uint8Array
   ) {
     this.rgb = channels(look.accent);
+    this.featuredRgb = channels(FEATURED.color);
     this.element = document.createElement('section');
     this.element.className = 'group';
     // Two colours on the section: what the rows rest at, and what attention looks like.
@@ -168,7 +180,8 @@ export class Group {
         continue;
       }
       const alpha = i === hovered ? 1 : brightness(frame.elevation[i]!);
-      row.el.style.setProperty('--accent', `rgba(${this.rgb}, ${alpha.toFixed(2)})`);
+      const rgb = this.featured[i] === 1 ? this.featuredRgb : this.rgb;
+      row.el.style.setProperty('--accent', `rgba(${rgb}, ${alpha.toFixed(2)})`);
       const azDeg = ((deg(frame.azimuth[i]!) % 360) + 360) % 360;
       const rate = frame.rangeRate[i]!;
       row.data.textContent =
