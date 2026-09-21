@@ -255,11 +255,17 @@ export async function run(status: StatusFn): Promise<void> {
       scene.setTracks(tracks);
     }
 
-    // What the voices are doing reaches the rings here: `audio.update` runs after the
-    // draw, so these are last frame's levels. Sixteen milliseconds behind a sound is
-    // not a lag anyone can see, and the drone keeps reading the heading it was just
-    // drawn with, which is the ordering that does matter.
+    // What the voices are doing reaches the image here, both halves of it at once:
+    // the rings on the sky and the bars in the column, from the one map, on the one
+    // frame. `hud.update` above runs at 4 Hz, which is right for names and ordering
+    // and hopeless for a level - a bird's whole phrase can pass between two of those
+    // ticks, which is what made the bars read as laggy beside their own rings.
+    //
+    // `audio.update` runs after the draw, so these are last frame's levels. Sixteen
+    // milliseconds behind a sound is not a lag anyone can see, and the drone keeps
+    // reading the heading it was just drawn with, which is the ordering that matters.
     scene.setPulses(audio.pulses);
+    hud.pulse();
     scene.render();
 
     // The canvas now holds a sky. Whatever is covering it can go.

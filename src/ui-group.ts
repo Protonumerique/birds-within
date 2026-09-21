@@ -189,28 +189,9 @@ export class Group {
       row.el.classList.toggle('lit', !isOpen && i === hovered);
       row.name.textContent = this.names[i] ?? '—';
 
-      /*
-       * **The pulse.** A bar beside the name, filling with whatever this object is
-       * *actually* sounding - see AUDIO.performer.meter. It is the strongest link the
-       * piece has between a mark overhead and a name in the column, because it is the
-       * one thing that could not be coincidence: the row moves when the sound does.
-       *
-       * It also says which *kind* of thing you kept without a word: a bird pulses in
-       * phrases, a machine knocks steadily, a shard breathes, the ISS thumps every few
-       * seconds. Nothing in the panel had that before.
-       *
-       * Quantised to 64 steps so a still voice stops writing style at all - the
-       * envelope moves continuously and the DOM does not need to know every value.
-       */
-      const raw = this.levelOf(i);
-      const lvl = Math.round(raw * 64) / 64;
-      if (lvl !== row.lastLevel) {
-        row.lastLevel = lvl;
-        row.el.style.setProperty('--lvl', String(lvl));
-        // No voice, no bar. An object past `maxVoices` is kept and silent, and drawing
-        // it an empty bar would claim it was sounding at zero.
-        row.el.classList.toggle('sounding', raw > 0);
-      }
+      // The pulse, so a row built this frame is not blank until the next one. Every
+      // other frame it is `pulse()` that keeps it moving - see there.
+      this.paintLevel(row, i);
 
       // A closed row drops its inline override and rests at the group's own colours.
       if (!isOpen) {
@@ -226,5 +207,49 @@ export class Group {
         `${deg(frame.elevation[i]!).toFixed(0)}° ${azDeg.toFixed(0)}°${compass(azDeg)} ` +
         `${frame.range[i]!.toFixed(0)}km ${rate >= 0 ? '+' : ''}${rate.toFixed(1)}`;
     }
+  }
+
+  /**
+   * Repaint the bars and nothing else, for **every** frame.
+   *
+   * `update` runs at 4 Hz, which is right for names, ordering and the numbers on an
+   * open row - those are read, and rebuilding that DOM every frame is waste. It is
+   * badly wrong for a level: a bird's phrase of three chirps is over inside 400 ms, so
+   * at 4 Hz the bar catches one of them and reads as a single slow swell. The ring on
+   * the same object runs at frame rate and is plainly livelier, which is exactly how
+   * the mismatch shows up - two readings of one number disagreeing.
+   *
+   * This walks the rows already on screen and writes one custom property on the few
+   * that are sounding. No layout, no rebuild, nothing sorted.
+   */
+  pulse(): void {
+    for (let r = 0; r < this.listed.length; r++) {
+      const row = this.pool[r];
+      if (row && row.index >= 0) this.paintLevel(row, row.index);
+    }
+  }
+
+  /**
+   * The pulse: a bar beside the name, filling with whatever this object is sounding.
+   * It is the strongest link the piece has between a mark overhead and a name in the
+   * column, because it is the one thing that could not be coincidence: the row moves
+   * when the sound does.
+   *
+   * It also says which *kind* of thing you kept without a word: a bird pulses in
+   * phrases, a machine knocks steadily, a shard breathes, the ISS thumps every few
+   * seconds. Nothing in the panel had that before.
+   *
+   * Quantised to 64 steps so a still voice stops writing style at all - the envelope
+   * moves continuously and the DOM does not need to know every value.
+   */
+  private paintLevel(row: Row, i: number): void {
+    const raw = this.levelOf(i);
+    const lvl = Math.round(raw * 64) / 64;
+    if (lvl === row.lastLevel) return;
+    row.lastLevel = lvl;
+    row.el.style.setProperty('--lvl', String(lvl));
+    // No voice, no bar. An object past `maxVoices` is kept and silent, and drawing it
+    // an empty bar would claim it was sounding at zero.
+    row.el.classList.toggle('sounding', raw > 0);
   }
 }

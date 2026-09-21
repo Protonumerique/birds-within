@@ -1125,10 +1125,39 @@ saturated from ten upward, so voices eleven to fifteen arrive at full and the su
 linearly. Measured, 500 belt objects, RMS over the settled tail — see the table under
 *The drone*.
 
+**It has to be written every frame, and that was a real bug for a day.** The bars first
+rode `hud.update`, which runs at **4 Hz** — right for names, ordering and the numbers on
+an open row, all of which are read rather than watched, and hopeless for a level. A
+bird's phrase of three chirps is over inside 400 ms, so at four samples a second the bar
+caught one of them and read as a single slow swell. Reported exactly as it behaves:
+"weird delay… as if they'd only react very slowly and laggy, even jagged. Sometimes they
+just go up and then go down once, even if the voice has three fast chirps."
+
+**The ring on the same object is what made it obvious.** It had been driven from the
+frame loop since the day it was built, so the two readings of one number visibly
+disagreed — and a mismatch between them is worse than either being slow, because the
+whole point of the pair is that they move together.
+
+So `Group.pulse` and `Hud.pulse` write the bars and nothing else, from the frame loop,
+beside `scene.setPulses`. No layout, no rebuild, nothing sorted: a custom property on the
+few rows that are sounding. `update` still paints a row it has just built, so a new one
+is not blank for a frame. Measured on the same two objects before and after, counting how
+often `--lvl` actually changed:
+
+| | 4 Hz | per frame |
+|---|---|---|
+| SYNTH NAV-91591 | 3.2 /s, 13 distinct | 7.9 /s, 18 distinct |
+| SYNTH NAV-91587 | 2.2 /s, 11 distinct | 5.0 /s, 18 distinct |
+
+The old numbers are against a hard ceiling of 4; the new ones are against the frame rate,
+which on this software rasteriser is **13.6 fps** — so the bar now changes on about 58%
+of frames, and on a real display it writes at 60 Hz. The 1/64 quantiser is not what
+limits it: a step is 0.23 px on a 15 px bar.
+
 **This is the only thing in the app that flows from the sound back to the image.**
 Everything else goes one way, the frame driving the sound. The seam is deliberately
-narrow: `AudioEngine.level(index)`, one number, cached per update, and the panel is its
-only reader. `--lvl` is quantised to 64 steps so a still voice stops writing style at
+narrow: `AudioEngine.level(index)`, one number, cached per update, read by the panel and
+by the rings and by nothing else. `--lvl` is quantised to 64 steps so a still voice stops writing style at
 all.
 
 The belt's solos are **not** metered: they have grid squares rather than rows, so there

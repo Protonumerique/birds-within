@@ -11,6 +11,13 @@ const pad = (n: number) => String(n).padStart(2, '0');
 
 export interface Hud {
   update(date: Date, frame: SkyFrame | null): void;
+  /**
+   * Repaint the pulse bars, and only those. Called **every frame**, unlike `update`,
+   * which runs at 4 Hz - a level sampled four times a second misses most of a bird's
+   * phrase and reads as laggy beside the ring on the same object, which runs at frame
+   * rate. See `Group.pulse`.
+   */
+  pulse(): void;
   /** What wears a ring on the sky: every row on show, plus anything kept or pointed at. */
   ringed(): readonly number[];
   /** Every belt object above the sky's floor - what the grid shows, and what sings. */
@@ -292,6 +299,11 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
       if (hovered >= 0 && frame.elevation[hovered]! > lowestVisible && ringed.indexOf(hovered) < 0) {
         ringed.push(hovered);
       }
+    },
+
+    pulse() {
+      passingGroup.pulse();
+      debrisGroup.pulse();
     },
   };
 }
