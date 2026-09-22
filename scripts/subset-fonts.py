@@ -4,7 +4,7 @@ Cut the web fonts down to the characters this piece actually draws, and write th
 committed woff2 files.
 
     pip install fonttools brotli
-    python3 scripts/subset-fonts.py vendor/satoshi
+    python3 scripts/subset-fonts.py fonts-in
 
 `public/fonts/*.woff2` is **committed**, like `public/data/synthetic.bin` and for the
 same reason: a fresh clone has to run, and there is no build step that could make a
@@ -14,7 +14,8 @@ knows how it was cut or how to cut it again.
 
 The sources themselves are **not** committed. They are a few hundred KB of .otf per
 weight and nothing reads them at runtime; download them from the foundry when a
-re-cut is needed. `vendor/` is gitignored.
+re-cut is needed. `vendor/` is gitignored for that, and `fonts-in/` is the hand-off
+for a machine that cannot reach the foundry - see its README.
 
 **The subset is ASCII, and that is not a gamble.** Every glyph the UI draws was
 inventoried from the source strings - printable ASCII plus a handful of typographic
@@ -60,19 +61,30 @@ WEIGHTS = {400: "regular", 700: "bold"}
 
 
 def find(src: Path, want: str) -> Path:
-    """The one file in `src` whose name carries `want`, ignoring case and italics."""
+    """
+    The face in `src` that carries `want` in its name, searched recursively.
+
+    A foundry download is a zip of the same family several times over - OTF, TTF, a
+    variable file and ready-made webfonts, each in its own folder - so this has to
+    choose rather than complain. Static beats variable (the design wants two weights,
+    and two statics measured 16.7 KB against 23.0 for one variable file), outline
+    beats an already-cut webfont, and a shallower path beats a deeper one.
+    """
+    order = {".otf": 0, ".ttf": 1, ".woff2": 2}
     hits = [
         p
-        for p in sorted(src.iterdir())
-        if p.suffix.lower() in {".otf", ".ttf", ".woff2"}
+        for p in sorted(src.rglob("*"))
+        if p.suffix.lower() in order
         and want in p.stem.lower()
         and "italic" not in p.stem.lower()
+        and "variable" not in str(p).lower()
     ]
     if not hits:
-        raise SystemExit(f"no {want} face in {src} (looked at .otf, .ttf, .woff2)")
-    if len(hits) > 1:
-        raise SystemExit(f"several {want} faces in {src}: {[p.name for p in hits]}")
-    return hits[0]
+        raise SystemExit(
+            f"no {want} face under {src} - looked for .otf, .ttf and .woff2 "
+            f"with '{want}' in the name, skipping italics and variable files"
+        )
+    return min(hits, key=lambda p: (order[p.suffix.lower()], len(p.parts)))
 
 
 def main() -> None:
