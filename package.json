@@ -15,6 +15,7 @@
     "make:synthetic": "node scripts/make-synthetic.mjs",
     "validate": "node scripts/validate.mjs",
     "reference": "python3 scripts/reference.py > scripts/reference.json",
+    "subset:fonts": "python3 scripts/subset-fonts.py vendor/satoshi",
     "bench": "node scripts/bench.mjs"
   },
   "dependencies": {

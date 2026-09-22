@@ -9,3 +9,8 @@ dist/
 .catalog-cache/
 public/data/active.bin
 public/data/full.bin
+
+# Downloaded font sources. public/fonts/*.woff2 IS committed - the subset that ships -
+# but the few-hundred-KB .otf originals it is cut from are not; fetch them from the
+# foundry when a re-cut is needed. See scripts/subset-fonts.py.
+vendor/
