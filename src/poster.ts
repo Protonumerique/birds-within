@@ -1,4 +1,15 @@
-import { GATE, GROUP_LOOK, HIGHLIGHT, KIND_LOOK, PALETTE, SKY, TRAIL } from './config';
+import { FAMILY } from './catalog-format';
+import {
+  FAMILY_LOOK,
+  FEATURED,
+  GATE,
+  GROUP_LOOK,
+  HIGHLIGHT,
+  KIND_LOOK,
+  PALETTE,
+  SKY,
+  TRAIL,
+} from './config';
 
 /**
  * The drawing on the first screen: a poster of the sky, in the sky's own grammar.
@@ -164,10 +175,10 @@ function passes(): { marks: string; tracks: string; ring: string } {
   const n = GATE.poster.passing;
   const marks: string[] = [];
   const tracks: string[] = [];
-  // Whichever object the pointer has taken. One, high enough to be clearly in the
-  // image, and the only amber on the screen.
-  let ring = '';
-  let bestEl = -1;
+  // Nothing is picked out in here any more: the kept objects are `orbits()` below,
+  // which draws them on their own arcs rather than fishing the highest dot out of a
+  // crowd. This is the field they sit in.
+  const ring = '';
 
   for (let i = 0; i < n; i++) {
     const el = 90 * hash(i, 1) ** 1.35;
@@ -190,22 +201,138 @@ function passes(): { marks: string; tracks: string; ring: string } {
       );
     }
 
-    // The watched one, and the only amber on the screen. It has to survive every crop
-    // - see the note on the viewBox - so it is taken from a band across the middle of
-    // the frame rather than from whatever happens to be highest.
-    if (x > W * 0.54 && x < W * 0.7 && el > bestEl && el < 52) {
-      bestEl = el;
-      const d = HIGHLIGHT.diameterPx * 1.55;
-      const dx = 300;
-      ring =
-        `<path d="M${(x - dx).toFixed(1)} ${(cy + 96).toFixed(1)} Q ${x.toFixed(1)} ${(cy - 40).toFixed(1)} ` +
-        `${(x + dx).toFixed(1)} ${(cy + 74).toFixed(1)}" fill="none" stroke="${HIGHLIGHT.markColor}" ` +
-        `stroke-width="1.4" opacity="0.5"/>` +
-        `<circle cx="${x.toFixed(1)}" cy="${cy.toFixed(1)}" r="${(d / 2).toFixed(1)}" fill="none" ` +
-        `stroke="${HIGHLIGHT.markColor}" stroke-width="${HIGHLIGHT.strokePx * 1.4}" opacity="0.92"/>`;
-    }
   }
   return { marks: marks.join(''), tracks: tracks.join(''), ring };
+}
+
+/**
+ * The white rings the readout puts on whatever it is listing - a loose cluster near
+ * the middle, which is the shape the panel actually makes when a dozen objects are
+ * high at once. Merely being listed is white for every kind; the colours below are
+ * attention, and attention is a different thing.
+ */
+function listed(): string {
+  const parts: string[] = [];
+  for (let i = 0; i < GATE.poster.listed; i++) {
+    const a = hash(i, 20) * Math.PI * 2;
+    const rad = 26 + hash(i, 21) ** 0.7 * 150;
+    const cx = W * 0.47 + Math.cos(a) * rad * 1.5;
+    const cy = y(46) + Math.sin(a) * rad * 0.8;
+    const d = HIGHLIGHT.diameterPx * (0.9 + hash(i, 22) * 0.5);
+    parts.push(
+      `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${(d / 2).toFixed(1)}" fill="none" ` +
+        `stroke="${HIGHLIGHT.color}" stroke-width="${HIGHLIGHT.strokePx * 1.3}" opacity="0.8"/>` +
+        light(cx, cy, 1.9, PALETTE.lit, 0.9, 1)
+    );
+  }
+  return parts.join('');
+}
+
+/**
+ * **The kept objects, and this is what the cover is now of.**
+ *
+ * Rewritten 2026-09-22, from the whole dome seen at once to the piece **zoomed in** -
+ * which is how anyone actually looks at it, and what the two screenshots that prompted
+ * this were of. A handful of long shallow arcs crossing the frame, each ending in a
+ * ring, in the colours the sky gives them: violet for Starlink, green for Military,
+ * amber for a satellite with no family, pink for wreckage. See *The constellation
+ * narrative*.
+ *
+ * It is the strongest thing the cover can say about the piece. A crowd of dots says
+ * "there are a lot of them", which the frame behind already says; a few chosen orbits
+ * say **somebody picked these out of twenty thousand**, which is the whole gesture.
+ *
+ * Every arc spans the full width and then some, so no crop can leave one dangling -
+ * the ring is what has to sit inside the surviving band, and does.
+ */
+function orbits(): { arcs: string; rings: string } {
+  const arcs: string[] = [];
+  const rings: string[] = [];
+
+  /*
+   * Colour, the elevation its arc crosses the middle at, where the ring sits as a
+   * fraction of the frame's width, and how hard the arc bows. Ordered back to front,
+   * so the loud ones are drawn last.
+   *
+   * **`atX` is the width fraction, not a curve parameter**, and it can be because the
+   * control point is the midpoint of the two ends: a quadratic with `cx` halfway is
+   * exactly *linear* in x, so t falls straight out of the target. Writing the position
+   * as a curve parameter meant guessing, and the guesses put two of the four rings
+   * under the text column and a third off the right edge.
+   *
+   * **Every one sits between 0.44 and 0.63 of the width, and that window is narrow
+   * because it is the intersection of two crops pulling opposite ways.** The copy
+   * occupies the left third on a laptop, so a ring has to be past 0.42. A phone shows
+   * about a centred third, so it has to be under 0.65. Spread them wider than that -
+   * the first attempt put them at 0.53 to 0.86 - and a phone keeps three of the four
+   * *arcs* while cropping away their rings, which is the failure this file already
+   * records once for the single amber ring: a coloured line crossing the frame with
+   * nothing on it reads as a stray mark rather than as an orbit somebody chose.
+   *
+   * They are separated by elevation instead, which the crop never takes.
+   */
+  const kept = [
+    { color: FAMILY_LOOK[FAMILY.STARLINK]!, el: 40, atX: 0.45, bow: -150, debris: false },
+    { color: HIGHLIGHT.markColor, el: 52, atX: 0.62, bow: -46, debris: false },
+    { color: FAMILY_LOOK[FAMILY.MILITARY]!, el: 33, atX: 0.55, bow: -58, debris: false },
+    { color: HIGHLIGHT.debrisMarkColor, el: 24, atX: 0.60, bow: 30, debris: true },
+  ].slice(0, GATE.poster.orbits);
+
+  for (const [i, k] of kept.entries()) {
+    // Off the left edge to off the right, bowed a little - a pass seen close is very
+    // nearly a straight line, which is exactly what the screenshots show.
+    const x0 = -160;
+    const x1 = W + 160;
+    const tilt = (hash(i, 30) - 0.5) * 230;
+    const y0 = y(k.el) + tilt + 90;
+    const y1 = y(k.el) - tilt - 90;
+    const cx = (x0 + x1) / 2;
+    const cyc = (y0 + y1) / 2 + k.bow;
+    arcs.push(
+      `<path d="M${x0} ${y0.toFixed(1)} Q ${cx.toFixed(1)} ${cyc.toFixed(1)} ${x1} ${y1.toFixed(1)}" ` +
+        `fill="none" stroke="${k.color}" stroke-width="${TRAIL.widthPx * 1.15}" ` +
+        `opacity="${TRAIL.opacity + 0.3}" stroke-linecap="round"/>`
+    );
+
+    // The mark, on the curve rather than near it: the quadratic evaluated at the t
+    // that reaches `atX`, so the ring can never float off its own orbit.
+    const t = (k.atX * W - x0) / (x1 - x0);
+    const mx = (1 - t) ** 2 * x0 + 2 * (1 - t) * t * cx + t ** 2 * x1;
+    const my = (1 - t) ** 2 * y0 + 2 * (1 - t) * t * cyc + t ** 2 * y1;
+    const d = HIGHLIGHT.diameterPx * 1.35;
+    rings.push(
+      (k.debris
+        ? shard(mx, my, 5.2 * KIND_LOOK.debris.size, 0.95, 26, i * 5)
+        : light(mx, my, 2.6, k.color, 0.95, 1.2)) +
+        `<circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="${(d / 2).toFixed(1)}" fill="none" ` +
+        `stroke="${k.color}" stroke-width="${HIGHLIGHT.strokePx * 1.5}" opacity="0.95"/>`
+    );
+  }
+  return { arcs: arcs.join(''), rings: rings.join('') };
+}
+
+/**
+ * **The one with people in it.** A larger mark in its own cool white, with the wider
+ * orbit it always carries while it is up - the only object on the cover that is not
+ * there because somebody clicked it. See *The one with people in it*.
+ */
+function station(): string {
+  const el = 62;
+  const x0 = -160;
+  const x1 = W + 160;
+  const y0 = y(el) + 210;
+  const y1 = y(el) - 130;
+  const cx = W * 0.44;
+  const cyc = y(el) - 96;
+  const t = 0.62;
+  const mx = (1 - t) ** 2 * x0 + 2 * (1 - t) * t * cx + t ** 2 * x1;
+  const my = (1 - t) ** 2 * y0 + 2 * (1 - t) * t * cyc + t ** 2 * y1;
+  return (
+    `<path d="M${x0} ${y0.toFixed(1)} Q ${cx.toFixed(1)} ${cyc.toFixed(1)} ${x1} ${y1.toFixed(1)}" ` +
+    `fill="none" stroke="${FEATURED.color}" stroke-width="${FEATURED.trackWidthPx}" ` +
+    `opacity="${FEATURED.trackOpacity}" stroke-linecap="round"/>` +
+    light(mx, my, 4.6, FEATURED.color, 1, 1.5)
+  );
 }
 
 /** The wreckage, spread wider and lower than the payloads, and turning. */
@@ -233,7 +360,8 @@ function shards(): string {
  * the haze over all of it, and the dome last so its structure survives to the horizon.
  */
 export function posterSvg(): string {
-  const { marks, tracks, ring } = passes();
+  const { marks, tracks } = passes();
+  const { arcs, rings } = orbits();
   return (
     `<svg class="poster" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMax slice" ` +
     `aria-hidden="true" focusable="false">` +
@@ -255,9 +383,13 @@ export function posterSvg(): string {
     `<rect width="${W}" height="${H}" fill="url(#dome)"/>` +
     // Everything that moves drifts, very slowly. The belt is not in this group: those
     // objects never rise and never set, and the poster says so by holding them still.
-    `<g class="drift">${tracks}${marks}${shards()}</g>` +
+    // Tracks under the marks, which is the piece's own render order since 2026-09-18:
+    // a line drawn across its own satellite puts ink on the thing being looked at.
+    `<g class="drift">${arcs}${tracks}${marks}${shards()}</g>` +
     belt() +
-    ring +
+    station() +
+    listed() +
+    rings +
     `<rect x="0" y="${y(SKY.haze.topDeg)}" width="${W}" height="${H - y(SKY.haze.topDeg)}" fill="url(#haze)"/>` +
     `<rect x="0" y="${HORIZON}" width="${W}" height="${H - HORIZON}" fill="${PALETTE.sky}"/>` +
     graticule() +

@@ -188,12 +188,27 @@ export const GATE = {
    * a photograph of what is behind it reads as a substitute rather than as a cover.
    */
   poster: {
-    /** Passing objects. Enough that it reads as a crowd, few enough to stay a drawing. */
-    passing: 260,
+    /**
+     * Passing objects. Raised from 260 on 2026-09-22 along with the whole framing:
+     * the poster used to be the dome seen whole, and is now the piece **zoomed in**,
+     * which is how anyone actually looks at it. A closer field wants more grains and
+     * smaller ones, so the frame reads as a depth of sky rather than as a scatter of
+     * dots on a card.
+     */
+    passing: 420,
     /** Fragments, drawn as the shards they are on the sky. */
-    shards: 42,
+    shards: 34,
     /** The belt, as the fixed arc across the south it actually is. */
-    belt: 48,
+    belt: 90,
+    /**
+     * The kept objects: the long shallow arcs that cross the frame, each ending in a
+     * ring. This is what the cover is *of* now - not a crowd, but a handful of things
+     * somebody chose out of twenty thousand, which is the gesture the whole piece is
+     * built around. Each names its colour from the same constants the sky uses.
+     */
+    orbits: 4,
+    /** White rings on objects the readout is listing. A cluster, as the panel makes. */
+    listed: 11,
     /** Fixed, so the poster is the same drawing every time the page is opened. */
     seed: 19,
   },

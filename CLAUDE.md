@@ -878,11 +878,12 @@ nothing — it renders a title, a drawing, four sentences and a LAUNCH button �
 WASM propagator, the worker and the packed catalogue. `src/piece.ts` is the old `main`,
 `src/gate.ts` is the screen, `src/poster.ts` is the drawing.
 
-**Measured, on the production build: 24.3 KB before the press**, of which **13.8 KB is
+**Measured, on the production build: 25.0 KB before the press**, of which **13.8 KB is
 the typeface** — see *The typeface* under **The panel**. The page (559 B), the
-stylesheet (3.0 KB gzipped), a 16.4 KB entry chunk (7.2 gzipped) and two woff2 faces.
-Without the fonts it is 10.5 KB, which is the figure this line carried until
-2026-09-22.
+stylesheet (3.0 KB gzipped), an 18.1 KB entry chunk (7.6 gzipped) and two woff2 faces.
+Without the fonts it is 11.2 KB. It was 10.5 before the typeface and 10.4 before the
+poster was rewritten — that last 0.6 KB is the cover's own drawing code, which is the
+one thing in the entry chunk that exists purely to be looked at.
 
 **Nothing blocks on the fonts**, which is what makes that affordable: `font-display:
 swap` paints the fallback immediately and reflows when the face lands, so a visitor who
@@ -938,14 +939,44 @@ hash the point shader uses.
 changes, and a cover showing a photograph of what is behind it reads as a substitute for
 the thing rather than as a way in to it.
 
+**Rewritten 2026-09-22: it is the piece zoomed in, not the dome seen whole.** What it
+draws now is what the two screenshots that prompted the change were of — a handful of
+long, shallow, nearly-straight arcs crossing the frame, each ending in a ring, in the
+colours the sky gives them. Violet for Starlink, green for Military, amber for a
+satellite with no family, pink for wreckage, and the ISS's own cool white across the top
+with the wider orbit it always carries. Behind them a finer field (420 marks against
+260), a cluster of white rings where the readout is listing, and the belt as a scatter
+low in the frame.
+
+**A crowd of dots says "there are a lot of them", which the frame already says. A few
+chosen orbits say somebody picked these out of twenty thousand**, which is the gesture
+the whole piece is built around — and it puts the family colours on the cover, where
+they are the newest thing the piece has to show.
+
 **The viewBox is anchored at the horizon** (`xMidYMax slice`), because a hero frame is
 wider than 16:9 and something has to be cropped: the zenith can go, the horizon cannot —
 it is what the image measures itself against. Hence the deliberately thin strip of ground
 at the bottom of the viewBox. What survives: a 16:9 frame shows all of it, a wide hero the
-bottom two thirds, a phone the full height and about a third of the width, centred. **The
-amber ring is placed inside that intersection rather than wherever the highest object
-happens to be** — the first version put it on the highest, and a 1600×620 hero cropped it
-away entirely while leaving its track visible, which reads as a stray orange line.
+bottom two thirds, a phone the full height and about a third of the width, centred.
+
+**Every ring sits between 0.44 and 0.63 of the width, and that window is narrow because
+it is the intersection of two crops pulling opposite ways.** The copy occupies the left
+third on a laptop, so a ring has to clear 0.42; a phone shows a centred third, so it has
+to stay under 0.65. This is the second time that trap has been paid for. The first
+version put the single amber ring on whatever object happened to be highest, and a
+1600×620 hero cropped it away while leaving its track visible — a stray orange line. The
+rewrite repeated it at four times the scale: rings spread from 0.53 to 0.86 kept all four
+at 1600×620 and at 1280×720, and at 390×780 kept **one of four**, leaving three coloured
+arcs crossing the frame with nothing on them. Measured at all three shapes, every time:
+11 white rings and 4 colours, all in view.
+
+They are separated by **elevation** instead, which no crop takes.
+
+**`atX` is a width fraction, not a curve parameter**, and it can be because each arc's
+control point is the midpoint of its two ends: a quadratic with `cx` halfway is exactly
+*linear* in x, so t falls straight out of the target. Writing the position as a curve
+parameter meant guessing, and the guesses put two rings under the text column and a third
+off the right edge.
 
 ### Where you are standing
 
