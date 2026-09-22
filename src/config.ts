@@ -918,6 +918,69 @@ export const GROUP_LOOK = {
   belt: { shape: 'dot', tone: PALETTE.geostationary, accent: PALETTE.geostationary },
 } as const;
 
+/**
+ * **The constellation narrative: which family a kept object belongs to, said in the
+ * attention colour.** Added 2026-09-22.
+ *
+ * This changes **nothing about the resting sky**. A satellite that nobody has touched
+ * is warm white whatever family it is in; the point sprite has no attention colour at
+ * all. What a family colour reaches is the three places that already say *you kept
+ * this* - the **ring**, the **track** and the **row** - so it is a refinement of an
+ * axis that exists rather than a new meaning laid over the image.
+ *
+ * That is why it fits. `HIGHLIGHT.markColor` (amber) already means "you touched a
+ * satellite" and `debrisMarkColor` (pink) "you touched wreckage": the attention hue
+ * has always said *what kind of thing* this is. A family hue says it more precisely.
+ *
+ * **`null` means no colour of its own** - the object falls back to the ordinary rule,
+ * amber or pink by `kind`. Most families are null and that is the point: a colour is
+ * spent on a story worth telling, not on every row of a taxonomy.
+ *
+ * **Measured, not chosen by eye.** These had to stand clear of everything a mark can
+ * already be - amber, pink, the ISS's cool white, the belt's blue, resting warm white,
+ * the shard's brown and the eclipsed grey - because a kept object sits in a field of
+ * unkept ones. In CIELAB, by CIEDE2000, the nearest existing colour is dE 28.5, 25.0
+ * and 25.4 respectively, and the worst separation *between* the three is 30.2. Around
+ * 18 is where two colours stop being reliably tellable apart at sixteen pixels.
+ *
+ * The saturations are not uniform and should not be: only a handful of objects are
+ * kept at once, so none of these ever covers the frame the way a resting colour would.
+ * Iridium is deliberately the loud one.
+ */
+export const FAMILY_LOOK: Record<Family, string | null> = {
+  [FAMILY.NONE]: null,
+  /** 11,110 objects on 2026-09-22 - 52.9% of the catalogue, and all of it one company. */
+  [FAMILY.STARLINK]: '#6b51b8',
+  /** 190, of which 109 are fragments of the 2009 collision. The loud one. */
+  [FAMILY.IRIDIUM]: '#c6f910',
+  /**
+   * 211 objects, 210 of them payloads - and getting to that number took the one
+   * piece of editorial judgement in the whole family table. CelesTrak publishes no
+   * all-military group, its `military` group is a leftover bucket of 24, and the
+   * `radar` group that used to feed this family is ten passive calibration spheres.
+   * The first object ever to rise wearing this colour was CALSPHERE 1, a 1964
+   * aluminium ball. It is now `military` plus YAOGAN and `USA ###` by name, and
+   * deliberately **not** COSMOS. See FAMILIES in catalog-sources.mjs for why.
+   *
+   * 19 of the 211 sit in the geosynchronous belt and stay blue there - belonging to
+   * the belt outranks family, exactly as it does in the sound, where audio.ts routes
+   * on the choir byte and a belt object never reaches a family voice at all.
+   */
+  [FAMILY.MILITARY]: '#46a466',
+  // Tagged and packed, but no colour yet: three stories at once is already the most
+  // the palette can hold apart. The byte is ready when one of them earns a slot.
+  [FAMILY.GNSS]: null,
+  [FAMILY.WEATHER]: null,
+  [FAMILY.SCIENCE]: null,
+};
+
+/** The families that actually carry a colour, in the order the legend lists them. */
+export const FAMILY_LEGEND = [
+  { family: FAMILY.STARLINK, label: 'STARLINK' },
+  { family: FAMILY.IRIDIUM, label: 'IRIDIUM' },
+  { family: FAMILY.MILITARY, label: 'MILITARY' },
+] as const;
+
 export const TRAIL = {
   /** Minutes of past track to draw. */
   pastMinutes: 35,
@@ -991,6 +1054,13 @@ const FAMILY_VOICE: Record<Family, 'none' | 'starlink' | 'iridium' | 'military'>
   [FAMILY.STARLINK]: 'starlink',
   [FAMILY.IRIDIUM]: 'iridium',
   [FAMILY.MILITARY]: 'military',
+  // Colour and voice are separate axes, and these three arrived with a colour only.
+  // They keep the default whistle until the calls exist to give them - *More of them*
+  // on the roadmap. A family that looks distinct and sounds like everything else is
+  // an honest half-finished thing; one that sounds distinct by accident is not.
+  [FAMILY.GNSS]: 'none',
+  [FAMILY.WEATHER]: 'none',
+  [FAMILY.SCIENCE]: 'none',
 };
 
 /**

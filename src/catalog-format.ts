@@ -114,7 +114,15 @@ export const KIND = { OTHER: 0, ROCKET_BODY: 1, DEBRIS: 2 } as const;
  *
  * Adding a family is a row in that table and a voice in AUDIO.performer.voices.
  */
-export const FAMILY = { NONE: 0, STARLINK: 1, IRIDIUM: 2, MILITARY: 3 } as const;
+export const FAMILY = {
+  NONE: 0,
+  STARLINK: 1,
+  IRIDIUM: 2,
+  MILITARY: 3,
+  GNSS: 4,
+  WEATHER: 5,
+  SCIENCE: 6,
+} as const;
 export type Family = (typeof FAMILY)[keyof typeof FAMILY];
 export type Kind = (typeof KIND)[keyof typeof KIND];
 

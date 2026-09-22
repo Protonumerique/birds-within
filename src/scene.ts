@@ -2,7 +2,41 @@ import * as THREE from 'three';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
-import { BLOOM, CHOIR, FEATURED, GHOST, GLOW, HIGHLIGHT, IMMERSION, INTERFERENCE, KIND_LOOK, PALETTE, SKY, TRAIL } from './config';
+import {
+  BLOOM,
+  CHOIR,
+  FAMILY_LOOK,
+  FEATURED,
+  GHOST,
+  GLOW,
+  HIGHLIGHT,
+  IMMERSION,
+  INTERFERENCE,
+  KIND_LOOK,
+  PALETTE,
+  SKY,
+  TRAIL,
+} from './config';
+
+/**
+ * How many family slots the ring shader loops over. Taken from FAMILY_LOOK rather
+ * than written down, so adding a family to the catalogue cannot leave the shader
+ * reading past the end of its own table.
+ */
+const FAMILY_COUNT = Object.keys(FAMILY_LOOK).length;
+
+/**
+ * FAMILY_LOOK as the shader wants it: one vec4 per family value, rgb for the colour
+ * and alpha as "does this family have one at all". Built once at module load, because
+ * a family's colour is a decision in config and never changes at runtime.
+ */
+const FAMILY_COLORS = Object.entries(FAMILY_LOOK)
+  .sort(([a], [b]) => Number(a) - Number(b))
+  .map(([, hex]) => {
+    if (!hex) return new THREE.Vector4(0, 0, 0, 0);
+    const c = new THREE.Color(hex);
+    return new THREE.Vector4(c.r, c.g, c.b, 1);
+  });
 import { NO_POSITION, directionFromAltAz, type SkyFrame } from './sky-frame';
 import type { FramePair } from './sky-stream';
 import { pickNearest } from './picking';
@@ -647,6 +681,12 @@ const RING_VERT = /* glsl */ `
   attribute float aKind;
   /** 1 on a featured object. See FEATURED. */
   attribute float aFeatured;
+  /**
+   * Which family this object is in, as a FAMILY value. Set once at init from the
+   * catalogue's own byte and never touched again - it is a permanent fact about the
+   * object, like aChoir and aKind.
+   */
+  attribute float aFamily;
 
   uniform float uRadius;
   uniform float uPixelRatio;
@@ -660,6 +700,12 @@ const RING_VERT = /* glsl */ `
   uniform vec3 uChoirColor;
   /** A featured object's attention colour: its own cool white, never amber. */
   uniform vec3 uFeaturedColor;
+  /**
+   * The attention colour per family, indexed by FAMILY value, with the alpha flagging
+   * whether that family has one at all. See FAMILY_LOOK - most do not, and fall back
+   * to amber or pink by kind.
+   */
+  uniform vec4 uFamilyColor[${FAMILY_COUNT}];
   uniform float uDimAtHorizon;
   uniform float uFullBright;
 
@@ -715,9 +761,29 @@ const RING_VERT = /* glsl */ `
     // "something is selected", which is the thing that is already legible; the cool
     // white says *which*, and says it in the same colour as the mark, the orbit and
     // the row. With no tags on the sky, colour is the only thing carrying that link.
+    /*
+     * What colour "you kept this" is, in order of who outranks whom:
+     *
+     *   1. a featured object keeps its own cool white - identity outranks attention,
+     *      which is the one place the attention rule already bends;
+     *   2. then its family, if that family has been given a colour at all;
+     *   3. then wreckage pink, from the kind byte;
+     *   4. then amber, which is what attention has always meant.
+     *
+     * Family sits above kind rather than below it on purpose. 109 of the 190 Iridium
+     * objects are fragments of the 2009 collision, so under the other ordering the
+     * constellation's own wreckage would read as anonymous debris - and the *shape*
+     * already says shard, so nothing is lost by letting hue carry the family instead.
+     */
+    int fam = int(aFamily + 0.5);
+    vec4 familyColor = uFamilyColor[0];
+    for (int f = 0; f < ${FAMILY_COUNT}; f++) {
+      if (f == fam) { familyColor = uFamilyColor[f]; break; }
+    }
+    vec3 byKind = aKind > 1.5 ? uDebrisColor : uMarkColor;
     vec3 attention = aFeatured > 0.5
       ? uFeaturedColor
-      : (aKind > 1.5 ? uDebrisColor : uMarkColor);
+      : (familyColor.a > 0.5 ? familyColor.rgb : byKind);
     vColor = choir ? uChoirColor : ((hovered || marked) ? attention : uRingColor);
     // Markers leave as the sky is immersed: a mark eight times its size and gone soft
     // is nowhere near where picking thinks it is, and a pointer that lies is worse than
@@ -1168,6 +1234,8 @@ export class SkyScene {
   private kindAttribute: THREE.BufferAttribute;
   /** 1 on a featured object - the ISS, and whatever joins it. See FEATURED. */
   private featuredAttribute: THREE.BufferAttribute;
+  /** Per-object FAMILY value. Set once; the ring shader reads it. See FAMILY_LOOK. */
+  private familyAttribute: THREE.BufferAttribute;
   private marked: number[] = [];
   /**
    * (object index, level) pairs for the rings that are sounding, read straight by the
@@ -1380,6 +1448,10 @@ export class SkyScene {
     const ringsGeom = withTicks(new THREE.BufferGeometry());
     this.markAttribute = new THREE.BufferAttribute(new Float32Array(count), 1).setUsage(THREE.DynamicDrawUsage);
     ringsGeom.setAttribute('aMark', this.markAttribute);
+    // Family rides on the rings alone: the point sprite has no attention colour, so
+    // nothing about a resting mark depends on which constellation it belongs to.
+    this.familyAttribute = new THREE.BufferAttribute(new Float32Array(count), 1);
+    ringsGeom.setAttribute('aFamily', this.familyAttribute);
     // A ring per object is the ceiling: the readout's rows, every mark, and the hover.
     this.highlightIndex = new THREE.BufferAttribute(new Uint32Array(count), 1).setUsage(THREE.DynamicDrawUsage);
     ringsGeom.setIndex(this.highlightIndex);
@@ -1403,6 +1475,7 @@ export class SkyScene {
       uDimAtHorizon: { value: HIGHLIGHT.dimAtHorizon },
       uFullBright: { value: THREE.MathUtils.degToRad(HIGHLIGHT.fullBrightDeg) },
       uMarkers: { value: 1 },
+      uFamilyColor: { value: FAMILY_COLORS },
       uPulses: { value: this.pulseSlots },
       uPulseCount: { value: 0 },
       uPulseSwell: { value: HIGHLIGHT.pulse.swell },
@@ -1668,19 +1741,22 @@ export class SkyScene {
    * fixed by the catalogue, so this is called once and the shader does the rest -
    * the CPU never touches appearance again.
    */
-  setClasses(choir: Uint8Array, kind: Uint8Array, featured: Uint8Array): void {
+  setClasses(choir: Uint8Array, kind: Uint8Array, featured: Uint8Array, family: Uint8Array): void {
     const choirFlags = this.choirAttribute.array as Float32Array;
     const kinds = this.kindAttribute.array as Float32Array;
     const featuredFlags = this.featuredAttribute.array as Float32Array;
+    const families = this.familyAttribute.array as Float32Array;
     const n = Math.min(choir.length, choirFlags.length);
     for (let i = 0; i < n; i++) {
       choirFlags[i] = choir[i]!;
       kinds[i] = kind[i] ?? 0;
       featuredFlags[i] = featured[i] ?? 0;
+      families[i] = family[i] ?? 0;
     }
     this.choirAttribute.needsUpdate = true;
     this.kindAttribute.needsUpdate = true;
     this.featuredAttribute.needsUpdate = true;
+    this.familyAttribute.needsUpdate = true;
   }
 
   /**

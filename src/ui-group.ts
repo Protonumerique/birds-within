@@ -1,4 +1,4 @@
-import { FEATURED, HIGHLIGHT, READOUT } from './config';
+import { FAMILY_LOOK, FEATURED, HIGHLIGHT, READOUT } from './config';
 import type { SkyFrame } from './sky-frame';
 import type { Selection } from './selection';
 
@@ -62,6 +62,12 @@ export class Group {
    * already hard to read.
    */
   private readonly featuredRgb: string;
+  /**
+   * The family attention colours as `r, g, b`, so a kept row is the same colour as
+   * its ring and its orbit. Only the families FAMILY_LOOK gives a colour are in here;
+   * everything else falls through to the group's own accent.
+   */
+  private readonly familyRgb = new Map<number, string>();
   /** Is the pointer in this list right now. See `update` for what it decides. */
   private pointerInside = false;
 
@@ -73,11 +79,16 @@ export class Group {
     private selection: Selection,
     /** 1 on a featured object, indexed like `names`. See FEATURED. */
     private featured: Uint8Array,
+    /** Per-object FAMILY value, for the attention colour. See FAMILY_LOOK. */
+    private family: Uint8Array,
     /** How loudly an object is sounding right now, 0-1. See AUDIO.performer.meter. */
     private levelOf: (index: number) => number
   ) {
     this.rgb = channels(look.accent);
     this.featuredRgb = channels(FEATURED.color);
+    for (const [value, hex] of Object.entries(FAMILY_LOOK)) {
+      if (hex) this.familyRgb.set(Number(value), channels(hex));
+    }
     this.element = document.createElement('section');
     this.element.className = 'group';
     // Two colours on the section: what the rows rest at, and what attention looks like.
@@ -199,7 +210,12 @@ export class Group {
         continue;
       }
       const alpha = i === hovered ? 1 : brightness(frame.elevation[i]!);
-      const rgb = this.featured[i] === 1 ? this.featuredRgb : this.rgb;
+      // Featured, then family, then the group's own accent - the same order the ring
+      // shader and the track both use, so the three never disagree about one object.
+      const rgb =
+        this.featured[i] === 1
+          ? this.featuredRgb
+          : (this.familyRgb.get(this.family[i] ?? 0) ?? this.rgb);
       row.el.style.setProperty('--accent', `rgba(${rgb}, ${alpha.toFixed(2)})`);
       const azDeg = ((deg(frame.azimuth[i]!) % 360) + 360) % 360;
       const rate = frame.rangeRate[i]!;

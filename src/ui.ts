@@ -1,4 +1,15 @@
-import { CLOCK, GROUP_LOOK, HIGHLIGHT, IMMERSION, READOUT, SKY, observerLabel, type Dataset } from './config';
+import {
+  CLOCK,
+  FAMILY_LEGEND,
+  FAMILY_LOOK,
+  GROUP_LOOK,
+  HIGHLIGHT,
+  IMMERSION,
+  READOUT,
+  SKY,
+  observerLabel,
+  type Dataset,
+} from './config';
 import type { Clock } from './clock';
 import type { SkyFrame } from './sky-frame';
 import type { Selection } from './selection';
@@ -36,6 +47,8 @@ export interface HudSource {
   kind: Uint8Array;
   /** 1 on a featured object: its row wears the cool white, not amber. See FEATURED. */
   featured: Uint8Array;
+  /** Per-object FAMILY value: a kept row wears its family's colour. See FAMILY_LOOK. */
+  family: Uint8Array;
   /** What the pointer is touching and what it has stuck to. Shared with the scene. */
   selection: Selection;
   /** The sound. The panel owns its one control; nothing else here knows about it. */
@@ -82,7 +95,7 @@ function thinBarWidth(): number {
  * along the bottom is a CSS change, not a rewrite.
  */
 export function createHud(root: HTMLElement, clock: Clock, source: HudSource): Hud {
-  const { names, selection, choir, kind, featured } = source;
+  const { names, selection, choir, kind, featured, family } = source;
   const isChoir = (i: number) => choir[i] === 1;
   const isDebris = (i: number) => kind[i] === 2;
 
@@ -123,6 +136,7 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
     </div>` : ''}
     <div class="hints">
       <div class="hintline" id="hint"></div>
+      <div class="conventions" id="conv"></div>
       <button id="full" type="button" hidden>FULL SCREEN</button>
     </div>
   `;
@@ -212,8 +226,30 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
   // Each rests at the colour its objects already wear and shows the mark's own shape
   // beside its name, so the legend lives where the thing it explains does.
   const level = (i: number) => source.audio.level(i);
-  const passingGroup = new Group('Passing', GROUP_LOOK.passing, READOUT.passingRows, names, selection, featured, level);
-  const debrisGroup = new Group('Debris', GROUP_LOOK.debris, READOUT.debrisRows, names, selection, featured, level);
+  /*
+   * **The conventions block, and it reverses "there is no legend any more".**
+   *
+   * That rule was right for the thing it was written about: a disc, a triangle and a
+   * colour that each belong to a *group*, which has a heading of its own to sit
+   * beside. A family has no heading - its members are scattered through both lists
+   * and across the sky - so the only place its colour can be explained is a block
+   * that names it. A hue cannot introduce itself.
+   *
+   * It lists what a *kept* object turns, which is the honest scope: none of these
+   * colours appears until something is clicked, so the block is describing an
+   * interaction rather than labelling the sky.
+   *
+   * Built once. Families are a fact about the catalogue, not about the frame.
+   */
+  const conv = $('conv');
+  conv.innerHTML = FAMILY_LEGEND.map(
+    ({ family: value, label }) =>
+      `<span class="conv"><i style="background:${FAMILY_LOOK[value]}"></i>${label}</span>`
+  ).join('');
+
+  const cols = [names, selection, featured, family] as const;
+  const passingGroup = new Group('Passing', GROUP_LOOK.passing, READOUT.passingRows, ...cols, level);
+  const debrisGroup = new Group('Debris', GROUP_LOOK.debris, READOUT.debrisRows, ...cols, level);
   const choirGrid = new ChoirGrid(names, selection);
   root.querySelector('.lists')!.append(passingGroup.element, debrisGroup.element);
   root.querySelector('.foot')!.append(choirGrid.element);

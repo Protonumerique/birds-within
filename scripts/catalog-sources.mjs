@@ -44,8 +44,10 @@ export const SOURCES = [
   // Fetched for their membership only - see FAMILIES. `tagOnly` keeps their objects
   // out of the union: these are payloads `active` already has, and the point of
   // downloading them is the list of catalog numbers, not the elements.
-  { id: 'military', query: 'GROUP=military', tagOnly: true }, // ~130
-  { id: 'radar', query: 'GROUP=radar', tagOnly: true }, // ~40
+  { id: 'military', query: 'GROUP=military', tagOnly: true }, // 24 on 2026-09-22
+  { id: 'gnss', query: 'GROUP=gnss', tagOnly: true },
+  { id: 'weather', query: 'GROUP=weather', tagOnly: true },
+  { id: 'science', query: 'GROUP=science', tagOnly: true },
 ];
 
 export const gpUrl = ({ query }) => `https://celestrak.org/NORAD/elements/gp.php?${query}&FORMAT=json`;
@@ -83,7 +85,46 @@ export const DATASETS = {
 export const FAMILIES = [
   { value: FAMILY.STARLINK, name: /^STARLINK[- ]/i },
   { value: FAMILY.IRIDIUM, name: /^IRIDIUM[- ]/i },
-  { value: FAMILY.MILITARY, groups: ['military', 'radar'] },
+  // Navigation before military on purpose, and it is a real choice rather than an
+  // ordering accident: GPS is a US Space Force system and its satellites can appear
+  // in both lists. "That one is telling you where you are" is the more informative
+  // reading of a mark in the sky than "that one belongs to an air force", and
+  // navigation is a narrative of its own - a dozen satellites, always up, that
+  // everything on the ground depends on.
+  { value: FAMILY.GNSS, groups: ['gnss'] },
+  /*
+   * **Military, and this one is the least tidy rule here - deliberately so.**
+   *
+   * There is no all-military group to join against, because that classification is
+   * contested and CelesTrak does not make it. What their `military` group actually
+   * is, checked on 2026-09-22, is a **leftover bucket of 24**: Praetorian SDA,
+   * SAR-Lupe, Sapphire. `GROUP=radar` used to be in here too and is now out - its
+   * ten members are passive **calibration spheres**, Calsphere and Rigidsphere and
+   * LCS, aluminium balls flown from 1964 for radars to range against. Verified the
+   * way these things have to be: the first object to rise wearing the military
+   * colour was CALSPHERE 1, and a 1964 metal ball is not what that colour means.
+   *
+   * So two name rules join it, on the same standard the megaconstellations are
+   * matched by - a naming convention that is absolute and cannot drift:
+   *
+   *   YAOGAN  164 objects, China's reconnaissance series
+   *   USA ###  23 objects, the US military designator
+   *
+   * **`COSMOS ####` is deliberately left out**, and it is the interesting exclusion.
+   * It matches 805 objects, which would make this the biggest family after Starlink -
+   * but 611 of those are fragments of the 2009 Cosmos 2251 collision, and Cosmos is a
+   * generic Soviet designator that covers navigation, science and civil comms as
+   * readily as anything military. Sweeping it in would tag the wreckage of a
+   * communications satellite as a weapon, and inflate the number by mistaking one
+   * accident for an arsenal.
+   *
+   * **This is our editorial judgement rather than CelesTrak's**, which is the thing
+   * the rest of this file avoids. It is marked as such because the alternative was a
+   * family of 34 that was mostly calibration balls.
+   */
+  { value: FAMILY.MILITARY, groups: ['military'], name: /^(YAOGAN|USA[- ]\d)/i },
+  { value: FAMILY.WEATHER, groups: ['weather'] },
+  { value: FAMILY.SCIENCE, groups: ['science'] },
 ];
 
 /** Every group whose membership some family reads. */

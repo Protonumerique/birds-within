@@ -90,8 +90,8 @@ on the live `.bin` files — so there is no hand-rolled compression.
 
 | dataset | objects (2026-09-13) | size | what |
 |---|---|---|---|
-| `full` | 20,933 | 831 KB gzipped | union of every CelesTrak GP dataset, newest elements win — **the default** |
-| `active` | 16,563 | 661 KB gzipped | every payload CelesTrak lists as active: the same sky with the wreckage removed |
+| `full` | 20,992 | 835 KB gzipped | union of every CelesTrak GP dataset, newest elements win — **the default** |
+| `active` | 16,588 | 664 KB gzipped | every payload CelesTrak lists as active: the same sky with the wreckage removed |
 | `synthetic` | 1,692 | 129 KB | **invented** orbits, committed, development fallback only |
 
 `?catalog=` switches without a rebuild: which image the piece wants is an aesthetic
@@ -388,7 +388,11 @@ word is **geostationary**, which is what a reader knows. (Strictly the membershi
 is geo*synchronous* and takes in inclined and drifting belt objects too; the screen
 uses the common word on purpose.)
 
-**There is no legend any more.** It became the **shape in each group's heading** —
+**There is no legend any more — except for the families, which reversed it in the one
+case the argument below does not cover.** See *The constellation narrative*: a group's
+mark can live in that group's heading, beside the thing it explains, but a *family* has
+no heading, its members are scattered through both lists and all over the sky, and a hue
+cannot introduce itself. Everything else still works as follows. It became the **shape in each group's heading** —
 a disc for `PASSING`, a triangle for `DEBRIS`, a disc for `GEOSTATIONARY` — the mark's
 own form in the mark's own colour, sitting beside the name of the thing it explains
 instead of in a list underneath everything. They are **CSS boxes, not characters**:
@@ -2034,9 +2038,10 @@ largest download in the pipeline, four times a day, to learn something the name 
 says. So a family is a name pattern, a set of groups, or both; first match wins, and
 `scripts/catalog-sources.mjs` is the only place that knows any of it.
 
-The two group lists are `tagOnly` sources: fetched the same timid way, **not** unioned
-into the catalogue. They are payloads `active` already has, and what is wanted is the
-list of numbers. Two more small requests per cycle against a budget of 100 MB a day.
+The group lists are `tagOnly` sources: fetched the same timid way, **not** unioned into
+the catalogue. They are payloads `active` already has, and what is wanted is the list of
+numbers. Four small requests per cycle — `military`, `gnss`, `weather`, `science` — against
+a budget of 100 MB a day; together they are under 0.2 MB.
 
 **`kind` still decides what an object is.** A Starlink rocket body is a machine and a
 Starlink fragment is a shard; the family only chooses which bird a *bird* is. That
@@ -2204,6 +2209,111 @@ shift of 2.5e-5 — about **0.04 cents**, which is nothing. The reason radio ama
 it at all is that it is 2.5e-5 of a 145 MHz carrier: a 3.6 kHz slide in the beat note.
 `dopplerCentsPerKmS` scales it into the audio band, which is not a cheat but the same
 operation the metaphor was built on.
+
+#### The constellation narrative: family as an attention colour
+
+Added 2026-09-22. Three families now have a colour of their own — `FAMILY_LOOK`.
+
+**It changes nothing about the resting sky, and that is the whole design.** A satellite
+nobody has touched is warm white whatever constellation it belongs to; the point sprite
+has no attention colour at all, and never did. What a family colour reaches is the three
+places that already say *you kept this*: the **ring**, the **track** and the **row**.
+
+That is why it does not break the two-axis rule. `HIGHLIGHT.markColor` (amber) has
+always meant "you touched a satellite" and `debrisMarkColor` (pink) "you touched
+wreckage" — the attention hue already said *what kind of thing this is*. A family hue
+says it more precisely. It is a refinement of an axis that exists, not a new meaning
+laid over the image.
+
+**The composition, measured on the real catalogue** (`full`, 20,992 objects,
+2026-09-22) — and the first row is the premise of the whole piece in one number:
+
+| family | count | share | in the belt | payloads | debris |
+|---|---|---|---|---|---|
+| **Starlink** | **11,110** | **52.9%** | 0 | 11,110 | 0 |
+| *no family* | 9,191 | 43.8% | 1,063 | 5,922 | 2,843 |
+| Military | 211 | 1.0% | 19 | 210 | 1 |
+| Iridium | 190 | 0.9% | 0 | 81 | 109 |
+| GNSS | 172 | 0.8% | 43 | 172 | 0 |
+| Weather | 72 | 0.3% | 22 | 72 | 0 |
+| Science | 46 | 0.2% | 1 | 46 | 0 |
+
+Over half of everything on orbit is one company's. *No family* is not "unnamed" — every
+one of those objects has a name; they match no family rule, and they are where all the
+wreckage lives.
+
+**The colours were solved, not picked.** In CIELAB by CIEDE2000, against everything a
+mark can already be — amber, pink, the ISS's cool white, the belt's blue, resting warm
+white, the shard's brown, the eclipsed grey — because a kept object sits in a field of
+unkept ones:
+
+| | | nearest existing | |
+|---|---|---|---|
+| Starlink | `#6b51b8` violet | eclipsed grey | ΔE 28.5 |
+| Iridium | `#c6f910` chartreuse | resting warm white | ΔE 25.4 |
+| Military | `#46a466` green | shard brown | ΔE 25.0 |
+
+Worst separation *between* the three: **ΔE 30.2**. Around 18 is where two colours stop
+being reliably tellable apart at sixteen pixels.
+
+**Saturation is not uniform and should not be.** Only a handful of objects are kept at
+once, so none of these ever covers the frame the way a resting colour would. Iridium is
+deliberately the loud one at 95%.
+
+**The finding that made this possible**, and it is worth keeping because the first
+analysis got it backwards: if family colour had gone on the *resting* mark, the palette
+would have had room for **two** hues, not three — and none of them could have been pale.
+Measured then: an olive is ΔE 12.5 from warm white, a sage green 15.4, a lilac 13.3 from
+the wreckage pink. **Yellow is the most crowded part of this wheel, not the freest** —
+warm white sits at hue 41 and amber at 34. Scoping the colour to *attention* removes
+warm white and the shard brown from the competition and opens the whole thing up.
+
+**Precedence, and all three places agree on it:** featured → family → kind → amber. So a
+kept Iridium fragment is chartreuse rather than pink, and 109 of Iridium's 190 objects
+are fragments of the 2009 collision. Nothing is lost: the **shape** still says shard.
+Hue carries the family, form carries the kind. Verified on `USA 142 DEB`, the one debris
+object in the military family, which comes out `rgba(70, 164, 102, 0.97)` — green, and
+still a triangle.
+
+**The belt outranks all of it**, in the shader and in the sound alike. `RING_VERT` tests
+`choir` before attention, so the 19 military and 43 GNSS objects in the belt stay blue;
+`audio.ts` splits on the same byte, so a belt object never reaches a family voice either.
+One rule, both senses.
+
+**GNSS, Weather and Science are tagged and packed but have no colour.** Three stories at
+once is already the most the palette holds apart. The byte is ready when one of them
+earns a slot.
+
+**Colour and voice are separate axes.** The three new families keep the default whistle —
+*More of them* on the roadmap is where the calls come from.
+
+##### The military family is the one editorial judgement here
+
+And it took a browser to catch it. `GROUP=military` is a **leftover bucket of 24** —
+Praetorian SDA, SAR-Lupe, Sapphire — and `GROUP=radar`, which used to feed this family,
+is **ten passive calibration spheres**: Calsphere, Rigidsphere, LCS, aluminium balls
+flown from 1964 for radars to range against. The way this surfaced is the way these
+things do: the first object ever to rise wearing the military colour was **CALSPHERE 1**,
+and a 1964 metal ball is not what green was supposed to mean.
+
+`radar` is out. Two name rules are in, on the same standard the megaconstellations are
+matched by — a convention that is absolute and cannot drift:
+
+- `YAOGAN` — 164, China's reconnaissance series
+- `USA ###` — 23, the US military designator
+
+**`COSMOS ####` is deliberately excluded, and it is the interesting exclusion.** It
+matches 805 objects, which would make this the second-largest family — but 611 of them
+are fragments of the 2009 Cosmos 2251 collision, and Cosmos is a generic Soviet
+designator covering navigation, science and civil comms. Sweeping it in would tag the
+wreckage of a communications satellite as a weapon and mistake one accident for an
+arsenal.
+
+That gets the family from 34 to **211**. It is **our** classification rather than
+CelesTrak's, which is the thing the rest of `FAMILIES` exists to avoid, and it is marked
+as such in the source. There is no all-military group to join against because that
+classification is contested — so a real military family cannot be had any other way, and
+600-odd military satellites is a true fact about the world that this data does not label.
 
 **Purpose is still not in the pipeline**, and the family table is how it would arrive
 when it is wanted. The softer-weather / bolder-telecom voicing needs no new mechanism
@@ -2410,9 +2520,15 @@ Anything that computes range rate by hand must not repeat the naive version.
         actually making — read from an analyser rather than the schedule, on a dB window
         because the textures differ by three orders of magnitude. The first general
         answer to linking the sky to the column. See *The pulse*.
+  - [x] **The constellation narrative.** Starlink, Iridium and Military carry a colour
+        of their own on the *attention* state — the ring, the track and the row — with
+        a conventions block naming them. GNSS, Weather and Science are tagged and
+        packed but uncoloured. Nothing about the resting sky changed. See *The
+        constellation narrative* under **Sound**.
   - [ ] **More of them.** Weather, telecoms and the navigation constellations are each
-        a row in `FAMILIES` and a voice, now that the mechanism exists. And a wider
-        vocabulary of calls than the four here — caw, cackle, the rest of it.
+        a row in `FAMILIES` and already packed as a byte; what they still lack is a
+        *voice*. And a wider vocabulary of calls than the four here — caw, cackle, the
+        rest of it.
   - [ ] **HRTF.** `PannerNode` behind a flag, on the same direction vectors, once the
         stereo mapping is known to be right.
 

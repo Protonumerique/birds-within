@@ -1,6 +1,16 @@
 import * as THREE from 'three';
 
-import { DATASET, DEBUG, FEATURED, HIGHLIGHT, OBSERVER, TRAIL, catalogUrl, type Dataset } from './config';
+import {
+  DATASET,
+  DEBUG,
+  FAMILY_LOOK,
+  FEATURED,
+  HIGHLIGHT,
+  OBSERVER,
+  TRAIL,
+  catalogUrl,
+  type Dataset,
+} from './config';
 import { fetchCatalog, type FetchedCatalog } from './catalog';
 import { KIND } from './catalog-format';
 import { geodeticObserver } from './sky-frame';
@@ -74,7 +84,7 @@ export async function run(status: StatusFn): Promise<void> {
   // Keeping anything - from the sky or from the belt's grid - starts the sound, unless
   // the person has already worked the button themselves. See `armFromSelection`.
   selection.onMark = () => audio.armFromSelection();
-  scene.setClasses(stream.choir, stream.kind, stream.featured);
+  scene.setClasses(stream.choir, stream.kind, stream.featured, stream.family);
   const hud = createHud(hudRoot, clock, {
     names: stream.names,
     dataset,
@@ -83,6 +93,7 @@ export async function run(status: StatusFn): Promise<void> {
     choir: stream.choir,
     kind: stream.kind,
     featured: stream.featured,
+    family: stream.family,
     audio,
     immersion: (amount) => scene.setImmersion(amount),
   });
@@ -119,6 +130,15 @@ export async function run(status: StatusFn): Promise<void> {
   const debrisColor = new THREE.Color(HIGHLIGHT.debrisMarkColor);
   /** A featured orbit is the mark's own cool white, so the line names it before the row does. */
   const featuredColor = new THREE.Color(FEATURED.color);
+  /**
+   * The family attention colours, one THREE.Color each, built once. A track is the
+   * longest mark the piece draws, so it is where a family reads most clearly - a
+   * violet arc across the sky says Starlink before any name is read.
+   */
+  const familyColor = new Map<number, THREE.Color>();
+  for (const [value, hex] of Object.entries(FAMILY_LOOK)) {
+    if (hex) familyColor.set(Number(value), new THREE.Color(hex));
+  }
   /** The featured objects, found once - the catalogue cannot change under a running page. */
   const featuredIndices: number[] = [];
   for (let i = 0; i < stream.count; i++) if (stream.featured[i] === 1) featuredIndices.push(i);
@@ -244,11 +264,12 @@ export async function run(status: StatusFn): Promise<void> {
            * orbit amber on a click would have said "something is selected" while
            * throwing away the one thing that said *which*.
            */
-          const color = featured
-            ? featuredColor
-            : stream.kind[i] === KIND.DEBRIS
-              ? debrisColor
-              : markColor;
+          const color =
+            featured
+              ? featuredColor
+              : // Family before kind, the same order the ring uses - see FAMILY_LOOK.
+                (familyColor.get(stream.family[i]!) ??
+                (stream.kind[i] === KIND.DEBRIS ? debrisColor : markColor));
           tracks.push({ directions, color, featured });
         }
       }

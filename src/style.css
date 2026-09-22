@@ -605,6 +605,45 @@ input[type="range"] {
   color: var(--ink-faint);
 }
 
+/*
+ * The conventions block: what a *kept* object turns, for the families that have a
+ * colour of their own. See FAMILY_LOOK.
+ *
+ * It sits under the hints in the same corner, and it reverses "there is no legend any
+ * more" for a reason that does not touch the original: a group's shape and colour can
+ * live in that group's heading, beside the thing it explains. A family has no heading -
+ * its members are scattered through both lists and all over the sky - so a hue that
+ * means Starlink has nowhere to introduce itself except a block that says so.
+ */
+.conventions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 12px;
+  margin-top: 7px;
+}
+
+.conv {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  color: var(--ink-faint);
+}
+
+/*
+ * A drawn box, not a character - the same argument the group glyphs settled. A swatch
+ * this small has to centre against 9px capitals, and no font puts a bullet where that
+ * would be. Here the element is the ink.
+ */
+.conv i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+
 /* --- the belt -------------------------------------------------------------- */
 
 /*
