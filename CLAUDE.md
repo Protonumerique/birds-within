@@ -874,8 +874,17 @@ nothing — it renders a title, a drawing, four sentences and a LAUNCH button �
 WASM propagator, the worker and the packed catalogue. `src/piece.ts` is the old `main`,
 `src/gate.ts` is the screen, `src/poster.ts` is the drawing.
 
-**Measured, on the production build: 10.4 KB before the press.** The page, the stylesheet
-and a 15.8 KB entry chunk (7.0 gzipped). The press then fetches the piece chunk — 635.7 KB,
+**Measured, on the production build: 24.3 KB before the press**, of which **13.8 KB is
+the typeface** — see *The typeface* under **The panel**. The page (559 B), the
+stylesheet (3.0 KB gzipped), a 16.4 KB entry chunk (7.2 gzipped) and two woff2 faces.
+Without the fonts it is 10.5 KB, which is the figure this line carried until
+2026-09-22.
+
+**Nothing blocks on the fonts**, which is what makes that affordable: `font-display:
+swap` paints the fallback immediately and reflows when the face lands, so a visitor who
+scrolls past the hero waits for nothing. The budget exists to stop a scroller
+downloading three.js and twenty thousand orbits — 13.8 KB against the piece chunk's 168
+is a different order of thing. The press then fetches the piece chunk — 635.7 KB,
 166.0 gzipped — the catalogue, the worker and the WASM build. Nothing else has ever been
 this cheap to not look at. It was 8.7 KB when the screen shipped and drifted upward as
 the screen gained the location control; `config.ts` is in the entry chunk because
@@ -1063,6 +1072,95 @@ the sky, a mark overhead and a name in the list were joined by colour and by not
 else — which works while one thing is touched and thins out fast beyond that. The ISS's
 cool white is one object's answer, not the general one. *The pulse*, below, is the first
 general one. Whatever else follows has to obey *No tags on the sky*.
+
+#### The typeface
+
+Set in **Satoshi** since 2026-09-22, self-hosted, two static weights. Before that there
+was no typeface at all: everything ran on `--mono`, a **system** stack, so the piece
+rendered in SF Mono on one machine, Cascadia on another and DejaVu on a third. A
+typographic identity borrowed from whatever operating system happened to open it, which
+is most of what made the UI read as a developer tool rather than as a piece.
+
+`--mono` still exists and is now used by **one thing: the `?debug` panel**, which is a
+developer tool and should look like one.
+
+**14.1 KB for both weights**, and that is the wire cost — woff2 is already Brotli, so
+gzip adds nothing on top. `scripts/subset-fonts.py` cuts them and documents every
+choice; `public/fonts/SOURCES.md` carries the credit ITF's licence asks for.
+
+| | bytes |
+|---|---|
+| Satoshi as the foundry serves it, per weight | 73,476 |
+| subset to this piece's characters, Regular | 7,100 |
+| subset, Bold | 7,016 |
+| **the pair** | **14,116** |
+
+**Two static weights, not one variable file.** Measured on a comparable face: two
+statics 16.7 KB against 23.0 for variable. Two is all the design asks for, so the
+variable file is paying for eight weights nobody uses.
+
+**The subset is ASCII plus `° · — … × −`, and that is a fact rather than a bet.** Every
+non-ASCII character in the whole source was inventoried — the only two missing are `●`
+and `▲` at `config.ts:903`, inside the comment explaining why they are drawn as CSS
+boxes and *not* as characters. The bulk of the panel is catalogue names, and those are
+safe for a reason about the format: GP and OMM `OBJECT_NAME` inherits the fixed-width
+ASCII field of TLE line 0, which is why the catalogue reads `SL-16 R/B` and `USA 245
+(KH-11)`. Widening to all of Latin-1 costs +4.1 KB a weight for names the format cannot
+produce. And CSS falls through **per codepoint**, so anything missed draws in the system
+font behind it — a mismatched glyph, never a tofu box.
+
+**`tnum` is the feature that had to be there**, and it was checked on the file before
+anything was committed to it. The clock rewrites every second and the data line four
+times a second; in Satoshi's proportional figures a `1` is narrower than a `0`, so
+without tabular figures `11:59:59` is a different width from `12:00:00` and the line
+twitches on every minute. `.rd` and `.gn` had carried `font-variant-numeric:
+tabular-nums` for months, doing nothing, because a monospace is already tabular. It is
+real now. Satoshi also ships `case`, which lifts hyphens and parens against capitals —
+`USA 245 (KH-11)` — and it costs **zero bytes** in the subset, reusing glyphs already
+there. `tnum` costs 284.
+
+Keeping a feature in the subset only makes it *available*. Applying it is the
+stylesheet's job.
+
+**Tracking came down wherever weight went up**, and that is the whole shape of the
+change. The title was `400 20px` at `0.22em`; it is now `700 22px` at `0.1em`. Heavy
+tracking was doing a monospace's job — a face with no weight contrast has to buy
+presence somewhere and letter spacing is the only lever it has. Satoshi Bold has the
+presence already, so the old tracking would read as a logotype stretched to fill a box.
+
+**Everything went up about 10%**, because Satoshi's x-height is **0.484 em** against a
+system monospace's ~0.53: the same pixel size reads a tenth smaller. Body 12 → 13, rows
+11 → 12, the clock 18 → 20, headings 9 → 10 and bold. That buys back parity and a little
+more, which is the "probably a bit bigger" this pass was asked for.
+
+**Only 400 and 700 exist**, so any rule asking for 500 or 600 gets a browser-synthesised
+weight — the 400 smeared — which on dark-on-light text at 10.5px is visibly muddy. Two
+rules were doing that and are now 700. **Do not introduce a weight the subset does not
+carry.**
+
+**A kept row's name is bold**, which says the panel's own rule — *a row is a name until
+you keep it* — in weight rather than only in a box. Bolding every name instead makes the
+lists one solid block with nothing picked out; the churning default rows are meant to
+recede.
+
+**The `/fonts/…` path in `@font-face` looks like the absolute-URL trap `base: './'`
+exists to avoid, and is not.** Vite resolves a leading slash against the public directory
+and rewrites it *relative to the emitted stylesheet*, so the built CSS asks for
+`../fonts/satoshi-400.woff2` and resolves at a domain root and under `/birds-within/`
+alike. Verified in `dist/`. Do not hand-write `../fonts/` — the dev server has no
+`assets/` directory to climb out of.
+
+**A type-size change is a layout change**, so the short-window check under *The lists
+scroll* was re-run at 900, 620, 480 and 400 px with five rows kept open: column 14 px
+clear of the bottom at every height, groups 10 px apart, no row escaping its group. Do
+this again after any size pass.
+
+**The fonts are fetched, not vendored, and a cloud session cannot reach them by
+default.** `fontshare.com` and `*.fontshare.com` need adding to the environment's
+allowed-domains list, exactly as `celestrak.org` does — the **Trusted** level includes
+neither. The setting lives behind the cloud icon above the message box at claude.ai/code
+(**edit cloud environment** → **Network access** → **Custom**), and it applies to a
+**running** session, no restart needed.
 
 #### The pulse
 
@@ -2325,6 +2423,11 @@ Anything that computes range rate by hand must not repeat the naive version.
   screen's whole point is that a page nobody presses costs ~10 KB; one stray static
   import puts 160 KB back, silently and with nothing on screen to show for it. Check the
   entry chunk's size in `npm run build`'s output after touching the entry.
+- **`public/fonts/*.woff2` is committed; the `.ttf` it is cut from is not.** Same
+  arrangement as `synthetic.bin`: a fresh clone has to run and no build step can make a
+  font, so the binary is in git and `scripts/subset-fonts.py` is in git beside it.
+  `vendor/` is gitignored. **Do not use a font weight outside the subset** - it carries
+  400 and 700, and anything else is synthesised.
 - The observer's **default** lives in `src/config.ts` as `DEFAULT_OBSERVER` and **must**
   match `OBS_*` in `scripts/reference.py`, or the validation compares different things.
   `OBSERVER` itself is settable at runtime — see *Where you are standing* — so **nothing
@@ -2358,6 +2461,11 @@ Code is **AGPL-3.0-or-later** (AGPL, not GPL: this is a web app, and plain GPL's
 obligations do not trigger on hosting). The `LICENSE` file is added through GitHub's
 license-template picker so the text is canonical.
 
+**The typeface is not covered by it either.** Satoshi is Indian Type Foundry's, under
+the ITF Free Font Licence, which asks that the fonts be identified by name and the
+foundry's ownership credited — `public/fonts/SOURCES.md` is that credit, and it has to
+stay.
+
 The element sets the site publishes are not covered by it — their origin and CelesTrak's
 terms are documented in `public/data/SOURCES.md`. Keep the fetch-and-cache arrangement
 intact in any fork; pointing browsers straight at CelesTrak earns 403s and an IP block.
@@ -2375,4 +2483,7 @@ npm run validate         # four roads to a position, against the Python referenc
 npm run bench            # WASM vs JS at catalogue scale
 npm run build            # typecheck + production build
 npm run make:synthetic   # regenerate the committed offline fallback
+npm run subset:fonts     # vendor/satoshi/*.ttf -> public/fonts/*.woff2 (needs
+                         # pip install fonttools brotli, and fontshare.org on the
+                         # environment's network egress allowlist to fetch the faces)
 ```

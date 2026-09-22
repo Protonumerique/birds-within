@@ -4,7 +4,7 @@ Cut the web fonts down to the characters this piece actually draws, and write th
 committed woff2 files.
 
     pip install fonttools brotli
-    python3 scripts/subset-fonts.py fonts-in
+    python3 scripts/subset-fonts.py vendor/satoshi
 
 `public/fonts/*.woff2` is **committed**, like `public/data/synthetic.bin` and for the
 same reason: a fresh clone has to run, and there is no build step that could make a
@@ -14,8 +14,9 @@ knows how it was cut or how to cut it again.
 
 The sources themselves are **not** committed. They are a few hundred KB of .otf per
 weight and nothing reads them at runtime; download them from the foundry when a
-re-cut is needed. `vendor/` is gitignored for that, and `fonts-in/` is the hand-off
-for a machine that cannot reach the foundry - see its README.
+re-cut is needed - `vendor/` is gitignored for exactly that. Satoshi's two static
+faces live at api.fontshare.com; a cloud session needs `fontshare.com` and
+`*.fontshare.com` on its environment's allowed-domains list to reach them.
 
 **The subset is ASCII, and that is not a gamble.** Every glyph the UI draws was
 inventoried from the source strings - printable ASCII plus a handful of typographic
@@ -50,9 +51,21 @@ OUT = ROOT / "public" / "fonts"
 # real minus (range rate). Everything else falls through to the system stack.
 UNICODES = "U+0020-007E,U+00B0,U+00B7,U+2013,U+2014,U+2026,U+00D7,U+2212"
 
-# `tnum` is what stops a changing number shifting its own neighbours sideways, and
-# `kern`/`liga`/`calt` are what a face is drawn expecting. Everything else goes.
-FEATURES = "kern,liga,tnum,calt"
+# `tnum` is what stops a changing number shifting its own neighbours sideways - the
+# panel's data line rewrites itself every frame, and in Satoshi's proportional figures
+# a 1 is narrower than a 0, so without it the whole line dances. `case` lifts hyphens
+# and parentheses to sit against capitals, which is most of what the panel is:
+# `USA 245 (KH-11)`, `SL-16 R/B`. `kern` and `liga` are what any face is drawn
+# expecting.
+#
+# Measured on Satoshi Regular, over this exact character set: kern+liga alone is
+# 6,816 bytes, tnum costs 284 more, and case costs **nothing at all** - it reuses
+# glyphs already in the subset. Everything else the face carries (fractions,
+# ordinals, superiors, four stylistic sets) goes.
+#
+# Keeping a feature here only makes it *available*; applying it is the stylesheet's
+# job, through font-variant-numeric and font-feature-settings.
+FEATURES = "kern,liga,tnum,case"
 
 # Weight -> the substring that picks that file out of the download. Two static
 # weights beat one variable file here: measured 16.7 KB against 23.0, because two

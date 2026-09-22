@@ -22,6 +22,51 @@
   --eclipsed: #808080;
   --geo: #8ad4ff;
   --mono: ui-monospace, "SF Mono", "Roboto Mono", Menlo, monospace;
+  /*
+   * Satoshi, self-hosted and cut to this piece's own character set - see
+   * public/fonts/SOURCES.md for the credit ITF's licence asks for, and
+   * scripts/subset-fonts.py for every choice in the cut.
+   *
+   * Until 2026-09-22 there was no typeface here at all: everything ran on `--mono`,
+   * a *system* stack, so the piece rendered in SF Mono on one machine, Cascadia on
+   * another and DejaVu on a third. A typographic identity borrowed from whatever
+   * operating system happened to open it, which is most of why the UI read as a
+   * developer tool rather than as a piece.
+   *
+   * `--mono` stays defined and is now used by nothing but the debug panel, which is
+   * a developer tool and should look like one.
+   */
+  --sans: "Satoshi", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/*
+ * The `/fonts/...` path looks like the absolute-URL trap that `base: './'` exists to
+ * avoid, and is not: Vite resolves a leading slash against the public directory and
+ * rewrites it **relative to the emitted stylesheet**, so the built CSS asks for
+ * `../fonts/satoshi-400.woff2` and resolves correctly at a domain root and under
+ * `/birds-within/` alike. Verified in `dist/`. Do not hand-write `../fonts/` here -
+ * the dev server has no `assets/` directory to climb out of.
+ *
+ * 14.1 KB for the pair, and **nothing blocks on it**: `swap` paints the fallback
+ * immediately and reflows when the face lands, so a visitor who scrolls past the
+ * hero waits for nothing. That matters because these are in the entry stylesheet,
+ * which is loaded before LAUNCH - see *The first screen* in CLAUDE.md for the budget
+ * this sits inside.
+ */
+@font-face {
+  font-family: "Satoshi";
+  src: url("/fonts/satoshi-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Satoshi";
+  src: url("/fonts/satoshi-700.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
 }
 
 * {
@@ -34,7 +79,13 @@ body {
   height: 100%;
   background: var(--sky);
   color: var(--ink);
-  font: 12px/1.5 var(--mono);
+  /*
+   * 13px against the 12px the mono had. Satoshi's x-height is 0.484 em and a system
+   * monospace runs about 0.53, so the same pixel size reads a tenth smaller - the
+   * bump buys back the parity and a little more, which is the "probably a bit
+   * bigger" this pass was asked for.
+   */
+  font: 13px/1.5 var(--sans);
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
 }
@@ -200,18 +251,23 @@ body {
 
 h1 {
   margin: 0 0 4px;
-  /* 1.7x the 12px it was. The tracking comes in a little at this size, or the title
-     runs past a 272px column. */
-  font: 400 20px/1.15 var(--mono);
-  letter-spacing: 0.22em;
+  /*
+   * Bold, and the tracking comes right down with it. 0.22em was doing a monospace's
+   * job - a face with no weight contrast has to buy presence somewhere, and letter
+   * spacing is the only lever it has. Satoshi Bold has the presence already, so the
+   * same tracking would read as a logotype stretched to fill a box rather than as a
+   * title. 22px fits the 272px column at 0.1em.
+   */
+  font: 700 22px/1.12 var(--sans);
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--ink);
 }
 
 .sub {
   color: var(--ink-dim);
-  letter-spacing: 0.05em;
-  font-size: 10px;
+  letter-spacing: 0.06em;
+  font-size: 11px;
 }
 
 /* The note under LISTEN only exists while it has something to say; otherwise it would
@@ -226,14 +282,21 @@ h1 {
 
 .clock {
   margin-top: 10px;
-  font-size: 18px;
-  letter-spacing: 0.03em;
+  font-size: 20px;
+  letter-spacing: 0.02em;
   color: var(--lit);
+  /*
+   * The one place tabular figures are not a nicety. This rewrites every second, and
+   * in Satoshi's proportional figures a 1 is narrower than a 0 - so 11:59:59 would
+   * be a different width from 12:00:00 and the whole line would twitch on the turn
+   * of every minute. `tnum` is in the subset for this.
+   */
+  font-variant-numeric: tabular-nums;
 }
 
 .clock small {
   display: block;
-  font-size: 10px;
+  font-size: 10.5px;
   letter-spacing: 0.1em;
   color: var(--ink-dim);
 }
@@ -261,8 +324,8 @@ select {
   border: 1px solid rgba(120, 160, 190, 0.22);
   color: var(--ink);
   font: inherit;
-  font-size: 10px;
-  letter-spacing: 0.08em;
+  font-size: 10.5px;
+  letter-spacing: 0.09em;
   padding: 7px 8px;
   border-radius: 2px;
   cursor: pointer;
@@ -288,7 +351,10 @@ button:disabled {
   background-color: rgba(207, 224, 236, 0.86);
   border-color: rgba(207, 224, 236, 0.9);
   color: #0a1016;
-  font-weight: 600;
+  /* 700, not 600: the subset carries 400 and 700, and a browser asked for a weight
+     it does not have synthesises one by smearing the nearest - which on dark-on-light
+     text at 10.5px is visibly muddy. */
+  font-weight: 700;
 }
 
 #rate:hover,
@@ -337,8 +403,10 @@ input[type="range"] {
   margin: 0 0 3px;
   padding-bottom: 2px;
   border-bottom: 1px solid rgba(120, 160, 190, 0.14);
-  font: 400 9px/1.4 var(--mono);
-  letter-spacing: 0.18em;
+  /* Bold, because a heading is a name of a thing - and the tracking comes down for
+     the same reason the title's did. */
+  font: 700 10px/1.4 var(--sans);
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--ink-faint);
 }
@@ -394,7 +462,7 @@ input[type="range"] {
   position: relative;
   padding: 1px 4px;
   color: var(--tone);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.45;
   white-space: nowrap;
   overflow: hidden;
@@ -422,15 +490,24 @@ input[type="range"] {
     inset -1px 0 0 var(--accent);
 }
 
+/*
+ * A kept row's name is **bold**, which is the panel's own rule - *a row is a name
+ * until you keep it* - said in weight rather than only in a box. Bold every name
+ * instead and the lists become a solid block with nothing picked out of it; the
+ * churning default rows are meant to recede.
+ */
 .row.open .rn {
   display: block;
+  font-weight: 700;
 }
 
 .row.open .rd {
   display: block;
-  font-size: 10px;
+  font-size: 10.5px;
   line-height: 1.3;
   opacity: 0.8;
+  /* Elevation, azimuth, range and range rate, rewritten four times a second. Without
+     tabular figures every one of those numbers shoves the ones after it sideways. */
   font-variant-numeric: tabular-nums;
 }
 
@@ -716,8 +793,8 @@ input[type="range"] {
 
 .gate-title {
   margin: 0;
-  font: 400 clamp(21px, 3.3vw, 36px) / 1.12 var(--mono);
-  letter-spacing: 0.2em;
+  font: 700 clamp(23px, 3.5vw, 40px) / 1.1 var(--sans);
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ink);
 }
@@ -725,8 +802,8 @@ input[type="range"] {
 .gate-tagline {
   margin-top: 11px;
   color: var(--ink-dim);
-  font-size: 10px;
-  letter-spacing: 0.18em;
+  font-size: 11px;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 
@@ -734,8 +811,10 @@ input[type="range"] {
   margin: 18px 0 0;
   padding-top: 18px;
   border-top: 1px solid rgba(120, 160, 190, 0.16);
-  font-size: 12.5px;
-  line-height: 1.75;
+  /* The only running prose in the piece, so it is the one place set for reading
+     rather than for scanning: larger, and looser in the line than anything else. */
+  font-size: 14px;
+  line-height: 1.7;
   color: var(--ink);
 }
 
@@ -744,8 +823,10 @@ input[type="range"] {
   margin-top: 22px;
   padding: 13px 28px;
   font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.26em;
+  /* 600 was a weight nothing here has: the subset carries 400 and 700, and a browser
+     asked for 600 synthesises it by smearing the 400. */
+  font-weight: 700;
+  letter-spacing: 0.2em;
   background-color: rgba(207, 224, 236, 0.9);
   border-color: rgba(207, 224, 236, 0.95);
   color: #0a1016;
