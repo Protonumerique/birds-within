@@ -983,12 +983,43 @@ export const FAMILY_LOOK: Record<Family, string | null> = {
    */
   [FAMILY.MILITARY]: '#46a466',
   /**
-   * 172 objects, 43 of them in the belt. A beacon red: the family everything on the
-   * ground depends on and nobody looks at.
+   * 172 objects, 43 of them in the belt. A gold, and **the one colour in the table
+   * that does not clear the threshold** - deliberately, and by the smallest margin
+   * available.
+   *
+   * It measures **dE 16.6 from `HIGHLIGHT.markColor`**, the amber every kept satellite
+   * *without* a family wears, against a ~18 bar. That is the best any warm yellow can
+   * do, because the band is a pincer: amber sits at hue 34 and Iridium's chartreuse at
+   * 70, so moving off one walks into the other. Measured across the whole run -
+   *
+   *   #ffcb00  13.1 from amber     the first choice, plainly too close
+   *   #ffd700  16.6 from amber     this, and 18.9 from Iridium
+   *   #ffe000  19.2 from amber     but 16.4 from Iridium - the pincer closing
+   *   #ffee00  23.0 from amber     and 12.9 from Iridium
+   *   #c6b410  18.4 worst          clears, and reads as olive next to Iridium
+   *
+   * The olive is the only thing that passes and it was rejected on looking, which is
+   * the right way to settle this: at sixteen pixels it sits in Iridium's chartreuse
+   * rather than beside it, so a number that clears hides a confusion the eye does not.
+   *
+   * What makes 16.6 survivable is the thing that bought six families in the first
+   * place: **the legend names it**. Keep a navigation satellite and NAVIGATION lights
+   * in the corner; keep an ordinary one and nothing does, so the pair resolves in a
+   * glance even where the hues are close. The residual cost is real and worth stating -
+   * scanning a sky with several objects kept, gold and amber are neighbours.
    */
-  [FAMILY.GNSS]: '#e50654',
-  /** 69 objects. Storm orange - the one hue that already means weather to everyone. */
-  [FAMILY.WEATHER]: '#e55406',
+  [FAMILY.GNSS]: '#ffd700',
+  /**
+   * 69 objects, 22 of them in the belt. A cyan reaching from Iridium's chartreuse
+   * toward the belt's blue without arriving: dE 22.9 from the belt, 28.5 from the
+   * military green, 25.2 from the ISS white.
+   *
+   * A teal was tried for this on 2026-09-23 and measured **worse** - 19.9 against the
+   * military green. The difference is lightness: those sat at L* 78-81 and this is at
+   * **91**, fully saturated, which is what lifts it clear of both greens. The earlier
+   * note saying "a cyan collided with the belt's blue" was measuring a duller one.
+   */
+  [FAMILY.WEATHER]: '#00fff3',
   /** 45 objects, the smallest family. Magenta, which reads as instrument. */
   [FAMILY.SCIENCE]: '#e94cfa',
 };

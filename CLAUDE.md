@@ -2380,15 +2380,17 @@ unkept ones:
 | Starlink | `#6b51b8` violet | eclipsed grey | ΔE 28.5 |
 | Iridium | `#c6f910` chartreuse | resting warm white | ΔE 25.4 |
 | Military | `#46a466` green | shard brown | ΔE 25.0 |
-| **GNSS** | `#e50654` beacon red | eclipsed grey | ΔE 28.9 |
-| **Weather** | `#e55406` storm orange | amber | ΔE 25.9 |
+| **GNSS** | `#ffd700` gold | amber | ΔE **16.6** |
+| **Weather** | `#00fff3` cyan | belt blue | ΔE 22.9 |
 | **Science** | `#e94cfa` magenta | wreckage pink | ΔE 24.1 |
 
 **All six since 2026-09-23**, which required re-measuring the claim this paragraph used
 to make — that three was the most the palette could hold apart. Worst separation anywhere
-is now **24.1**, and **24.2** between families (Science against Starlink), down from 30.2
-but well clear of the ~18 where two marks stop being reliably tellable apart at sixteen
-pixels. Every one is legible on this sky: L\* 42 to 92 against a `#05070a` backdrop.
+is now **16.6** — gold against amber, see below — and **18.9** between families (gold
+against Iridium's chartreuse), down from 30.2 when there were three. ~18 is where two
+marks stop being reliably tellable apart at sixteen pixels, so this set sits *at* the bar
+rather than clear of it, deliberately and with the legend carrying the difference. Every
+one is legible on this sky: L\* 42 to 92 against a `#05070a` backdrop.
 
 **What bought the extra three is the legend becoming active, not a cleverer search.** A
 colour identified in isolation needs the whole perceptual distance; one that only has to
@@ -2396,11 +2398,41 @@ be told apart from *whatever else is lit right now* needs much less, because the
 in the corner names it the moment a member is touched. Six static swatches would have
 been worse than three. See *The legend answers* below.
 
-**A semantic set was tried first and measured worse.** Teal for weather — the obvious
-ice-and-cloud choice — collided with the military green at ΔE 19.9, and a cyan collided
-with the belt's blue. Meaning lost to separation there, which is why weather is the storm
-orange rather than an ice blue. The orange is not a consolation: warning colour is what
-weather already means to everyone.
+**The first set was solved for separation and rejected on looking.** A crimson for
+navigation and a storm orange for weather measured well — worst 24.1 — and read as
+"really funky, too edgy" beside the rest of the piece. Both were replaced on 2026-09-23
+with colours chosen by eye and then measured, which is the order this project usually
+works in and did not, that once.
+
+**The cyan reverses an earlier measurement rather than ignoring it.** A teal for weather
+had been tried and rejected at ΔE 19.9 against the military green, which is why this file
+said a cyan collides with the belt's blue. Those candidates sat at **L\* 78–81**;
+`#00fff3` is at **91** and fully saturated, and that lightness is what lifts it clear of
+both greens — 22.9 from the belt, 28.5 from the military green. The old note was
+measuring a duller colour than the one that works.
+
+**The gold does not clear the threshold, and nothing warm and yellow can.** It is ΔE
+**16.6** from amber against a ~18 bar, and that is the *best available*, because the band
+is a pincer — amber at hue 34, Iridium's chartreuse at 70:
+
+| | vs amber | vs Iridium |
+|---|---|---|
+| `#ffcb00` | 13.1 | 22.7 |
+| **`#ffd700`** | **16.6** | **18.9** |
+| `#ffe000` | 19.2 | 16.4 |
+| `#ffee00` | 23.0 | 12.9 |
+| `#c6b410` olive | 18.4 | 19.2 |
+
+The olive is the only one that passes and it was rejected **on looking**: at sixteen
+pixels it sits *in* Iridium's chartreuse rather than beside it, so the number that clears
+hides a confusion the eye does not. That is the right way round — the measurement is a
+filter, not the decision.
+
+**What makes 16.6 survivable is the legend**, which is the same mechanism that bought six
+families at all: keep a navigation satellite and NAVIGATION lights in the corner, keep an
+ordinary one and nothing does. The pair resolves in a glance where the hues are close.
+The residual cost is real: scanning a sky with several objects kept, gold and amber are
+neighbours.
 
 **Saturation is not uniform and should not be.** Only a handful of objects are kept at
 once, so none of these ever covers the frame the way a resting colour would. Iridium is
