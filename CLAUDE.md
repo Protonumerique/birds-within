@@ -2262,12 +2262,12 @@ laid over the image.
 | family | count | share | in the belt | payloads | debris |
 |---|---|---|---|---|---|
 | **Starlink** | **11,110** | **52.9%** | 0 | 11,110 | 0 |
-| *no family* | 9,191 | 43.8% | 1,063 | 5,922 | 2,843 |
-| Military | 211 | 1.0% | 19 | 210 | 1 |
+| *no family* | 8,997 | 42.9% | 996 | 5,729 | 2,843 |
+| Military | 409 | 1.9% | 86 | 407 | 1 |
 | Iridium | 190 | 0.9% | 0 | 81 | 109 |
 | GNSS | 172 | 0.8% | 43 | 172 | 0 |
-| Weather | 72 | 0.3% | 22 | 72 | 0 |
-| Science | 46 | 0.2% | 1 | 46 | 0 |
+| Weather | 69 | 0.3% | 22 | 69 | 0 |
+| Science | 45 | 0.2% | 1 | 45 | 0 |
 
 Over half of everything on orbit is one company's. *No family* is not "unnamed" — every
 one of those objects has a name; they match no family rule, and they are where all the
@@ -2318,41 +2318,81 @@ earns a slot.
 **Colour and voice are separate axes.** The three new families keep the default whistle —
 *More of them* on the roadmap is where the calls come from.
 
-##### The military family is the one editorial judgement here
+##### The military family, and the one list that is not CelesTrak's
 
-And it took a browser to catch it. `GROUP=military` is a **leftover bucket of 24** —
-Praetorian SDA, SAR-Lupe, Sapphire — and `GROUP=radar`, which used to feed this family,
-is **ten passive calibration spheres**: Calsphere, Rigidsphere, LCS, aluminium balls
-flown from 1964 for radars to range against. The way this surfaced is the way these
-things do: the first object ever to rise wearing the military colour was **CALSPHERE 1**,
-and a 1964 metal ball is not what green was supposed to mean.
+`GROUP=military` is a **leftover bucket of 24** — 22 Praetorian SDA, SAR-Lupe 2,
+Sapphire, Victus Haze Puma — and `GROUP=radar`, which used to feed this family, is **ten
+passive calibration spheres**: Calsphere, Rigidsphere, LCS, aluminium balls flown from
+1964 for radars to range against. The way that surfaced is the way these things do: the
+first object ever to rise wearing the military colour was **CALSPHERE 1**, and a 1964
+metal ball is not what green was supposed to mean.
 
-`radar` is out. Two name rules are in, on the same standard the megaconstellations are
-matched by — a convention that is absolute and cannot drift:
+`radar` is out. What is in is **three sources unioned**, and the interesting part is that
+no two of them overlap much:
 
-- `YAOGAN` — 164, China's reconnaissance series
-- `USA ###` — 23, the US military designator
+| | objects | |
+|---|---|---|
+| `GROUP=military` | 24 | CelesTrak's bucket |
+| **UCS Satellite Database** | 613 numbers, **402** still on orbit | a published classification |
+| `YAOGAN` and `USA ###` | 187 | naming conventions that cannot drift |
+| **union, on `full`** | **409** | was 211 |
 
-**`COSMOS ####` is deliberately excluded, and it is the interesting exclusion.** It
-matches 805 objects, which would make this the second-largest family — but 611 of them
-are fragments of the 2009 Cosmos 2251 collision, and Cosmos is a generic Soviet
-designator covering navigation, science and civil comms. Sweeping it in would tag the
-wreckage of a communications satellite as a weapon and mistake one accident for an
-arsenal.
+**The UCS list is what makes this a classification rather than our judgement**, which is
+the thing the rest of `FAMILIES` exists to preserve. Added 2026-09-23. The Union of
+Concerned Scientists' database carries an operator, a purpose and a class of user for
+every active satellite, and — decisively — a **NORAD Number** column, so it joins the way
+everything else here joins. 613 of its 7,560 rows have a `Users` column mentioning
+Military. `scripts/ucs-military.py` reads the spreadsheet once and commits the numbers;
+`public/data/SOURCES.md` carries the credit; the spreadsheet itself is not committed, on
+the same arrangement as `vendor/` and the typeface.
 
-That gets the family from 34 to **211**. It is **our** classification rather than
-CelesTrak's, which is the thing the rest of `FAMILIES` exists to avoid, and it is marked
-as such in the source. There is no all-military group to join against because that
-classification is contested — so a real military family cannot be had any other way, and
-600-odd military satellites is a true fact about the world that this data does not label.
+**It resolves `COSMOS ####`, which no name rule could.** That pattern matches 805
+objects, and a name rule was refused because 611 of them are fragments of the 2009 Cosmos
+2251 collision — tagging the wreckage of a communications satellite as a weapon, and
+mistaking one accident for an arsenal. UCS names **62 specific military Cosmos payloads**
+by catalog number and leaves the debris and the civil ones alone. The whole argument for
+joining on numbers rather than names, arriving in one example.
 
-**Purpose is still not in the pipeline**, and the family table is how it would arrive
-when it is wanted. The softer-weather / bolder-telecom voicing needs no new mechanism
-now: CelesTrak publishes `weather`, `intelsat`, `ses` and the navigation constellations
-as groups, so each is a row in `FAMILIES` and a voice in `AUDIO.performer.voices`. What
-it costs is one more small fetch per group per cycle. `kind` remains a name heuristic and
-GP data still carries no object type at all; the families go around that rather than
-through it.
+**The name rules stay, and they are not decoration.** UCS froze on **1 May 2023** — it is
+the last edition they published — and **57.9% of the catalogue launched after it**. Of
+the 409 objects the family now holds, **106 come from the name rules alone**: 76 YAOGAN,
+21 Praetorian SDA, 8 USA, Victus Haze Puma, every one a launch UCS never saw. Only 105
+are found by both. So the list gives breadth and the names give currency, and **a
+UCS-only family would have been a third smaller in YAOGAN than what was already
+shipping**. Anything that later replaces the name rules with the list has this backwards.
+
+**The cost is a frozen dataset in a pipeline that is otherwise six-hourly**, and it will
+describe less of the sky every year with nothing to announce it. The snapshot date is
+written into `scripts/ucs-military.json` so the staleness is visible rather than
+inferred. The failure mode is the mild one this file already accepts for a thin family:
+an untagged object sings the default voice, which is not wrong.
+
+**86 of the 409 are in the belt and stay blue.** `RING_VERT` tests `choir` before
+attention and `audio.ts` splits on the same byte, so a fifth of this family never reaches
+the colour or the voice at all — which is the belt rule working, not a loss.
+
+**The line this closes.** The previous version of this section ended by saying that
+"600-odd military satellites is a true fact about the world that this data does not
+label". It was 613, and the data labelling it was one spreadsheet away.
+
+**Purpose is now reachable, and that is the larger thing the UCS join opened.** GP data
+still carries no object type at all and `kind` remains a name heuristic — but UCS has a
+`Purpose` column beside the `Users` one, over the same NORAD numbers: Earth Observation,
+Communications, Navigation, Technology Development, Space Science. The mechanism for
+using it already exists in full. A family is a row in `FAMILIES` and a voice in
+`AUDIO.performer.voices`, `ucs-military.py` becomes `ucs-purpose.py` emitting more than
+one list, and the byte is already packed. What it costs is nothing per deploy, because
+the file is frozen and derived once.
+
+Deliberately not done. Three stories is the most the palette holds apart (see the ΔE
+table above), and *More of them* on the roadmap is about **voices** rather than colours —
+GNSS, Weather and Science are tagged and packed and still sing the default whistle, which
+is the gap worth closing first. The softer-weather / bolder-telecom voicing needs no new
+data at all.
+
+The one thing to keep in view: UCS is **payloads only**, so purpose can never describe
+wreckage or a spent stage. That is consistent rather than limiting — `kind` decides what
+a thing *is*, and family only chooses which bird a bird is.
 
 
 ## Deployment
@@ -2630,6 +2670,9 @@ npm run validate         # four roads to a position, against the Python referenc
 npm run bench            # WASM vs JS at catalogue scale
 npm run build            # typecheck + production build
 npm run make:synthetic   # regenerate the committed offline fallback
+npm run ucs:military -- <file.xlsx>   # UCS database -> scripts/ucs-military.json
+                         # derived once and committed; needs pip install openpyxl.
+                         # The spreadsheet is not in the repo - see public/data/SOURCES.md
 npm run subset:fonts     # vendor/satoshi/*.ttf -> public/fonts/*.woff2 (needs
                          # pip install fonttools brotli, and fontshare.org on the
                          # environment's network egress allowlist to fetch the faces)

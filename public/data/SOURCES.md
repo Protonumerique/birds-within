@@ -89,3 +89,31 @@ If you fork this, keep the fetch-and-cache arrangement intact.
 authentication and restricts redistribution — and a public page that ships element sets to
 every visitor's browser is redistribution. It is the only way to the missing ~14k objects,
 and is noted here so that choice is on the record.
+
+## The UCS Satellite Database
+
+<https://www.ucsusa.org/resources/satellite-database> — the Union of Concerned
+Scientists' database of active satellites, with an operator, a purpose and a class of
+user for each one. This project uses the **1 May 2023** edition, which is the last one
+UCS published.
+
+**What is taken from it is 613 integers.** `scripts/ucs-military.py` reads the
+spreadsheet once and writes `scripts/ucs-military.json`: the NORAD numbers of every row
+whose `Users` column mentions Military, and nothing else — no names, no operators, no
+orbital data. That list is committed and joined against the catalogue at pack time to
+decide one byte per object. The spreadsheet itself is **not** committed and is not
+published here in any form; anyone re-deriving the list downloads it from UCS.
+
+Credit is given because the classification is theirs and is the whole value of it. There
+is no all-military GP group — CelesTrak does not make that call — so without this the
+family was 24 leftover objects plus two name rules of our own invention. It is now 409,
+and 303 of them are somebody's published judgement rather than ours.
+
+**It is frozen, and that is stated wherever it is used.** 57.9% of the catalogue on
+2026-09-22 launched after the snapshot, so the list can only ever describe the older
+half of the sky and will describe less of it every year. The name rules in
+`scripts/catalog-sources.mjs` exist to cover what it cannot see, and the snapshot date
+is written into the derived file so the staleness is visible rather than inferred.
+
+The elements themselves still come from CelesTrak. Nothing in `active.bin` or `full.bin`
+is UCS's except which family byte 409 objects carry.

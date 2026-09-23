@@ -3,11 +3,26 @@
  * check-catalog.mjs and make-synthetic.mjs, so they cannot disagree.
  */
 
+import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FAMILY } from '../src/catalog-format.ts';
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+/**
+ * Military catalog numbers from the UCS Satellite Database, derived once by
+ * `scripts/ucs-military.py` and committed - see that file for why, and
+ * `public/data/SOURCES.md` for the credit. Read here rather than imported so the
+ * scripts need no JSON import attributes.
+ *
+ * It is a **frozen snapshot of 1 May 2023**, which is what makes it a supplement to
+ * the name rules below and never a replacement for them: 57.9% of the catalogue
+ * launched after it, including 56 of our 164 YAOGAN.
+ */
+export const UCS_MILITARY = JSON.parse(
+  readFileSync(resolve(ROOT, 'scripts/ucs-military.json'), 'utf8'),
+);
 
 /** Raw CelesTrak JSON. Gitignored; carried between CI runs by the Actions cache. */
 export const CACHE_DIR = '.catalog-cache';
@@ -75,9 +90,9 @@ export const DATASETS = {
  * instead would make it the largest download in the pipeline, four times a day, to
  * learn something the name already says.
  *
- * So a family is a name pattern, a set of groups, or both. **First match wins**, so the
- * order here is the precedence. Anything unmatched is `FAMILY.NONE` and keeps the
- * whistle the piece started with.
+ * So a family is a name pattern, a set of groups, an explicit list of catalog numbers,
+ * or any mix of them. **First match wins**, so the order here is the precedence.
+ * Anything unmatched is `FAMILY.NONE` and keeps the whistle the piece started with.
  *
  * `kind` still decides what an object *is*: a Starlink rocket body is a machine and a
  * Starlink fragment is a shard. The family only chooses which bird a bird is.
@@ -93,42 +108,63 @@ export const FAMILIES = [
   // everything on the ground depends on.
   { value: FAMILY.GNSS, groups: ['gnss'] },
   /*
-   * **Military, and this one is the least tidy rule here - deliberately so.**
+   * **Military. Three sources, and no one of them is enough.**
    *
-   * There is no all-military group to join against, because that classification is
-   * contested and CelesTrak does not make it. What their `military` group actually
-   * is, checked on 2026-09-22, is a **leftover bucket of 24**: Praetorian SDA,
-   * SAR-Lupe, Sapphire. `GROUP=radar` used to be in here too and is now out - its
-   * ten members are passive **calibration spheres**, Calsphere and Rigidsphere and
-   * LCS, aluminium balls flown from 1964 for radars to range against. Verified the
-   * way these things have to be: the first object to rise wearing the military
-   * colour was CALSPHERE 1, and a 1964 metal ball is not what that colour means.
+   * There is no all-military GP group, because that classification is contested and
+   * CelesTrak does not make it. What their `military` group actually is, checked on
+   * 2026-09-22, is a **leftover bucket of 24**: 22 Praetorian SDA, SAR-Lupe 2,
+   * Sapphire, Victus Haze Puma. `GROUP=radar` used to be in here too and is now out -
+   * its ten members are passive **calibration spheres**, Calsphere and Rigidsphere and
+   * LCS, aluminium balls flown from 1964 for radars to range against. Verified the way
+   * these things have to be: the first object to rise wearing the military colour was
+   * CALSPHERE 1, and a 1964 metal ball is not what that colour means.
    *
-   * So two name rules join it, on the same standard the megaconstellations are
-   * matched by - a naming convention that is absolute and cannot drift:
+   * So the family reads **three** things, unioned:
    *
-   *   YAOGAN  164 objects, China's reconnaissance series
-   *   USA ###  23 objects, the US military designator
+   *   `GROUP=military`   24, CelesTrak's bucket
+   *   UCS_MILITARY      613 numbers, a published classification - see ucs-military.py
+   *   two name rules     YAOGAN and USA ###, for what postdates the UCS snapshot
    *
-   * **`COSMOS ####` is deliberately left out**, and it is the interesting exclusion.
-   * It matches 805 objects, which would make this the biggest family after Starlink -
-   * but 611 of those are fragments of the 2009 Cosmos 2251 collision, and Cosmos is a
-   * generic Soviet designator that covers navigation, science and civil comms as
-   * readily as anything military. Sweeping it in would tag the wreckage of a
-   * communications satellite as a weapon, and inflate the number by mistaking one
-   * accident for an arsenal.
+   * **The UCS list is what makes this a classification rather than our judgement**,
+   * which is the thing the rest of this file exists to preserve. It joins on the
+   * catalog number like everything else here, and it resolves the case a name rule
+   * never could: `COSMOS ####` matches 805 objects, 611 of them fragments of the 2009
+   * Cosmos 2251 collision, so a name rule would tag the wreckage of a communications
+   * satellite as a weapon. UCS names **62 specific military Cosmos payloads** by
+   * number and leaves the debris and the civil ones alone. That is the whole argument
+   * for joining on numbers, arriving in one example.
    *
-   * **This is our editorial judgement rather than CelesTrak's**, which is the thing
-   * the rest of this file avoids. It is marked as such because the alternative was a
-   * family of 34 that was mostly calibration balls.
+   * **The name rules stay, and are not decoration.** UCS froze on 1 May 2023 and
+   * 57.9% of the catalogue launched after it. Measured on 2026-09-22: of the 409
+   * objects this family now holds, 106 come from the name rules alone - 76 YAOGAN, 21
+   * Praetorian SDA, 8 USA, Victus Haze Puma - every one of them a launch UCS never
+   * saw. The list gives breadth, the names give currency.
+   *
+   *   YAOGAN   164 objects, China's reconnaissance series
+   *   USA ###   23 objects, the US military designator
+   *
+   * Both are naming conventions that are absolute and cannot drift, which is the same
+   * standard the megaconstellations are matched by.
+   *
+   * 402 of the 613 UCS numbers are still on orbit; 99 of those are navigation and are
+   * taken by the GNSS rule above before this one is reached, which is that ordering
+   * doing its job on Beidou and Navstar.
    */
-  { value: FAMILY.MILITARY, groups: ['military'], name: /^(YAOGAN|USA[- ]\d)/i },
+  { value: FAMILY.MILITARY, groups: ['military'], catnrs: UCS_MILITARY.catnrs, name: /^(YAOGAN|USA[- ]\d)/i },
   { value: FAMILY.WEATHER, groups: ['weather'] },
   { value: FAMILY.SCIENCE, groups: ['science'] },
 ];
 
 /** Every group whose membership some family reads. */
 export const TAG_GROUPS = [...new Set(FAMILIES.flatMap((f) => f.groups ?? []))];
+
+// A Set per family that carries an explicit number list, built once rather than per
+// object: `familyOf` runs 21,000 times a pack and a linear scan of 613 would show.
+// The catalogue's NORAD_CAT_ID arrives as a string from CelesTrak's JSON, so both
+// sides are coerced to Number - a Set of ints never matches the string '25544'.
+for (const family of FAMILIES) {
+  if (family.catnrs) family.catnrSet = new Set(family.catnrs.map(Number));
+}
 
 /**
  * Which family an object belongs to. `inGroup` answers whether a catalog number is in
@@ -138,6 +174,7 @@ export function familyOf(name, catnr, inGroup) {
   for (const family of FAMILIES) {
     if (family.name && family.name.test(name)) return family.value;
     if (family.groups?.some((g) => inGroup(g, catnr))) return family.value;
+    if (family.catnrSet?.has(Number(catnr))) return family.value;
   }
   return FAMILY.NONE;
 }
