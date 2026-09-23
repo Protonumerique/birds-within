@@ -795,7 +795,29 @@ const RING_VERT = /* glsl */ `
     vec3 attention = aFeatured > 0.5
       ? uFeaturedColor
       : (familyColor.a > 0.5 ? familyColor.rgb : byKind);
-    vColor = choir ? uChoirColor : ((hovered || marked || revealed) ? attention : uRingColor);
+
+    /*
+     * **A belt object with a family shows it, but only under attention.** Changed
+     * 2026-09-23, and it is a narrowing of "the belt outranks all of it" rather than a
+     * reversal of it.
+     *
+     * 43 GNSS and 22 weather objects are geosynchronous - BeiDou's geostationary arm,
+     * the SBAS hosts, and every GOES, Meteosat, Himawari and Fengyun there is. Under
+     * the old rule they were blue in every state, so two thirds of the weather family
+     * was unfindable *as weather*: it existed, it had a colour, and no object would
+     * ever wear it.
+     *
+     * What did **not** change is the resting sky. The point sprite is still blue for
+     * every belt object, so "blue means geostationary" holds exactly where that rule
+     * does its work - across twenty thousand untouched marks. What changes is the one
+     * state that already means "you picked this out", where the question is *which*
+     * thing you picked and the belt's answer was the least informative one available.
+     * A belt object with no family still rings blue, and the ring keeps the belt's
+     * smaller size and its steady brightness, so two channels go on saying belt.
+     */
+    bool attentive = hovered || marked || revealed;
+    vec3 ringed = (choir && familyColor.a < 0.5) ? uChoirColor : attention;
+    vColor = attentive ? ringed : (choir ? uChoirColor : uRingColor);
     // Markers leave as the sky is immersed: a mark eight times its size and gone soft
     // is nowhere near where picking thinks it is, and a pointer that lies is worse than
     // no pointer. See IMMERSION.markersGoneAt.

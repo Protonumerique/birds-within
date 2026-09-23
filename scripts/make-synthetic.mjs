@@ -66,6 +66,19 @@ const SHELLS = [
   [700, 550, 53.0, 'STARLINK', null], // the real Starlink shell, tagged by name
   [250, 780, 86.4, 'IRIDIUM', null], // the real Iridium shell, tagged by name
   [200, 1200, 87.9, 'COSMOS', FAMILY.MILITARY], // near-polar; stands in for the group join
+  /*
+   * **Wreckage that matches a family's name rule**, which is the one case the DEB
+   * exclusion in `familyOf` exists for and the one nothing else here produces.
+   *
+   * On the real sky this is 109 fragments of the 2009 collision, all named
+   * `IRIDIUM 33 DEB`, and until 2026-09-23 every one of them carried FAMILY.IRIDIUM -
+   * a shard that looked and sounded like wreckage and wore the constellation's colour.
+   * Named the same way here, so the exclusion runs offline by the path production
+   * takes: the name rule matches, and `kindFromName` reading DEB overrules it first.
+   * Without this shell the rule is untestable on the dev sky, because nothing else in
+   * it is debris *and* in a family.
+   */
+  [60, null, null, 'IRIDIUM 33 DEB', null],
   [150, 800, 98.6, 'SSO', null], // sun-synchronous, untagged: the default whistle
   [200, null, null, 'SYNTH DEB', null], // broad spread; named so kindFromName reads it as debris
   /*
@@ -203,8 +216,27 @@ for (let k = 0; k < CHOIR_COUNT; k++) {
   const alt = retired ? uniform(36_050, 36_350) : 35_786 + uniform(-25, 25);
   const inc = retired ? uniform(0.5, 12) : uniform(0.01, 0.6);
 
+  /*
+   * **A slice of the belt carries a family**, added 2026-09-23 with the rule that lets
+   * a belt object wear its family's colour under attention.
+   *
+   * On the real sky 43 GNSS and 22 weather objects are geosynchronous - BeiDou's
+   * geostationary arm and the SBAS hosts, and every GOES, Meteosat, Himawari and
+   * Fengyun there is, which is *two thirds of the whole weather family*. Every
+   * synthetic belt object was FAMILY.NONE, so nothing offline could show a belt mark
+   * ringing anything but blue, and the rule was untestable on the dev sky.
+   *
+   * Over-represented at ~12% against a real 5.7%, on the same argument as everything
+   * else in this file.
+   */
+  const geoFamily =
+    k % 13 === 0 ? FAMILY.GNSS : k % 17 === 0 ? FAMILY.WEATHER : null;
+  const label =
+    geoFamily === FAMILY.GNSS ? 'SYNTH GEONAV' : geoFamily === FAMILY.WEATHER ? 'SYNTH GEOWX' : 'SYNTH GEO';
+
   records.push({
-    OBJECT_NAME: `SYNTH GEO ${catnr}`,
+    OBJECT_NAME: `${label} ${catnr}`,
+    FAMILY: geoFamily ?? FAMILY.NONE,
     NORAD_CAT_ID: catnr,
     EPOCH: EPOCH.toISOString(),
     INCLINATION: fixed(inc, 4),

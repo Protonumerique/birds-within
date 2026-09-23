@@ -6,7 +6,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { FAMILY } from '../src/catalog-format.ts';
+import { FAMILY, KIND, kindFromName } from '../src/catalog-format.ts';
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -171,6 +171,32 @@ for (const family of FAMILIES) {
  * a named group; the packer builds it from the tag sources.
  */
 export function familyOf(name, catnr, inGroup) {
+  /*
+   * **Wreckage has no family.** Changed 2026-09-23, and it reverses a decision this
+   * file used to defend as "the rule working".
+   *
+   * `IRIDIUM 33 DEB` matches the Iridium name rule, so 109 fragments of the 2009
+   * collision carried `FAMILY.IRIDIUM` - more than half the family. The argument for
+   * keeping them was that hue carries the constellation while shape carries the kind,
+   * so nothing is lost. What that missed is that the three channels then **disagree**:
+   * the mark is a shard, the voice is a shard, and the colour says *working Iridium
+   * satellite*. Reported exactly so - "they look like a shard and produce
+   * interference, but are colored green. This makes no sense."
+   *
+   * A family names a constellation, and a fragment is not a member of one. It is what
+   * is left of a member, which is a different fact and one the wreckage grammar
+   * already tells better than a hue could.
+   *
+   * It costs the Iridium family 109 of its 190 objects, and the 2009-collision story
+   * with them. That story is still in the sky - those fragments are drawn, they tear
+   * the picture and they hiss - it simply is not told in Iridium's colour any more.
+   *
+   * Rocket bodies are deliberately **not** covered: one Starlink stage is a spent
+   * launcher rather than wreckage, it sounds as a machine, and there is exactly one
+   * in the whole table. If that changes, this is the line to widen.
+   */
+  if (kindFromName(name) === KIND.DEBRIS) return FAMILY.NONE;
+
   for (const family of FAMILIES) {
     if (family.name && family.name.test(name)) return family.value;
     if (family.groups?.some((g) => inGroup(g, catnr))) return family.value;

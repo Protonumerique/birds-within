@@ -2155,7 +2155,7 @@ silences between phrases — fine for a shard, which has no gaps and does exactl
 and wrong for anything with a phrase. Multiplying leaves silence silent.
 
 **The military voice is a hawk now, and the squawk it replaced became navigation.** A
-squawk is a *gregarious* sound — it says flock, and 409 objects spread across every orbit
+squawk is a *gregarious* sound — it says flock, and 408 objects spread across every orbit
 are not a flock. A hunting bird is solitary, holds one note far longer than a songbird
 can, and empties the sky around it. `noteMs` at 700–1500 is the whole patch: three to six
 times any other voice, which forces `perPhrase` to 1–2 and `gapMs` out to six seconds so
@@ -2238,9 +2238,12 @@ voice in the browser. What it cannot tell you is anything about the *sky*: the
 composition that comes out is the composition you put in. Delete the cache afterwards, or
 the next local `fetch:catalog` will see fresh metadata and pack the invention.
 
-One case only scale shows: `IRIDIUM 33 DEB` fragments match the Iridium *name* rule, so
-110 of them carry `FAMILY.IRIDIUM` while `kind` still says debris - and they sound as
-shards, because kind decides the class. That is the rule working, not a mis-tag.
+One case only scale showed, and it turned out to be a **mis-tag after all**:
+`IRIDIUM 33 DEB` fragments match the Iridium *name* rule, so 109 of them carried
+`FAMILY.IRIDIUM` while `kind` said debris. This file called that "the rule working"
+for five days. It was not — see *Wreckage has no family*. `familyOf` drops debris from
+every family now, and a full-scale stand-in is still the way to catch this class of
+thing.
 
 #### Both buses
 
@@ -2353,12 +2356,15 @@ laid over the image.
 | family | count | share | in the belt | payloads | debris |
 |---|---|---|---|---|---|
 | **Starlink** | **11,110** | **52.9%** | 0 | 11,110 | 0 |
-| *no family* | 8,997 | 42.9% | 996 | 5,729 | 2,843 |
-| Military | 409 | 1.9% | 86 | 407 | 1 |
-| Iridium | 190 | 0.9% | 0 | 81 | 109 |
+| *no family* | 9,107 | 43.4% | 996 | 5,729 | 2,953 |
+| Military | 408 | 1.9% | 86 | 407 | 0 |
 | GNSS | 172 | 0.8% | 43 | 172 | 0 |
+| Iridium | 81 | 0.4% | 0 | 81 | 0 |
 | Weather | 69 | 0.3% | 22 | 69 | 0 |
 | Science | 45 | 0.2% | 1 | 45 | 0 |
+
+**Every debris column is zero since 2026-09-23**, and Iridium went from 190 to 81 as a
+result — see *Wreckage has no family* below.
 
 Over half of everything on orbit is one company's. *No family* is not "unnamed" — every
 one of those objects has a name; they match no family rule, and they are where all the
@@ -2408,17 +2414,81 @@ the wreckage pink. **Yellow is the most crowded part of this wheel, not the free
 warm white sits at hue 41 and amber at 34. Scoping the colour to *attention* removes
 warm white and the shard brown from the competition and opens the whole thing up.
 
-**Precedence, and all three places agree on it:** featured → family → kind → amber. So a
-kept Iridium fragment is chartreuse rather than pink, and 109 of Iridium's 190 objects
-are fragments of the 2009 collision. Nothing is lost: the **shape** still says shard.
-Hue carries the family, form carries the kind. Verified on `USA 142 DEB`, the one debris
-object in the military family, which comes out `rgba(70, 164, 102, 0.97)` — green, and
-still a triangle.
+**Precedence, and all three places agree on it:** featured → family → kind → amber.
 
-**The belt outranks all of it**, in the shader and in the sound alike. `RING_VERT` tests
-`choir` before attention, so the 19 military and 43 GNSS objects in the belt stay blue;
-`audio.ts` splits on the same byte, so a belt object never reaches a family voice either.
-One rule, both senses.
+**This used to be demonstrated on wreckage and no longer can be.** The example was a
+kept `IRIDIUM 33 DEB` fragment coming out chartreuse rather than pink — hue carrying the
+family, form carrying the kind — and the argument was that nothing is lost because the
+shape still says shard. It was wrong, and *why* is worth keeping: see *Wreckage has no
+family* below. No object in any family is debris any more, so the family-over-kind step
+now only ever decides between a payload's amber and its constellation's hue.
+
+##### Wreckage has no family
+
+Changed 2026-09-23, and it reverses a decision this file previously defended twice.
+
+`IRIDIUM 33 DEB` matches the Iridium name rule, so **109 fragments of the 2009 collision
+carried `FAMILY.IRIDIUM`** — more than half of a 190-object family. The defence was that
+the three channels divide the work: hue says constellation, shape says kind, voice says
+kind. What that missed is that they then **disagree about the same object**. Reported
+exactly so: *"they look like a shard and produce interference, but are colored green.
+This makes no sense."*
+
+A family names a constellation, and a fragment is not a member of one — it is what is
+left of a member, which is a different fact, and one the wreckage grammar already tells
+better than a hue can.
+
+`familyOf` now returns `FAMILY.NONE` for anything `kindFromName` calls debris. It is
+**110 objects in the whole catalogue**: 109 Iridium fragments and one `USA 142 DEB`.
+Starlink, GNSS, Weather and Science had none at all.
+
+**The cost is real and worth stating.** Iridium drops from 190 to 81, and the story that
+*more than half of Iridium on orbit is Iridium's own wreckage* stops being told in
+Iridium's colour. That story is still in the sky — the fragments are drawn, they tear
+the picture and they hiss — it simply is not told in a hue any more.
+
+**Rocket bodies are deliberately not covered.** A spent stage is a launcher rather than
+wreckage, it sounds as a machine, and there was exactly one in the whole table. If that
+changes, `familyOf` is the one line to widen.
+
+`synthetic.bin` carries an `IRIDIUM 33 DEB` shell so the exclusion runs offline by the
+path production takes — the name rule matches and the kind check overrules it first.
+Nothing else in the dev sky is debris *and* in a family, so without it the rule is
+untestable. Verified: 56 Iridium-named fragments in `synthetic`, 109 in `full`, **zero
+carrying a family** in either.
+
+**The belt outranks all of it at rest, and gave way under attention on 2026-09-23.**
+
+It used to be absolute: `RING_VERT` tested `choir` before anything, so a belt object was
+blue in every state, and `audio.ts` splits on the same byte so it never reaches a family
+voice. The sound half is unchanged and should stay that way — a geostationary object
+belongs to the drone.
+
+What changed is the **ring**, because the old rule made two families largely
+unfindable. **152 of the 1,148 belt objects carry a family**: 86 military, 43 GNSS, 22
+weather, 1 science — and for weather that is *two thirds of the entire family*, and for
+GNSS it is BeiDou's geostationary arm plus the SBAS hosts. They had a colour that no
+object would ever wear. Reported as not being able to find a single weather or
+positioning satellite in an hour of looking.
+
+So a belt object with a family now shows it **when touched, kept or revealed**, and only
+then. Three things hold it together:
+
+- **The resting sky did not move.** Every belt point sprite is still blue, which is
+  where "blue means geostationary" does its work — across twenty thousand untouched
+  marks, not on the two you have clicked.
+- **A belt object with no family still rings blue**, which is 996 of the 1,148.
+- **Two channels go on saying belt**: the ring keeps the belt's smaller `CHOIR` size and
+  its steady brightness rather than dimming by elevation.
+
+Measured on the synthetic sky with the clock held, hovering NAVIGATION in the legend:
+crimson pixels **0 → 250**, and belt blue **198 → 189** — that drop is belt objects
+changing what their ring says, which is the specific thing being tested. Nothing hovered
+is byte-identical to before.
+
+`synthetic.bin` tags ~13% of its belt GNSS or Weather for this, against a real 13.2%.
+Every synthetic belt object was `FAMILY.NONE`, so nothing offline could show a belt mark
+ringing anything but blue.
 
 ##### The legend answers
 
@@ -2466,8 +2536,8 @@ sampled hourly over 24 hours, above the 2° floor:
 |---|---|---|---|---|
 | Starlink | 11,110 | 0 | 320–438 (median 362) | 0 |
 | GNSS | 172 | 43 | **44–51 (median 49)** | 14–20 |
-| Military | 409 | 86 | 16–35 (median 27) | 41–43 |
-| Iridium | 190 | 0 | 5–18 (median 10) | 0 |
+| Military | 408 | 86 | 16–35 (median 27) | 41–43 |
+| Iridium | 81 | 0 | 2–8 (was 5–18 with its wreckage) | 0 |
 | Science | 45 | 1 | 3–11 (median 7) | 0–1 |
 | Weather | 69 | 22 | **0–3 (median 2)** | 12 |
 
@@ -2478,8 +2548,10 @@ family was to point at the sky and hope.
 
 **And the belt really does absorb them**, which was the other half of the guess and is
 correct: **42 of the 69 military objects up at once are in the belt**, and **12 of the
-14 weather**. Those stay blue and never wear the family colour, because `choir` outranks
-family — so for weather especially, what is *findable* by hue is a median of two objects.
+14 weather**. At the time those stayed blue in every state and never wore the family
+colour, so for weather what was *findable* by hue was a median of two objects. That is
+what *The belt outranks all of it* was narrowed to fix, later the same day: a belt
+object now wears its family's colour under attention, so those twelve are reachable.
 
 So the legend carries a number and answers to the pointer:
 
@@ -2530,7 +2602,7 @@ no two of them overlap much:
 | `GROUP=military` | 24 | CelesTrak's bucket |
 | **UCS Satellite Database** | 613 numbers, **402** still on orbit | a published classification |
 | `YAOGAN` and `USA ###` | 187 | naming conventions that cannot drift |
-| **union, on `full`** | **409** | was 211 |
+| **union, on `full`** | **408** | was 211 |
 
 **The UCS list is what makes this a classification rather than our judgement**, which is
 the thing the rest of `FAMILIES` exists to preserve. Added 2026-09-23. The Union of
@@ -2550,7 +2622,7 @@ joining on numbers rather than names, arriving in one example.
 
 **The name rules stay, and they are not decoration.** UCS froze on **1 May 2023** — it is
 the last edition they published — and **57.9% of the catalogue launched after it**. Of
-the 409 objects the family now holds, **106 come from the name rules alone**: 76 YAOGAN,
+the 408 objects the family now holds, **106 come from the name rules alone**: 76 YAOGAN,
 21 Praetorian SDA, 8 USA, Victus Haze Puma, every one a launch UCS never saw. Only 105
 are found by both. So the list gives breadth and the names give currency, and **a
 UCS-only family would have been a third smaller in YAOGAN than what was already
@@ -2562,7 +2634,7 @@ written into `scripts/ucs-military.json` so the staleness is visible rather than
 inferred. The failure mode is the mild one this file already accepts for a thin family:
 an untagged object sings the default voice, which is not wrong.
 
-**86 of the 409 are in the belt and stay blue.** `RING_VERT` tests `choir` before
+**86 of the 408 are in the belt.** `RING_VERT` tests `choir` before
 attention and `audio.ts` splits on the same byte, so a fifth of this family never reaches
 the colour or the voice at all — which is the belt rule working, not a loss.
 

@@ -382,11 +382,15 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
        * that take an attention hue - a listed row rings white whatever family it is in,
        * so lighting on listed would name colours that are nowhere on screen.
        *
-       * Two objects are skipped for the same reason the shader skips them, and the
-       * block would otherwise tell a plain lie. A belt object stays blue however it is
-       * tagged, because `choir` outranks family in `RING_VERT` and in `audio.ts` alike;
-       * and a featured object keeps its cool white. Neither wears the hue, so neither
-       * lights the name of it.
+       * **A featured object is skipped**, for the same reason the shader skips it: the
+       * ISS keeps its cool white, so it never wears a family hue and must not light the
+       * name of one.
+       *
+       * **A belt object is no longer skipped.** It was, while `choir` outranked family
+       * everywhere - but since 2026-09-23 a belt object with a family *does* wear that
+       * colour on its ring, which is what makes BeiDou's geostationary arm and every
+       * GOES findable as Navigation and Weather at all. It still sings with the drone
+       * and still holds a square rather than a row; only the attention colour moved.
        */
       /*
        * **Revealing a family rings its members without keeping any of them.**
@@ -396,10 +400,9 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
        * the whole time - 4.5% of the 1,087 objects above the horizon, at 20,000 km, so
        * small and slow. Nothing was broken; they were simply not findable by pointing.
        *
-       * The belt members are included on purpose, though they ring blue rather than in
-       * the family's colour, because `choir` outranks family in the shader. That is
-       * the other half of the same answer: 42 of the 69 military objects up at once are
-       * parked in the belt, and 12 of the 14 weather. A reveal that quietly dropped
+       * The belt members are included on purpose, and since 2026-09-23 they wear the
+       * family's colour like everything else: 42 of the 69 military objects up at once
+       * are parked in the belt, and 12 of the 14 weather. A reveal that quietly dropped
        * them would hide exactly the fact the count is there to expose.
        */
       if (revealed >= 0) {
@@ -408,7 +411,7 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
 
       let lit = 0;
       const claim = (i: number) => {
-        if (i < 0 || isChoir(i) || featured[i] === 1) return;
+        if (i < 0 || featured[i] === 1) return;
         const at = convAt.get(family[i] ?? 0);
         if (at !== undefined) lit |= 1 << at;
       };
