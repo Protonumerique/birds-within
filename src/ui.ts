@@ -31,6 +31,8 @@ export interface Hud {
   pulse(): void;
   /** What wears a ring on the sky: every row on show, plus anything kept or pointed at. */
   ringed(): readonly number[];
+  /** The FAMILY value the pointer is revealing from the legend, or -1. */
+  revealing(): number;
   /** Every belt object above the sky's floor - what the grid shows, and what sings. */
   belt(): readonly number[];
 }
@@ -244,13 +246,31 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
   const conv = $('conv');
   conv.innerHTML = FAMILY_LEGEND.map(
     ({ family: value, label }) =>
-      `<span class="conv"><i style="background:${FAMILY_LOOK[value]}"></i>${label}</span>`
+      `<span class="conv"><i style="background:${FAMILY_LOOK[value]}"></i>${label}<b class="cn"></b></span>`
   ).join('');
   const convRows = [...conv.querySelectorAll<HTMLElement>('.conv')];
+  const convNum = convRows.map((row) => row.querySelector<HTMLElement>('.cn')!);
   /** Which legend entry each family maps to, so lighting one is an array index. */
   const convAt = new Map<number, number>(FAMILY_LEGEND.map((e, n) => [e.family, n]));
   /** What was lit last time, so an unchanged frame writes no style at all. */
   let convLit = 0;
+  /** The last count written beside each name, for the same reason. */
+  const convCount = FAMILY_LEGEND.map(() => -1);
+  /** Members of each family above the horizon, refilled on the cull. */
+  const famUp: number[][] = FAMILY_LEGEND.map(() => []);
+  /**
+   * Which legend entry the pointer is resting on, or -1.
+   *
+   * Hovering a *name* reveals where that family is; it deliberately does not keep
+   * anything. The rest of the piece treats a click as the instrument, and a legend
+   * that selected six objects on a mouse-over would be an accident waiting to happen
+   * every time someone reached for FULL SCREEN.
+   */
+  let revealed = -1;
+  convRows.forEach((row, n) => {
+    row.onpointerenter = () => { revealed = n; };
+    row.onpointerleave = () => { if (revealed === n) revealed = -1; };
+  });
 
   const cols = [names, selection, featured, family] as const;
   const passingGroup = new Group('Passing', GROUP_LOOK.passing, READOUT.passingRows, ...cols, level);
@@ -273,6 +293,7 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
 
   return {
     ringed: () => ringed,
+    revealing: () => (revealed >= 0 ? FAMILY_LEGEND[revealed]!.family : -1),
     belt: () => choirUp,
 
     update(date, frame) {
@@ -297,11 +318,24 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
         passing.length = 0;
         debris.length = 0;
         choirUp.length = 0;
+        // Which objects of each family are up, gathered on the pass that is already
+        // walking the catalogue. The legend's counts and its reveal both read this, so
+        // the number beside a name and the rings it draws can never disagree.
+        for (const list of famUp) list.length = 0;
         for (let i = 0; i < frame.count; i++) {
           if (frame.range[i]! < 0 || frame.elevation[i]! <= lowestVisible) continue;
+          const at = convAt.get(family[i] ?? 0);
+          if (at !== undefined) famUp[at]!.push(i);
           if (isChoir(i)) choirUp.push(i);
           else if (isDebris(i)) debris.push(i);
           else passing.push(i);
+        }
+        for (let n = 0; n < convRows.length; n++) {
+          const count = famUp[n]!.length;
+          if (count !== convCount[n]) {
+            convCount[n] = count;
+            convNum[n]!.textContent = String(count);
+          }
         }
         const byElevation = (a: number, b: number) => frame.elevation[b]! - frame.elevation[a]!;
         passing.sort(byElevation);
@@ -354,6 +388,24 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
        * and a featured object keeps its cool white. Neither wears the hue, so neither
        * lights the name of it.
        */
+      /*
+       * **Revealing a family rings its members without keeping any of them.**
+       *
+       * Added 2026-09-23, and it answers a real complaint: an hour of play found no
+       * navigation satellite at all. There were about **forty-nine** of them passing
+       * the whole time - 4.5% of the 1,087 objects above the horizon, at 20,000 km, so
+       * small and slow. Nothing was broken; they were simply not findable by pointing.
+       *
+       * The belt members are included on purpose, though they ring blue rather than in
+       * the family's colour, because `choir` outranks family in the shader. That is
+       * the other half of the same answer: 42 of the 69 military objects up at once are
+       * parked in the belt, and 12 of the 14 weather. A reveal that quietly dropped
+       * them would hide exactly the fact the count is there to expose.
+       */
+      if (revealed >= 0) {
+        for (const i of famUp[revealed]!) if (ringed.indexOf(i) < 0) ringed.push(i);
+      }
+
       let lit = 0;
       const claim = (i: number) => {
         if (i < 0 || isChoir(i) || featured[i] === 1) return;

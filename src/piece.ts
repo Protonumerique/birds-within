@@ -202,6 +202,7 @@ export async function run(status: StatusFn): Promise<void> {
       // Rings follow the GPU blend on their own, so only a change of membership has
       // to reach the scene - at most a handful of integers.
       scene.setHighlights(hud.ringed());
+      scene.setReveal(hud.revealing());
       lastHud = wall;
     }
 

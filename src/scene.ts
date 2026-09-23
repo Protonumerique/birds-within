@@ -694,6 +694,13 @@ const RING_VERT = /* glsl */ `
   uniform float uChoirPx;
   uniform float uHovered;
   uniform float uHoverScale;
+  /**
+   * A whole family revealed at once, by FAMILY value, or -1 for none. Set while the
+   * pointer rests on that family's name in the legend. One uniform rather than a
+   * per-object attribute, for the reason the pulse records: the rings are an indexed
+   * draw, so this runs on the handful of vertices actually being drawn.
+   */
+  uniform float uReveal;
   uniform vec3 uRingColor;
   uniform vec3 uMarkColor;
   uniform vec3 uDebrisColor;
@@ -744,6 +751,10 @@ const RING_VERT = /* glsl */ `
     bool hovered = abs(aIndex - uHovered) < 0.5;
     bool marked = aMark > 0.5;
     bool choir = aChoir > 0.5;
+    // Revealed: the pointer is on this family's name. It wears the family's own colour
+    // exactly as a kept one would, because that is the question being asked - *where
+    // are these* - and answering it in a different hue would answer a different one.
+    bool revealed = uReveal >= 0.0 && abs(aFamily - uReveal) < 0.5;
 
     float elevation = asin(clamp(dir.y, -1.0, 1.0));
     float bright = mix(uDimAtHorizon, 1.0, clamp(elevation / uFullBright, 0.0, 1.0));
@@ -784,11 +795,11 @@ const RING_VERT = /* glsl */ `
     vec3 attention = aFeatured > 0.5
       ? uFeaturedColor
       : (familyColor.a > 0.5 ? familyColor.rgb : byKind);
-    vColor = choir ? uChoirColor : ((hovered || marked) ? attention : uRingColor);
+    vColor = choir ? uChoirColor : ((hovered || marked || revealed) ? attention : uRingColor);
     // Markers leave as the sky is immersed: a mark eight times its size and gone soft
     // is nowhere near where picking thinks it is, and a pointer that lies is worse than
     // no pointer. See IMMERSION.markersGoneAt.
-    vAlpha = uMarkers * (choir ? 1.0 : (hovered ? 1.0 : (marked ? bright : 1.0)));
+    vAlpha = uMarkers * (choir ? 1.0 : (hovered ? 1.0 : ((marked || revealed) ? bright : 1.0)));
 
     // The ring breathes with its voice. Radius rather than brightness, which already
     // means elevation - see HIGHLIGHT.pulse. An object with no voice finds no slot and
@@ -1472,6 +1483,7 @@ export class SkyScene {
       uChoirColor: { value: new THREE.Color(CHOIR.color) },
       uHovered: { value: -1 },
       uHoverScale: { value: HIGHLIGHT.hoverScale },
+      uReveal: { value: -1 },
       uDimAtHorizon: { value: HIGHLIGHT.dimAtHorizon },
       uFullBright: { value: THREE.MathUtils.degToRad(HIGHLIGHT.fullBrightDeg) },
       uMarkers: { value: 1 },
@@ -1684,6 +1696,16 @@ export class SkyScene {
    * Indices into the frame columns; only a change reaches the GPU, and a change is
    * a handful of integers.
    */
+  /**
+   * Reveal a whole family: every ringed object of it wears the family's colour.
+   *
+   * `ui.ts` decides *which* objects get a ring at all and puts them in the highlight
+   * list; this only says how to colour them. -1 is nothing revealed.
+   */
+  setReveal(family: number) {
+    this.ringUniforms.uReveal.value = family;
+  }
+
   setHighlights(indices: readonly number[]) {
     const index = this.highlightIndex.array as Uint32Array;
     const n = Math.min(indices.length, index.length);

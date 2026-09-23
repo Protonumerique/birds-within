@@ -654,6 +654,22 @@ input[type="range"] {
   letter-spacing: 0.14em;
   color: var(--ink-dim);
   transition: color 160ms ease-out;
+  /* The one thing in the hints corner besides FULL SCREEN that takes the pointer:
+     resting on a name rings every member of that family that is currently up. */
+  pointer-events: auto;
+  cursor: default;
+}
+
+/* How many of this family are above the horizon now - the number the reveal will ring.
+   Tabular, because it rewrites itself four times a second and a proportional 1 against
+   a 0 makes the whole block twitch. */
+.conv .cn {
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  opacity: 0.6;
+  min-width: 1.6em;
+  text-align: right;
 }
 
 /* Something of this family is kept or under the pointer, so it is wearing this colour

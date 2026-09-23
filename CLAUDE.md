@@ -2452,6 +2452,63 @@ Each entry grows three or four pixels in place and nothing rewraps — so sweepi
 pointer across the sky cannot make the block jump. A legend that jitters on hover would
 have been worse than a dark one.
 
+##### A count, and a reveal
+
+Added 2026-09-23, from a report worth quoting because the answer was the opposite of
+what it sounded like: *"I haven't been able to catch a single military/weather/
+positioning sat in the last hour. Specially for GPS I find it really impossible that
+they're basically none."*
+
+**The data was right and the sky was full of them.** Measured on `full` from Berlin,
+sampled hourly over 24 hours, above the 2° floor:
+
+| family | in catalogue | of which belt | passing, above horizon | belt, above horizon |
+|---|---|---|---|---|
+| Starlink | 11,110 | 0 | 320–438 (median 362) | 0 |
+| GNSS | 172 | 43 | **44–51 (median 49)** | 14–20 |
+| Military | 409 | 86 | 16–35 (median 27) | 41–43 |
+| Iridium | 190 | 0 | 5–18 (median 10) | 0 |
+| Science | 45 | 1 | 3–11 (median 7) | 0–1 |
+| Weather | 69 | 22 | **0–3 (median 2)** | 12 |
+
+**Forty-nine navigation satellites are passing at any moment** — and that is 4.5% of the
+1,087 objects above the horizon, at 20,000 km, so small and slow. One hover in
+twenty-two lands on one. It was never a data problem; it was that the only way to find a
+family was to point at the sky and hope.
+
+**And the belt really does absorb them**, which was the other half of the guess and is
+correct: **42 of the 69 military objects up at once are in the belt**, and **12 of the
+14 weather**. Those stay blue and never wear the family colour, because `choir` outranks
+family — so for weather especially, what is *findable* by hue is a median of two objects.
+
+So the legend carries a number and answers to the pointer:
+
+- **The count is what is above the horizon now**, refreshed on the same 4 Hz cull that
+  builds the lists — it is a tally on a pass already walking the catalogue, so it costs
+  nothing. Tabular figures, because it rewrites four times a second.
+- **Resting on a name rings every member of that family**, in the family's own colour.
+  It **keeps nothing**: the piece treats a click as the instrument, and a legend that
+  selected six objects on a mouse-over would fire every time somebody reached for FULL
+  SCREEN. Verified — rows kept stayed 0 through every hover.
+- **Belt members are included and ring blue.** A reveal that dropped them would hide
+  exactly the fact the count exists to expose, and the count and the reveal must agree
+  or the number is a lie.
+
+`uReveal` is **one uniform**, not a per-object attribute — the same argument the pulse
+records. The rings are an indexed draw, so the test runs on the twenty-odd vertices
+actually being drawn.
+
+Measured on the synthetic sky with the clock held, pixels changed in the sky against an
+untouched baseline: **STARLINK n=34 → 1,607 px, NAVIGATION n=15 → 681, WEATHER n=4 →
+318**, against a noise floor of 102 with nothing hovered. Monotonic in the count, which
+is the check.
+
+**The measurement needed a fix first, and it is the fourth time this file has recorded
+one like it.** Reading the WebGL canvas back through `drawImage` returned **all black** —
+`preserveDrawingBuffer` is false, so there is nothing to copy once the frame is
+presented. The probe reported 0 pixels changed for every family and looked exactly like
+a feature that does not work. Playwright's own screenshot is the reachable path.
+
 **Colour and voice are now the same set but still separate axes.** Every family has both
 as of 2026-09-23 — see *Singing, not calling* — but a family could still have one without
 the other, and `FAMILY_VOICE` being a total map is what keeps that honest.
@@ -2816,7 +2873,9 @@ npm run bench            # WASM vs JS at catalogue scale
 npm run build            # typecheck + production build
 npm run make:synthetic   # regenerate the committed offline fallback
 npm run voice:probe      # render each family's voice offline and measure it -
-                         # RMS, peak, spectral centroid, and the steps A/B
+                         # RMS, peak, spectral centroid, and the steps A/B. Needs
+                         # npm i --no-save playwright && npx playwright install chromium;
+                         # playwright is deliberately NOT a dependency of this project
 npm run ucs:military -- <file.xlsx>   # UCS database -> scripts/ucs-military.json
                          # derived once and committed; needs pip install openpyxl.
                          # The spreadsheet is not in the repo - see public/data/SOURCES.md

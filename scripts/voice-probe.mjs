@@ -1,7 +1,15 @@
 /**
  * Render each family's voice on its own into an OfflineAudioContext and measure it.
  *
- *     node scripts/voice-probe.mjs
+ *     npm i --no-save playwright && npx playwright install chromium
+ *     npm run voice:probe
+ *
+ * **Playwright is not a dependency of this project and should not become one.** It is
+ * a few hundred MB of browser for a measurement nobody takes during a build, so it is
+ * installed when wanted and pruned after - the same arrangement as `pip install
+ * fonttools brotli` for the fonts and `pip install sgp4 skyfield` for the reference.
+ * The piece needs a real browser here rather than a Node audio shim, because what is
+ * being measured is Web Audio's own `OfflineAudioContext`.
  *
  * **Every gain in `AUDIO.performer.voices` is a measured number, not a chosen one**,
  * and this is what measures them. The trap it exists for is register: the ear is about
@@ -25,8 +33,14 @@
  * It drives the scheduler through `OfflineAudioContext.suspend`, because the lookahead
  * is 0.35 s: one `update` at time zero writes a third of a second and then silence.
  */
-import { chromium } from 'playwright';
-import { createServer } from 'vite';
+let chromium, createServer;
+try {
+  ({ chromium } = await import('playwright'));
+  ({ createServer } = await import('vite'));
+} catch {
+  console.error('voice-probe needs playwright: npm i --no-save playwright && npx playwright install chromium');
+  process.exit(1);
+}
 
 const server = await createServer({ root: process.cwd(), server: { port: 5199 }, logLevel: 'error' });
 await server.listen();
