@@ -1288,6 +1288,9 @@ export class SkyScene {
   private bloomA: THREE.WebGLRenderTarget | null = null;
   private bloomB: THREE.WebGLRenderTarget | null = null;
   private bloomPixelRatio = 0;
+  /** The device-pixel size the buffers above were built for. See `resize`. */
+  private bloomWidth = 0;
+  private bloomHeight = 0;
   private readonly bloomQuad: THREE.Mesh | null;
   private readonly bloomScene = new THREE.Scene();
   private readonly bloomCamera = new THREE.Camera();
@@ -2341,10 +2344,24 @@ export class SkyScene {
     // The patch is a fixed square in CSS pixels; only a change of device pixel ratio
     // can resize it, so it is built once and kept.
     // The glow's buffers follow the canvas, so they are rebuilt whenever it changes.
-    if (this.bloomQuad && (ratio !== this.bloomPixelRatio || this.bloomA?.width !== Math.max(1, Math.floor((w * ratio) / BLOOM.downscale)))) {
+    //
+    // **Both dimensions, and that is the whole of the fix.** This guard used to test
+    // the pixel ratio and the *width* alone, on the assumption that a canvas filling
+    // the window never changes one without the other. Entering full screen is exactly
+    // the case where it does: on a maximised window the browser gives back the height
+    // of its own chrome and leaves the width alone. The buffers then stayed at the old
+    // height, and because GL's origin is bottom-left, `copyFramebufferToTexture` at
+    // (0, 0) took the *bottom* band of a now-taller frame and the composite stretched
+    // it back over the whole canvas - so every glow sat above the mark that cast it,
+    // on Y only, with no horizontal component at all. It reproduced on one machine and
+    // not another for the same reason: a window that was not already full width
+    // changes its width too, and the old guard caught it.
+    const dw = Math.max(1, Math.round(w * ratio));
+    const dh = Math.max(1, Math.round(h * ratio));
+    if (this.bloomQuad && (ratio !== this.bloomPixelRatio || dw !== this.bloomWidth || dh !== this.bloomHeight)) {
       this.bloomPixelRatio = ratio;
-      const dw = Math.max(1, Math.round(w * ratio));
-      const dh = Math.max(1, Math.round(h * ratio));
+      this.bloomWidth = dw;
+      this.bloomHeight = dh;
       const lw = Math.max(1, Math.floor(dw / BLOOM.downscale));
       const lh = Math.max(1, Math.floor(dh / BLOOM.downscale));
 

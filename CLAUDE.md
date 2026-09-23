@@ -693,6 +693,36 @@ uniform; a tick arriving uploads into whichever of the two GPU slots is stale.
   - Checked at 20,582 objects before shipping, because bloom over a sky that already
     sums additive haloes is exactly the thing that could turn into one white field. It
     does not: it reads as dense.
+  - **Its buffers must follow *both* dimensions of the canvas, and for five days they
+    followed one.** The resize guard tested the device-pixel ratio and the **width**,
+    on the unexamined assumption that a canvas filling the window never changes one
+    dimension without the other. **Entering full screen is exactly where that is
+    false**: on a window that is already full width the browser gives back the height
+    of its own chrome and leaves the width alone, so nothing reallocated. The copy
+    texture and both low-resolution targets kept the old, shorter height — and because
+    GL's origin is bottom-left, `copyFramebufferToTexture` at (0, 0) then took the
+    **bottom band** of a now-taller frame, which the composite stretched back over the
+    whole canvas. Every glow sat above the mark that cast it, **on Y only, with no
+    horizontal component at all**, which is what made it diagnosable from the
+    description alone.
+    - **It reproduced on one machine and not another for a reason, not at random.**
+      Whether the width changes on entering full screen depends on whether the window
+      was already full width; when it does, the old guard caught it and the glow was
+      correct. A bug that follows the window state rather than the browser reads as a
+      driver difference and is not one.
+    - **Measuring it needed the glow amplified first.** A 620 → 900 height-only resize
+      against a page sized 900 from the start gave a best vertical shift of **0 px** at
+      the shipping `strength: 0.85` and `threshold: 0.16` — the glow is soft, additive
+      and low-contrast, so the per-row brightness profile stays dominated by the
+      graticule and the marks, which are drawn correctly either way. At `strength: 6`
+      and `threshold: 0.02` the same measurement reads **−53 px**, with the zero-shift
+      correlation falling from the control's 0.986 to 0.705 and the mean absolute
+      difference from 4.8 to 13.8. With the fix: **0 px**, 0.978 against a control of
+      0.993. Amplifying the channel under test is the move; the same trap as *draw the
+      quantity* above.
+    - The decisive evidence was not pixels at all but one printed line —
+      `copy=1280x620 A=213x103` beside `drawbuf=1280x900`. **Check the invariant
+      before hunting for it in the image.**
   - The panel does not glow. It is DOM and sits above the canvas, which is where this
     pass ends.
 - **Render order is a design decision**, set in `RENDER_ORDER`: points, tracks and rings
