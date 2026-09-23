@@ -92,6 +92,13 @@ interface Voice {
   level: GainNode;
   pan: StereoPannerNode;
   baseHz: number;
+  /**
+   * The root this voice's pentatonic is measured from, and which degree of it
+   * `baseHz` sits on - so a melodic phrase can step to a neighbouring degree and
+   * stay in the scale. `scaleHz * ratios[degree] === baseHz` by construction.
+   */
+  scaleHz: number;
+  degree: number;
   /** Context time the next phrase begins. */
   nextAt: number;
   /** Phrases written so far, so a bird's jitter differs from one to the next. */
@@ -367,22 +374,47 @@ export class Performers {
     const spacing = pick(look.spacingMs, hash(i, 3)) / 1000;
     const sweep = pick(look.sweep, hash(i, 4));
     // Which way a note sweeps is the family's business: a songbird goes either way,
-    // a goose falls a little, a squawk falls hard.
+    // a goose falls a little, a hawk's scream only ever falls.
     const rising = hash(i, 5) < look.rise;
-    const from = rising ? v.baseHz / sweep : v.baseHz * sweep;
-    const to = rising ? v.baseHz * sweep : v.baseHz / sweep;
 
     let t = at;
     for (let k = 0; k < n; k++) {
       // A little life per chirp, and per phrase, so a bird is never a metronome.
       const jitter = 0.75 + 0.5 * hash(i, 11 + k + v.phrase * 3);
       const dur = chirp * jitter;
+      // Where this note sits. At `steps: 0` that is always the voice's own pitch and
+      // the phrase is one motif repeated, which is what a call is. Above 0 the note
+      // takes its own degree of the object's pentatonic - and because the hash is
+      // salted with the phrase counter, the next phrase is a different tune. That is
+      // the whole of the difference between calling and singing.
+      const note = look.steps > 0 ? this.stepHz(v, i, k) : v.baseHz;
+      const from = rising ? note / sweep : note * sweep;
+      const to = rising ? note * sweep : note / sweep;
       v.osc!.frequency.setValueAtTime(from, t);
       v.osc!.frequency.exponentialRampToValueAtTime(to, t + dur);
       this.strike(v, t, dur, look.attack, look.hold);
       t += dur + spacing * jitter;
     }
     return t + pick(look.gapMs, hash(i, 6)) / 1000;
+  }
+
+  /**
+   * The pitch of note `k` of the current phrase, `look.steps` degrees either side of
+   * the voice's own note and always inside its pentatonic.
+   *
+   * Stepping in **degrees rather than in ratios** is what keeps it musical: multiplying
+   * the base by another ratio compounds the intervals and drifts out of the scale
+   * within a couple of notes. Walking the table and carrying the octave cannot.
+   */
+  private stepHz(v: Voice, i: number, k: number): number {
+    const n = P.ratios.length;
+    const spread = v.look!.steps;
+    // Salted with the phrase, so the motif is new each time round.
+    const move = Math.round((hash(i, 41 + k * 2 + v.phrase * 5) * 2 - 1) * spread);
+    const at = v.degree + move;
+    const octave = Math.floor(at / n);
+    const idx = ((at % n) + n) % n;
+    return v.scaleHz * P.ratios[idx]! * 2 ** octave;
   }
 
   /**
@@ -457,6 +489,8 @@ export class Performers {
     let ring: BiquadFilterNode | null = null;
     const lfos: OscillatorNode[] = [];
     let baseHz = 0;
+    let scaleHz = 0;
+    let degree = 0;
     let boost = 1;
 
     // A payload's family only refines a bird. A machine and a shard are what `kind`
@@ -556,11 +590,19 @@ export class Performers {
       filter.Q.value = look ? look.q : 0.9;
       // Pitch from the object's own hash, quantised to a pentatonic so several kept
       // at once are a chord rather than a cluster.
-      const ratio = P.ratios[Math.floor(hash(index, 0) * P.ratios.length) % P.ratios.length]!;
+      const degreeAt = Math.floor(hash(index, 0) * P.ratios.length) % P.ratios.length;
+      const ratio = P.ratios[degreeAt]!;
       const octave = Math.floor(hash(index, 9) * P.octaves);
       baseHz = P.rootHz * ratio * 2 ** octave;
+      degree = degreeAt;
+      scaleHz = P.rootHz * 2 ** octave;
       if (timbre === 'machine') baseHz /= 2 ** P.machine.octaveDown;
-      else if (look) baseHz *= 2 ** look.octaveShift;
+      else if (look) {
+        // The scale root moves with the note, or a melodic step would undo the
+        // family's register - a nightingale an octave up must step an octave up too.
+        baseHz *= 2 ** look.octaveShift;
+        scaleHz *= 2 ** look.octaveShift;
+      }
       osc = ctx.createOscillator();
       osc.type = look ? look.wave : 'sawtooth';
       osc.frequency.value = baseHz;
@@ -577,6 +619,19 @@ export class Performers {
         this.shapers.push(shaper);
       } else {
         osc.connect(vca);
+      }
+
+      // A tremolo, where a family asks for one. It multiplies the envelope rather
+      // than riding on it - an LFO on `vca.gain` adds to whatever the schedule says,
+      // which is right for a shard (no gaps) and would sound straight through the
+      // silences of anything with a phrase.
+      if (look && look.tremDepth > 0) {
+        const trem = ctx.createGain();
+        trem.gain.value = 1 - look.tremDepth;
+        vca.disconnect(filter);
+        vca.connect(trem);
+        trem.connect(filter);
+        modulate(look.tremHz, look.tremDepth, trem.gain);
       }
 
       // And a high-Q band alongside the lowpass, struck by the same envelope: what
@@ -618,6 +673,8 @@ export class Performers {
       level,
       pan,
       baseHz,
+      scaleHz,
+      degree,
       // A beat before the first phrase, so keeping several at once does not fire
       // them all on the same instant.
       nextAt: now + 0.1 + hash(index, 13) * 0.5,

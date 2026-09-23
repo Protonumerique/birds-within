@@ -619,17 +619,48 @@ input[type="range"] {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 4px 12px;
-  margin-top: 7px;
+  gap: 5px 12px;
+  margin-top: 8px;
+  max-width: 240px;
 }
 
+/*
+ * **The legend is active, and that is what pays for six families.**
+ *
+ * Revised 2026-09-23. It used to be six static swatches at --ink-faint, which is
+ * #3d5566 - barely off the sky, and asking a reader to hold six hues in their head
+ * against a list they could not read. Two things changed.
+ *
+ * It is legible at rest: --ink-dim rather than --ink-faint, 10px rather than 9. But it
+ * is still deliberately recessive, because most of the time none of these colours is
+ * on screen at all - nothing wears a family hue until it is kept or pointed at.
+ *
+ * And it *answers*. When a member of a family is picked up, that row goes to the full
+ * --ink the instructions use, bold, with its dot at full strength; everything else
+ * stays down. So the block is not a table to memorise, it is a readout that names
+ * what you are looking at the moment you touch it - which is the same job the row in
+ * the column does for the object, one level up.
+ *
+ * That is also the argument that let the palette go from three families to six. A hue
+ * identified in isolation needs the whole perceptual distance; one that only has to be
+ * told apart from whatever else is lit *right now* needs much less, because the block
+ * says the name. See FAMILY_LEGEND in config.ts for the dE measurements.
+ */
 .conv {
   display: flex;
   align-items: center;
-  gap: 5px;
-  font-size: 9px;
+  gap: 6px;
+  font-size: 10px;
   letter-spacing: 0.14em;
-  color: var(--ink-faint);
+  color: var(--ink-dim);
+  transition: color 160ms ease-out;
+}
+
+/* Something of this family is kept or under the pointer, so it is wearing this colour
+   on the sky right now. Only then is it worth reading. */
+.conv.lit {
+  color: var(--ink);
+  font-weight: 700;
 }
 
 /*
@@ -638,10 +669,18 @@ input[type="range"] {
  * would be. Here the element is the ink.
  */
 .conv i {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   flex: none;
+  /* Half-strength at rest, full when the family is on screen. Opacity rather than a
+     second colour per family, so the swatch and the mark are the one hex value. */
+  opacity: 0.45;
+  transition: opacity 160ms ease-out;
+}
+
+.conv.lit i {
+  opacity: 1;
 }
 
 /* --- the belt -------------------------------------------------------------- */

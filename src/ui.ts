@@ -246,6 +246,11 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
     ({ family: value, label }) =>
       `<span class="conv"><i style="background:${FAMILY_LOOK[value]}"></i>${label}</span>`
   ).join('');
+  const convRows = [...conv.querySelectorAll<HTMLElement>('.conv')];
+  /** Which legend entry each family maps to, so lighting one is an array index. */
+  const convAt = new Map<number, number>(FAMILY_LEGEND.map((e, n) => [e.family, n]));
+  /** What was lit last time, so an unchanged frame writes no style at all. */
+  let convLit = 0;
 
   const cols = [names, selection, featured, family] as const;
   const passingGroup = new Group('Passing', GROUP_LOOK.passing, READOUT.passingRows, ...cols, level);
@@ -334,6 +339,34 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
       const hovered = selection.hovered;
       if (hovered >= 0 && frame.elevation[hovered]! > lowestVisible && ringed.indexOf(hovered) < 0) {
         ringed.push(hovered);
+      }
+
+      /*
+       * Light the legend entry for every family that is wearing its colour right now.
+       *
+       * **Kept or hovered, not merely listed**, because those are exactly the objects
+       * that take an attention hue - a listed row rings white whatever family it is in,
+       * so lighting on listed would name colours that are nowhere on screen.
+       *
+       * Two objects are skipped for the same reason the shader skips them, and the
+       * block would otherwise tell a plain lie. A belt object stays blue however it is
+       * tagged, because `choir` outranks family in `RING_VERT` and in `audio.ts` alike;
+       * and a featured object keeps its cool white. Neither wears the hue, so neither
+       * lights the name of it.
+       */
+      let lit = 0;
+      const claim = (i: number) => {
+        if (i < 0 || isChoir(i) || featured[i] === 1) return;
+        const at = convAt.get(family[i] ?? 0);
+        if (at !== undefined) lit |= 1 << at;
+      };
+      for (const i of selection.marked) claim(i);
+      claim(hovered);
+      if (lit !== convLit) {
+        for (let n = 0; n < convRows.length; n++) {
+          convRows[n]!.classList.toggle('lit', (lit & (1 << n)) !== 0);
+        }
+        convLit = lit;
       }
     },
 

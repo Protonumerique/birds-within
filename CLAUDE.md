@@ -878,9 +878,11 @@ nothing — it renders a title, a drawing, four sentences and a LAUNCH button �
 WASM propagator, the worker and the packed catalogue. `src/piece.ts` is the old `main`,
 `src/gate.ts` is the screen, `src/poster.ts` is the drawing.
 
-**Measured, on the production build: 25.0 KB before the press**, of which **13.8 KB is
+**Measured, on the production build: 25.3 KB before the press**, of which **13.8 KB is
 the typeface** — see *The typeface* under **The panel**. The page (559 B), the
-stylesheet (3.0 KB gzipped), an 18.1 KB entry chunk (7.6 gzipped) and two woff2 faces.
+stylesheet (3.2 KB gzipped), a 19.0 KB entry chunk (8.2 gzipped) and two woff2 faces.
+It was 25.0 before the four new family voices, which land here rather than in the piece
+chunk because `config.ts` is in the entry: +0.25 KB gzipped for the voice specs.
 Without the fonts it is 11.2 KB. It was 10.5 before the typeface and 10.4 before the
 poster was rewritten — that last 0.6 KB is the cover's own drawing code, which is the
 one thing in the entry chunk that exists purely to be looked at.
@@ -2081,22 +2083,111 @@ ordering is what keeps the wreckage grammar intact.
 The voices, in `AUDIO.performer.voices` — each a full parameter set rather than a patch
 on a default, because a family that differs in one number is not a family:
 
-| | wave | register | rhythm | ring |
+| | wave | register | rhythm | steps |
 |---|---|---|---|---|
-| none | sine | — | 2–5 quick swept chirps | — |
-| starlink | sawtooth, driven | −1 octave | 1–2 long falling honks, long gaps | — |
-| iridium | square | +1 octave | 4–9 very short notes, wide sweeps | 2.76× base, Q 20 |
-| military | sawtooth, driven hard | −2 octaves | 1–3 slow falling squawks | 2.76× base, Q 20 |
+| none | sine | — | 2–5 quick swept chirps | 0 |
+| starlink | sawtooth, driven | −1 octave | 1–2 long falling honks, long gaps | 0 |
+| iridium | square | +1 octave | 4–9 very short notes, wide sweeps | 0 |
+| **military** | sawtooth, driven | 0 | **1–2 screams of 0.7–1.5 s, rasp, 6 s gaps** | 0 |
+| **gnss** | sawtooth, driven hard | **−3 octaves** | 1–2 slow booms with a 6 Hz throb | 0 |
+| **weather** | triangle | 0 | 3–6 fluted notes | **3** |
+| **science** | sine | +1 octave | 4–9 very short notes | **5** |
 
-Measured alone, mid-pass at 45°: none −38.2 dBFS, starlink −35.1, iridium −36.9,
-military −32.6; all four at once −29.2, peak 0.385. **Those are corrected for register,
-not levelled by RMS.** The ear is roughly 6 dB less sensitive at 220 Hz than at 1 kHz and
-8 dB less at 175, so the low families have to *measure* hotter to sit level. Tuning them
-by RMS alone buried the geese 5.5 dB under the songbirds.
+**All seven measured, `npm run voice:probe`** — each voice alone, held mid-pass at 45°,
+700 km, sunlit:
+
+| | RMS | peak | centroid |
+|---|---|---|---|
+| none | −30.6 dBFS | 0.209 | 1,092 Hz |
+| starlink | −27.7 | 0.616 | 1,056 Hz |
+| iridium | −35.7 | 0.163 | 2,835 Hz |
+| military | −30.5 | 0.338 | 978 Hz |
+| gnss | −26.6 | 0.695 | **338 Hz** |
+| weather | −29.0 | 0.203 | 994 Hz |
+| science | −32.5 | 0.161 | 2,269 Hz |
+
+**Those are corrected for register, not levelled by RMS.** The ear is roughly 6 dB less
+sensitive at 220 Hz than at 1 kHz and 8 dB less at 175, so the low families have to
+*measure* hotter to sit level. Tuning them by RMS alone buried the geese 5.5 dB under
+the songbirds — and the navigation boom's first gain of 2.6 measured **peak 1.004**,
+clipping, while every individual number looked plausible. It is 1.8, and +4 dB over the
+songbird in RMS is what 338 Hz costs.
 
 **`FAMILY_VOICE` is a total map over `Family`**, not an array or a lookup with a
 fallback, so adding a family and forgetting to give it a voice is a compile error rather
 than a satellite that quietly sings the default.
+
+##### Singing, not calling — and a hawk
+
+Added 2026-09-23. Every family now has a voice, and getting there needed **two new
+things in the synthesiser** rather than four more rows of numbers.
+
+**`steps`: a note may move.** Until now every note of a phrase was the *same* pitch pair
+— `from`→`to` was computed once per phrase and only the duration jittered — so every
+voice was one motif repeated. That is exactly what a *call* is, and it is why the four
+original voices are all calls. A blackbird is not: consecutive notes take different
+degrees of the scale, and the next phrase is a different tune. `steps` is how many
+degrees of the object's own pentatonic a note may wander; **0 is the old behaviour
+exactly**, which is what keeps the goose a goose.
+
+It steps **in degrees, not in ratios**. Multiplying the base by another just ratio
+compounds intervals and drifts out of the scale within a couple of notes; walking the
+ratio table and carrying the octave cannot. That needed `scaleHz` and `degree` on the
+voice beside `baseHz`.
+
+Verified by A/B on the parameter alone — same object, same seed, the sweep left in:
+
+| | distinct pitches | sounding windows |
+|---|---|---|
+| weather, `steps: 0` | 3 | 39 |
+| weather, `steps: 3` | **14** | 39 |
+| science, `steps: 0` | 4 | 37 |
+| science, `steps: 5` | **17** | 37 |
+
+The window counts are **identical**, which is the check that matters: the rhythm did not
+move, only the tune. A raw pitch count cannot show this on its own — the sweep inside
+each note already spans several semitones, which is why `none` reads 7 distinct pitches
+with `steps: 0`.
+
+**`tremHz` / `tremDepth`: a tremolo, and it is a separate gain *after* the VCA.** An LFO
+on `vca.gain` **adds** to the scheduled envelope, so it would sound straight through the
+silences between phrases — fine for a shard, which has no gaps and does exactly that,
+and wrong for anything with a phrase. Multiplying leaves silence silent.
+
+**The military voice is a hawk now, and the squawk it replaced became navigation.** A
+squawk is a *gregarious* sound — it says flock, and 409 objects spread across every orbit
+are not a flock. A hunting bird is solitary, holds one note far longer than a songbird
+can, and empties the sky around it. `noteMs` at 700–1500 is the whole patch: three to six
+times any other voice, which forces `perPhrase` to 1–2 and `gapMs` out to six seconds so
+one hawk does not fill the mix it is meant to hang over. `rise: 0` because a scream only
+falls, `hold: 0.85` because it is sustained — the envelope, not the pitch, is what makes
+it a whistle rather than a squawk. The rasp is `tremHz: 21`, above flutter and below
+pitch, where the ear hears roughness *in* the tone; slower is a warble and reads as comic.
+
+**Navigation took the squawk down three octaves into a boom.** Centroid **338 Hz**, under
+everything in the piece except the belt's bed — which is right for a dozen-odd satellites
+that are always up and that everything on the ground depends on. `cutoffHz` had to come
+down with it or the sawtooth's upper harmonics keep it in the songbirds' band and the
+drop is inaudible. `tremHz: 6` is a throb you can count, which is what separates it from
+the hawk that used to own the patch.
+
+**Weather and science are deliberately a pair**, not two unrelated calls: the two
+smallest families, the two that carry instruments rather than run a service. What they
+share is that they *sing*; what separates them is how virtuosic it is — 3 steps against
+5, an octave apart, twice the notes at half the length.
+
+**`synthetic.bin` could not exercise any of this**, and that is the third time this file
+has recorded the same lesson. It carried families 1–3 only, so GNSS, weather and science
+had no objects at all offline: three new voices and three new colours that nothing in
+development could produce. `SYNTH NAV` was *already* the navigation shell at GPS altitude
+and simply untagged. Weather and science are new shells at real orbits, over-represented
+at 40 and 30 against a real 0.3% and 0.2% — at true share a 1,900-object dev sky carries
+six and four, and whether two songbird voices differ is not a question four objects can
+answer. **Check what the development catalogue actually contains before concluding
+anything about how the piece sounds.**
+
+(The shell counts are targets, not totals: `planes × perPlane` is a Walker lattice and
+rounds down, so 60 packs as 56 and 700 has always packed as 676.)
 
 **How to verify the join without CelesTrak.** This environment cannot reach
 celestrak.org, and in general nothing should be fetched casually — their terms are
@@ -2283,9 +2374,27 @@ unkept ones:
 | Starlink | `#6b51b8` violet | eclipsed grey | ΔE 28.5 |
 | Iridium | `#c6f910` chartreuse | resting warm white | ΔE 25.4 |
 | Military | `#46a466` green | shard brown | ΔE 25.0 |
+| **GNSS** | `#e50654` beacon red | eclipsed grey | ΔE 28.9 |
+| **Weather** | `#e55406` storm orange | amber | ΔE 25.9 |
+| **Science** | `#e94cfa` magenta | wreckage pink | ΔE 24.1 |
 
-Worst separation *between* the three: **ΔE 30.2**. Around 18 is where two colours stop
-being reliably tellable apart at sixteen pixels.
+**All six since 2026-09-23**, which required re-measuring the claim this paragraph used
+to make — that three was the most the palette could hold apart. Worst separation anywhere
+is now **24.1**, and **24.2** between families (Science against Starlink), down from 30.2
+but well clear of the ~18 where two marks stop being reliably tellable apart at sixteen
+pixels. Every one is legible on this sky: L\* 42 to 92 against a `#05070a` backdrop.
+
+**What bought the extra three is the legend becoming active, not a cleverer search.** A
+colour identified in isolation needs the whole perceptual distance; one that only has to
+be told apart from *whatever else is lit right now* needs much less, because the block
+in the corner names it the moment a member is touched. Six static swatches would have
+been worse than three. See *The legend answers* below.
+
+**A semantic set was tried first and measured worse.** Teal for weather — the obvious
+ice-and-cloud choice — collided with the military green at ΔE 19.9, and a cyan collided
+with the belt's blue. Meaning lost to separation there, which is why weather is the storm
+orange rather than an ice blue. The orange is not a consolation: warning colour is what
+weather already means to everyone.
 
 **Saturation is not uniform and should not be.** Only a handful of objects are kept at
 once, so none of these ever covers the frame the way a resting colour would. Iridium is
@@ -2311,12 +2420,41 @@ still a triangle.
 `audio.ts` splits on the same byte, so a belt object never reaches a family voice either.
 One rule, both senses.
 
-**GNSS, Weather and Science are tagged and packed but have no colour.** Three stories at
-once is already the most the palette holds apart. The byte is ready when one of them
-earns a slot.
+##### The legend answers
 
-**Colour and voice are separate axes.** The three new families keep the default whistle —
-*More of them* on the roadmap is where the calls come from.
+Revised 2026-09-23, and it is what makes six families readable.
+
+It was six swatches at `--ink-faint`, which is `#3d5566` — barely off the sky, 9 px, and
+asking a reader to hold six hues in their head against a list they could not actually
+read. Reported exactly so: *"barely readable, way too dark and small"*.
+
+Two changes. It is **legible at rest** — `--ink-dim` and 10 px — but still deliberately
+recessive, because most of the time none of these colours is on screen at all: nothing
+wears a family hue until it is kept or pointed at. And it **answers**: when a member of a
+family is picked up, that entry goes to the full `--ink` the instructions use, bold, with
+its dot from 0.45 opacity to 1. Everything else stays down.
+
+So the block stops being a table to memorise and becomes a readout that names what you
+are touching — the same job a row in the column does for the object, one level up. It is
+also the first thing in the piece that links a *hue* to a *word* without breaking *No
+tags on the sky*: the naming happens in the corner, never on the mark.
+
+**It lights on kept or hovered, never on merely listed** — those are exactly the objects
+that take an attention hue, and a listed row rings white whatever family it is in, so
+lighting on listed would name colours that are nowhere on screen. Two objects are skipped
+for the same reason the shader skips them: a **belt** object stays blue however it is
+tagged, and a **featured** object keeps its cool white. Neither wears the hue, so neither
+lights the name of it.
+
+**Bold reflows text, so that was measured before it shipped.** With every entry lit, at
+1600, 1280, 1024 and 820 px wide: **three lines at rest, three lines lit**, every time.
+Each entry grows three or four pixels in place and nothing rewraps — so sweeping the
+pointer across the sky cannot make the block jump. A legend that jitters on hover would
+have been worse than a dark one.
+
+**Colour and voice are now the same set but still separate axes.** Every family has both
+as of 2026-09-23 — see *Singing, not calling* — but a family could still have one without
+the other, and `FAMILY_VOICE` being a total map is what keeps that honest.
 
 ##### The military family, and the one list that is not CelesTrak's
 
@@ -2596,10 +2734,17 @@ Anything that computes range rate by hand must not repeat the naive version.
         a conventions block naming them. GNSS, Weather and Science are tagged and
         packed but uncoloured. Nothing about the resting sky changed. See *The
         constellation narrative* under **Sound**.
-  - [ ] **More of them.** Weather, telecoms and the navigation constellations are each
-        a row in `FAMILIES` and already packed as a byte; what they still lack is a
-        *voice*. And a wider vocabulary of calls than the four here — caw, cackle, the
-        rest of it.
+  - [x] **More of them.** All six families now have a voice and a colour. The military
+        squawk became a **hawk** — long screams with a rasp, which needed a tremolo that
+        multiplies the envelope rather than riding on it — and the squawk itself moved
+        to **navigation**, three octaves down into a boom. Weather and science *sing*
+        rather than call, which needed notes that move between scale degrees within a
+        phrase (`steps`); until then every voice was one motif repeated. See *Singing,
+        not calling — and a hawk*.
+  - [ ] **Telecoms, and a wider vocabulary.** Intelsat and SES are each a row in
+        `FAMILIES` away, and the UCS `Purpose` column would give the rest without a new
+        fetch. What is still thin is the *vocabulary* — caw, cackle, rattle. Seven
+        voices is not a dawn chorus.
   - [ ] **HRTF.** `PannerNode` behind a flag, on the same direction vectors, once the
         stereo mapping is known to be right.
 
@@ -2670,6 +2815,8 @@ npm run validate         # four roads to a position, against the Python referenc
 npm run bench            # WASM vs JS at catalogue scale
 npm run build            # typecheck + production build
 npm run make:synthetic   # regenerate the committed offline fallback
+npm run voice:probe      # render each family's voice offline and measure it -
+                         # RMS, peak, spectral centroid, and the steps A/B
 npm run ucs:military -- <file.xlsx>   # UCS database -> scripts/ucs-military.json
                          # derived once and committed; needs pip install openpyxl.
                          # The spreadsheet is not in the repo - see public/data/SOURCES.md

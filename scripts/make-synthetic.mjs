@@ -90,8 +90,28 @@ const SHELLS = [
    * GPS altitude and inclination. At 2.004 revolutions a day it sits well outside
    * `isGeosynchronous`'s 0.95-1.05 window, so it stays a **pass** and goes to the
    * performers rather than the belt - which is the point of putting it here.
+   *
+   * **Tagged GNSS since 2026-09-23**, when navigation got a voice of its own. It was
+   * already the navigation shell in everything but the byte; leaving it untagged meant
+   * the one low boom in the piece could not be heard offline.
    */
-  [60, 20200, 55.0, 'SYNTH NAV', null],
+  [60, 20200, 55.0, 'SYNTH NAV', FAMILY.GNSS],
+  /*
+   * **Weather and science, added 2026-09-23 with their voices.** Both are joins
+   * against CelesTrak group lists, so like the military shell they are tagged
+   * explicitly here - there is no group list offline.
+   *
+   * Heavily over-represented, and deliberately: they are the two smallest families on
+   * the real sky, 69 and 45 objects out of 20,990, which is 0.3% and 0.2%. At that
+   * share a 1,859-object dev catalogue would carry six and four, and whether the two
+   * songbird voices actually differ is not a question four objects can answer. The
+   * same argument put 240 belt objects and 120 rocket bodies in here.
+   *
+   * Real orbits for both: polar sun-synchronous for the weather platforms, and a
+   * mid-inclination low orbit for the science ones.
+   */
+  [40, 830, 98.7, 'SYNTH WX', FAMILY.WEATHER],
+  [30, 600, 45.0, 'SYNTH SCI', FAMILY.SCIENCE],
 ];
 
 const records = [];

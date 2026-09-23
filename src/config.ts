@@ -982,18 +982,44 @@ export const FAMILY_LOOK: Record<Family, string | null> = {
    * on the choir byte and a belt object never reaches a family voice at all.
    */
   [FAMILY.MILITARY]: '#46a466',
-  // Tagged and packed, but no colour yet: three stories at once is already the most
-  // the palette can hold apart. The byte is ready when one of them earns a slot.
-  [FAMILY.GNSS]: null,
-  [FAMILY.WEATHER]: null,
-  [FAMILY.SCIENCE]: null,
+  /**
+   * 172 objects, 43 of them in the belt. A beacon red: the family everything on the
+   * ground depends on and nobody looks at.
+   */
+  [FAMILY.GNSS]: '#e50654',
+  /** 69 objects. Storm orange - the one hue that already means weather to everyone. */
+  [FAMILY.WEATHER]: '#e55406',
+  /** 45 objects, the smallest family. Magenta, which reads as instrument. */
+  [FAMILY.SCIENCE]: '#e94cfa',
 };
 
-/** The families that actually carry a colour, in the order the legend lists them. */
+/**
+ * The families that carry a colour, in the order the legend lists them.
+ *
+ * **All six, since 2026-09-23**, which needed the paragraph above to be re-measured
+ * rather than assumed: it said three was the most the palette could hold apart. Six
+ * gives a worst separation of **24.1** (Science magenta against the wreckage pink) and
+ * 24.2 between families (Science against Starlink violet), down from 30.2 but still
+ * well clear of the ~18 where two marks stop being tellable apart. Every one is
+ * legible on this sky - L* 42 to 92 against a `#05070a` backdrop.
+ *
+ * **What bought the extra three is the legend becoming active**, not a cleverer
+ * search. A colour that has to be identified on its own needs the whole distance; one
+ * that only has to be *told apart from whatever else is lit right now* needs much
+ * less, because the block below names it the moment a member is touched. Six static
+ * swatches would have been worse than three. See `.conv.lit` in style.css.
+ *
+ * A semantic set was tried first and measured worse: teal for weather collided with
+ * the military green at dE 19.9. Meaning lost to separation on that one, which is why
+ * weather is the storm orange rather than an ice blue.
+ */
 export const FAMILY_LEGEND = [
   { family: FAMILY.STARLINK, label: 'STARLINK' },
   { family: FAMILY.IRIDIUM, label: 'IRIDIUM' },
   { family: FAMILY.MILITARY, label: 'MILITARY' },
+  { family: FAMILY.GNSS, label: 'NAVIGATION' },
+  { family: FAMILY.WEATHER, label: 'WEATHER' },
+  { family: FAMILY.SCIENCE, label: 'SCIENCE' },
 ] as const;
 
 export const TRAIL = {
@@ -1064,18 +1090,17 @@ export const CLOCK = {
  * fallback, so adding a family to `FAMILY` and forgetting to give it a voice is a
  * compile error rather than a satellite that quietly sings the default.
  */
-const FAMILY_VOICE: Record<Family, 'none' | 'starlink' | 'iridium' | 'military'> = {
+const FAMILY_VOICE: Record<
+  Family,
+  'none' | 'starlink' | 'iridium' | 'military' | 'gnss' | 'weather' | 'science'
+> = {
   [FAMILY.NONE]: 'none',
   [FAMILY.STARLINK]: 'starlink',
   [FAMILY.IRIDIUM]: 'iridium',
   [FAMILY.MILITARY]: 'military',
-  // Colour and voice are separate axes, and these three arrived with a colour only.
-  // They keep the default whistle until the calls exist to give them - *More of them*
-  // on the roadmap. A family that looks distinct and sounds like everything else is
-  // an honest half-finished thing; one that sounds distinct by accident is not.
-  [FAMILY.GNSS]: 'none',
-  [FAMILY.WEATHER]: 'none',
-  [FAMILY.SCIENCE]: 'none',
+  [FAMILY.GNSS]: 'gnss',
+  [FAMILY.WEATHER]: 'weather',
+  [FAMILY.SCIENCE]: 'science',
 };
 
 /**
@@ -1498,6 +1523,27 @@ export const AUDIO = {
         /** Soft clipping, for a voice that should sound forced rather than blown. */
         drive: 0,
         /**
+         * **How far a note may wander from the voice's own pitch, in scale degrees.**
+         * 0 is one motif repeated, which is what every voice did until 2026-09-23 and
+         * what the calls below still want: a goose honks the same honk, a squawk is
+         * the same squawk. Above 0 each note picks a degree of the object's own
+         * pentatonic and the phrase differs from the last one, which is the whole
+         * difference between a call and a *song*. See `weather` and `science`.
+         */
+        steps: 0,
+        /**
+         * A tremolo multiplying the envelope - rate in Hz, depth 0-1. Off everywhere
+         * but the hawk, where about 20 Hz is fast enough to read as a rasp in the
+         * voice rather than as a wobble on it.
+         *
+         * It is a **separate gain after the VCA**, not an LFO on the VCA itself. On the
+         * VCA an LFO adds to the scheduled envelope, so it would sound through the
+         * gaps between phrases - fine for a shard, which has no gaps, and wrong for
+         * anything with a phrase. Multiplying leaves silence silent.
+         */
+        tremHz: 0,
+        tremDepth: 0,
+        /**
          * **Measured, and corrected for register.** These are not proportional to
          * anything: the ear is roughly 6 dB less sensitive at 220 Hz than at 1 kHz and
          * 8 dB less at 175, so the low families have to measure *hotter* than the
@@ -1525,6 +1571,9 @@ export const AUDIO = {
         attack: 0.05,
         ring: 0,
         drive: 0.35,
+        steps: 0,
+        tremHz: 0,
+        tremDepth: 0,
         gain: 1.9,
       },
       /**
@@ -1548,29 +1597,153 @@ export const AUDIO = {
         attack: 0.002,
         ring: 0.6,
         drive: 0.15,
+        steps: 0,
+        tremHz: 0,
+        tremDepth: 0,
         gain: 0.55,
       },
       /**
-       * **Military and radar: big squawking birds.** Low, harsh and slow, and every
-       * note *falls* - a squawk drops, it does not lift. Long gaps, so one of these
-       * under a field of songbirds is a presence rather than a texture.
+       * **Military: a hawk.** One or two very long descending screams with a rasp in
+       * them, and a great deal of silence either side.
+       *
+       * This replaced the squawk on 2026-09-23, and the squawk was not thrown away -
+       * it became `gnss` below, an octave lower. The reason for the swap is that a
+       * squawk is a *gregarious* sound: it says flock, and 409 objects spread over
+       * every orbit are not a flock. A hunting bird is solitary, it holds one note
+       * far longer than a songbird can, and everything else in the sky goes quiet
+       * around it. That reads as what this family is.
+       *
+       * `noteMs` is the whole patch. At 700-1500 ms a note is three to six times any
+       * other voice's, which is why `perPhrase` drops to one or two and `gapMs` runs
+       * to six seconds: one hawk must not fill the mix it is supposed to hang over.
+       * `rise: 0` because a scream only ever falls, and `hold: 0.85` because it is
+       * sustained - the envelope, not the pitch, is what makes it a whistle and not a
+       * squawk.
+       *
+       * The rasp is `tremHz` at 21, which is above the flutter rate and below the
+       * pitch rate: the ear hears it as roughness in the tone. A slower tremolo here
+       * is a warble and reads as comic.
        */
       military: {
         wave: 'sawtooth' as OscillatorType,
-        octaveShift: -2,
-        q: 5,
-        perPhrase: [1, 3],
-        noteMs: [220, 520],
-        spacingMs: [180, 420],
-        gapMs: [1800, 4200],
-        sweep: [1.35, 2.2],
-        rise: 0.04,
-        cutoffHz: [320, 1500],
-        hold: 0.7,
-        attack: 0.02,
-        ring: 0.2,
-        drive: 0.6,
-        gain: 0.8,
+        octaveShift: 0,
+        q: 4,
+        perPhrase: [1, 2],
+        noteMs: [700, 1500],
+        spacingMs: [260, 620],
+        gapMs: [2600, 6000],
+        sweep: [1.5, 2.4],
+        rise: 0,
+        cutoffHz: [600, 3200],
+        hold: 0.85,
+        attack: 0.03,
+        ring: 0,
+        drive: 0.3,
+        steps: 0,
+        tremHz: 21,
+        tremDepth: 0.45,
+        gain: 1,
+      },
+      /**
+       * **Navigation: the old military squawk, dropped an octave and slowed into a
+       * boom.** Long, low, nasal calls with a throb in them - a bittern or a grouse
+       * rather than a songbird, which is what "call to mating" asks for.
+       *
+       * Three octaves down puts it under everything else in the piece except the
+       * belt's bed, and that is the point: GNSS is a dozen-odd satellites that are
+       * always up and that everything on the ground depends on, so a floor is the
+       * right register for it. `cutoffHz` comes down with it or the sawtooth's upper
+       * harmonics keep it in the songbirds' band and the drop is inaudible.
+       *
+       * `tremHz: 6` is a throb rather than a rasp - slow enough to count, which is
+       * what separates it from the hawk that used to own this patch.
+       */
+      gnss: {
+        wave: 'sawtooth' as OscillatorType,
+        octaveShift: -3,
+        q: 6,
+        perPhrase: [1, 2],
+        noteMs: [420, 900],
+        spacingMs: [300, 700],
+        gapMs: [2400, 5200],
+        sweep: [1.15, 1.5],
+        rise: 0.15,
+        cutoffHz: [180, 900],
+        hold: 0.8,
+        attack: 0.04,
+        ring: 0.15,
+        drive: 0.55,
+        steps: 0,
+        tremHz: 6,
+        tremDepth: 0.3,
+        gain: 1.8,
+      },
+      /**
+       * **Weather: a blackbird.** Mellow, fluted, unhurried, and - the point of the
+       * whole patch - *melodic*: `steps: 3` lets each note take its own degree of the
+       * object's pentatonic, so a phrase is a little tune rather than one motif
+       * repeated, and the next phrase is a different tune.
+       *
+       * A triangle rather than a sine, which is most of the flute in it: one soft odd
+       * harmonic where a sine has none, without the buzz a sawtooth brings.
+       *
+       * Small `sweep`, deliberately. Every other voice here gets its motion from
+       * bending one note; this one gets it from *changing* note, and doing both at
+       * once reads as a slide whistle rather than as singing.
+       */
+      weather: {
+        wave: 'triangle' as OscillatorType,
+        octaveShift: 0,
+        q: 1,
+        perPhrase: [3, 6],
+        noteMs: [90, 220],
+        spacingMs: [60, 160],
+        gapMs: [1200, 3000],
+        sweep: [1.05, 1.25],
+        rise: 0.5,
+        cutoffHz: [800, 4200],
+        hold: 0.75,
+        attack: 0.008,
+        ring: 0,
+        drive: 0,
+        steps: 3,
+        tremHz: 0,
+        tremDepth: 0,
+        gain: 1.0,
+      },
+      /**
+       * **Science: a nightingale.** The same melodic machinery as the weather voice
+       * and pushed much further - twice the notes, half their length, an octave up and
+       * `steps: 5`, which is a whole pentatonic octave of leap available to any note.
+       *
+       * The two are deliberately a *pair* rather than two unrelated calls. Weather and
+       * Science are the two smallest families, 69 and 45 objects, and they are the two
+       * that carry instruments rather than a service - so what they share is that they
+       * sing, and what separates them is how virtuosic it is. Hearing one and then the
+       * other should read as two birds of the same kind, not two kinds.
+       *
+       * A faint `ring` for shimmer. It is the one thing here borrowed from Iridium,
+       * at a fifth of the depth: enough to put an edge on a very short high note.
+       */
+      science: {
+        wave: 'sine' as OscillatorType,
+        octaveShift: 1,
+        q: 0.8,
+        perPhrase: [4, 9],
+        noteMs: [45, 130],
+        spacingMs: [30, 110],
+        gapMs: [900, 2400],
+        sweep: [1.1, 1.5],
+        rise: 0.5,
+        cutoffHz: [1400, 7000],
+        hold: 0.6,
+        attack: 0.004,
+        ring: 0.12,
+        drive: 0,
+        steps: 5,
+        tremHz: 0,
+        tremDepth: 0,
+        gain: 0.7,
       },
     },
     /** Which voice each `FAMILY` value sings with. See FAMILY_VOICE. */

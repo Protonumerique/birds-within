@@ -17,7 +17,8 @@
     "reference": "python3 scripts/reference.py > scripts/reference.json",
     "subset:fonts": "python3 scripts/subset-fonts.py vendor/satoshi",
     "bench": "node scripts/bench.mjs",
-    "ucs:military": "python3 scripts/ucs-military.py"
+    "ucs:military": "python3 scripts/ucs-military.py",
+    "voice:probe": "node scripts/voice-probe.mjs"
   },
   "dependencies": {
     "satellite.js": "^7.1.0",
