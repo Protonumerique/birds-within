@@ -308,7 +308,7 @@ Decided 2026-09-14, in `PALETTE` and `KIND_LOOK`. Two axes, kept strictly apart:
 the change: blue had to be freed to mean exactly one thing. Below-horizon is likewise
 a neutral `#4a4f54`, never blue, for the same reason.
 
-**Amber `#ffb454` is the third hue and it is the pointer's alone.** Nothing in the sky
+**Amber `#faa12c` is the third hue and it is the pointer's alone.** Nothing in the sky
 is amber until a person touches it, which is what makes a ring read as attention
 rather than as a property of the object.
 
@@ -458,7 +458,7 @@ uniform; a tick arriving uploads into whichever of the two GPU slots is stale.
   marked ring's brightness is computed **in the shader** from the blended elevation, so
   it dims as the object descends in exact step with what is drawn — and its row dims by
   the same curve.
-- **Tracks** (`TRAIL`): where a kept object has been and is going, 35 minutes either
+- **Tracks** (`TRAIL`): where a kept object has been and is going, 45 minutes either
   way. Every track shares one draw, and each is **cut exactly at the horizon** — the
   crossing segment is clipped at y = 0 rather than dropped, so the end of a track never
   depends on where the 20-second samples happened to fall — and dissolved over the last
@@ -2408,22 +2408,33 @@ mark can already be — amber, pink, the ISS's cool white, the belt's blue, rest
 white, the shard's brown, the eclipsed grey — because a kept object sits in a field of
 unkept ones:
 
-| | | nearest existing | |
-|---|---|---|---|
-| Starlink | `#6b51b8` violet | eclipsed grey | ΔE 28.5 |
-| Iridium | `#c6f910` chartreuse | resting warm white | ΔE 25.4 |
-| Military | `#46a466` green | shard brown | ΔE 25.0 |
-| **GNSS** | `#ffd700` gold | amber | ΔE **16.6** |
-| **Weather** | `#00fff3` cyan | belt blue | ΔE 22.9 |
-| **Science** | `#e94cfa` magenta | wreckage pink | ΔE 24.1 |
+| | | L\* | nearest non-family | | nearest other family | |
+|---|---|---|---|---|---|---|
+| Starlink | `#8e6cf5` violet | 55 | eclipsed grey | 28.4 | **Science** | **15.5** |
+| Science | `#e94cfa` magenta | 61 | wreckage pink | 24.1 | **Starlink** | **15.5** |
+| Military | `#62e78e` green | 83 | resting warm white | 27.2 | Iridium | 20.1 |
+| GNSS | `#ffd700` gold | 87 | amber | 19.6 | Iridium | 18.9 |
+| Weather | `#00fff3` cyan | 91 | belt blue | 22.9 | Military | 20.8 |
+| Iridium | `#c6f910` chartreuse | 92 | resting warm white | 25.4 | GNSS | 18.9 |
 
 **All six since 2026-09-23**, which required re-measuring the claim this paragraph used
-to make — that three was the most the palette could hold apart. Worst separation anywhere
-is now **16.6** — gold against amber, see below — and **18.9** between families (gold
-against Iridium's chartreuse), down from 30.2 when there were three. ~18 is where two
-marks stop being reliably tellable apart at sixteen pixels, so this set sits *at* the bar
-rather than clear of it, deliberately and with the legend carrying the difference. Every
-one is legible on this sky: L\* 42 to 92 against a `#05070a` backdrop.
+to make — that three was the most the palette could hold apart. **Four of them were then
+retuned by eye on 2026-09-24** and the table above is the re-measurement: the amber moved
+to `#faa12c`, Starlink's violet lightened from `#6b51b8`, the military green brightened
+from `#46a466`. ~18 is where two marks stop being reliably tellable apart at sixteen
+pixels, and this set sits *at* that bar rather than clear of it — deliberately, with the
+legend carrying the difference. Every one is legible on this sky: L\* 55 to 92 against a
+`#05070a` backdrop.
+
+**The marginal pair moved, and it is worth knowing which way.** The gold used to be the
+one colour under the bar, at 16.6 from amber; the amber's own move took that to **19.6**
+and the gold now clears on both sides. What it cost is the other end: the lighter violet
+walked toward the magenta, and **Starlink against Science is 15.5**, down from 24.2. That
+is the worst separation anywhere now, and it is on the hue most often on screen —
+Starlink is 52.9% of the catalogue. Accepted knowingly rather than overlooked: these were
+chosen by looking, which is the order this project works in, and the legend is what
+resolves a close pair in a glance. The residual cost is real and is the same sentence the
+gold used to carry — with several objects kept, violet and magenta are neighbours.
 
 **What bought the extra three is the legend becoming active, not a cleverer search.** A
 colour identified in isolation needs the whole perceptual distance; one that only has to
@@ -2444,28 +2455,32 @@ said a cyan collides with the belt's blue. Those candidates sat at **L\* 78–81
 both greens — 22.9 from the belt, 28.5 from the military green. The old note was
 measuring a duller colour than the one that works.
 
-**The gold does not clear the threshold, and nothing warm and yellow can.** It is ΔE
-**16.6** from amber against a ~18 bar, and that is the *best available*, because the band
-is a pincer — amber at hue 34, Iridium's chartreuse at 70:
+**The gold sits in a pincer, and that is why it was chosen where it was.** Warm yellow
+is squeezed between amber and Iridium's chartreuse, so moving off one walks into the
+other. Re-measured against the current amber `#faa12c` — the whole run shifted by about
+three when the amber moved, which is the clearest possible demonstration that a hue here
+is only ever as separate as the things beside it:
 
 | | vs amber | vs Iridium |
 |---|---|---|
-| `#ffcb00` | 13.1 | 22.7 |
-| **`#ffd700`** | **16.6** | **18.9** |
-| `#ffe000` | 19.2 | 16.4 |
-| `#ffee00` | 23.0 | 12.9 |
-| `#c6b410` olive | 18.4 | 19.2 |
+| `#ffcb00` | 15.7 | 22.7 |
+| **`#ffd700`** | **19.6** | **18.9** |
+| `#ffe000` | 22.5 | 16.4 |
+| `#ffee00` | 26.6 | 12.9 |
+| `#c6b410` olive | 20.3 | 19.2 |
 
-The olive is the only one that passes and it was rejected **on looking**: at sixteen
-pixels it sits *in* Iridium's chartreuse rather than beside it, so the number that clears
-hides a confusion the eye does not. That is the right way round — the measurement is a
-filter, not the decision.
+The olive `#c6b410` was rejected **on looking**, and it is the example worth keeping: it
+clears on both sides — it always did, and by more now — yet at sixteen pixels it sits
+*in* Iridium's chartreuse rather than beside it. A number that passes can hide a
+confusion the eye does not. That is the right way round: **the measurement is a filter,
+not the decision**, which is also why the four hues retuned on 2026-09-24 were picked by
+eye first and measured afterwards.
 
-**What makes 16.6 survivable is the legend**, which is the same mechanism that bought six
-families at all: keep a navigation satellite and NAVIGATION lights in the corner, keep an
-ordinary one and nothing does. The pair resolves in a glance where the hues are close.
-The residual cost is real: scanning a sky with several objects kept, gold and amber are
-neighbours.
+**What makes a close pair survivable is the legend**, which is the same mechanism that
+bought six families at all: keep a navigation satellite and NAVIGATION lights in the
+corner, keep an ordinary one and nothing does. The pair resolves in a glance where the
+hues are close. That argument was written for gold against amber at 16.6; it now carries
+Starlink against Science at 15.5 instead.
 
 **Saturation is not uniform and should not be.** Only a handful of objects are kept at
 once, so none of these ever covers the frame the way a resting colour would. Iridium is
