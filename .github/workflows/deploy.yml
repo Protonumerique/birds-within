@@ -40,9 +40,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -52,7 +52,7 @@ jobs:
       # The newest snapshot any earlier run saved. Keys are unique per run, so the
       # exact key never matches and restore-keys resolves to the most recent one.
       - name: Restore catalogue cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: .catalog-cache
           key: celestrak-${{ github.run_id }}-${{ github.run_attempt }}
@@ -67,7 +67,7 @@ jobs:
       # throws away a download that cannot be repeated for two hours.
       - name: Save catalogue cache
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: .catalog-cache
           key: celestrak-${{ github.run_id }}-${{ github.run_attempt }}
@@ -83,8 +83,8 @@ jobs:
       - run: npm run validate
       - run: npm run build
 
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
 
@@ -108,4 +108,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

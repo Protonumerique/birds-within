@@ -2694,6 +2694,30 @@ gitignored.
   the API. That is common practice but **unproven here until day 60** — if the published
   elements ever go stale, check the Actions tab before anything else.
 
+**Actions are pinned to a major and bumped as a set**, done 2026-09-23 from the
+deprecation warning every run was printing. Two different Node versions live in this
+workflow and only one of them is the project's:
+
+- `.nvmrc` (22.22.2) is the Node the **build** runs on, read by `setup-node`. It was
+  never the thing the warning meant, and it is current.
+- Each action also declares the Node its *own* JavaScript runs in, in its `action.yml`.
+  Every one pinned here still said `node20`, which GitHub deprecated — the runner was
+  already forcing them onto Node 24 and saying so in the log.
+
+Bumping is only ever editing the `uses:` lines; there is nothing to install. The set
+went checkout v4→v7, setup-node v4→v7, cache/restore and cache/save v4→v6,
+configure-pages v5→v6, upload-pages-artifact v3→v5, deploy-pages v4→v5 — all now
+`node24`. The breaking changes across those majors were checked and none reach this
+workflow: checkout v7 blocks fork-PR checkout under `pull_request_target` and
+`workflow_run`, which this never uses; setup-node v6 limits automatic caching to npm,
+which is what `cache: npm` already asks for, and `node-version-file` is still an input;
+cache and setup-node v6/v7 are ESM ports with the same inputs. The Pages three move
+together on purpose — `upload-pages-artifact` is a composite that wraps
+`upload-artifact`, and `deploy-pages` has to be able to read what it wrote.
+
+**The deprecation is only ever visible in a run's log**, so it is worth reading one
+after any change here rather than trusting a green tick.
+
 ### Embedding it
 
 The page is meant to be iframed into a hero section. Two things the embedding page has
