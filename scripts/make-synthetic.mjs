@@ -22,7 +22,7 @@
 import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { FAMILY, encodeCatalog } from '../src/catalog-format.ts';
-import { ROOT, familyOf } from './catalog-sources.mjs';
+import { ROOT, FAMILIES, familyOf } from './catalog-sources.mjs';
 
 const MU = 398600.4418; // km^3/s^2
 const R_EARTH = 6378.137; // km
@@ -62,6 +62,24 @@ const meanMotion = (altitudeKm) => 86400 / (2 * Math.PI * Math.sqrt((R_EARTH + a
  * list CelesTrak publishes, and there is no group list offline. Those records are
  * tagged **explicitly** here, which is a stand-in for the join and not a second rule.
  */
+/**
+ * Which groups a shell's explicit tag stands for.
+ *
+ * **The tag names the group an object is in, never the family it comes out as**, and
+ * that distinction is the whole reason this map exists. Writing the answer straight
+ * into the record - which this file did until 2026-09-24 - bypasses `familyOf`
+ * entirely, so every rule inside it goes untested offline. The one that bit was the
+ * newest: a rocket body tagged MILITARY would have kept the military green here while
+ * production stripped it, and the dev sky would have gone on showing the exact bug
+ * the rule was written to remove.
+ *
+ * Fed through `inGroup` instead, every synthetic object takes the path production
+ * takes, and the only thing the tag stands in for is the group list that does not
+ * exist offline.
+ */
+const GROUPS_OF = new Map(FAMILIES.map((f) => [f.value, f.groups ?? []]));
+const inGroupFor = (tag) => (group) => tag != null && (GROUPS_OF.get(tag) ?? []).includes(group);
+
 const SHELLS = [
   [700, 550, 53.0, 'STARLINK', null], // the real Starlink shell, tagged by name
   [250, 780, 86.4, 'IRIDIUM', null], // the real Iridium shell, tagged by name
@@ -93,6 +111,21 @@ const SHELLS = [
    * few per cent rocket bodies.
    */
   [120, null, null, 'SYNTH R/B', null],
+  /*
+   * **Spent stages that would otherwise land in a family**, added 2026-09-24 for the
+   * same reason the `IRIDIUM 33 DEB` shell above exists: without them the newest rule
+   * in `familyOf` is untestable offline, because every other R/B here matches nothing.
+   *
+   * One per path, because a stage can reach a family two ways and only one of them is
+   * a name. `YAOGAN 30 R/B` is caught by the military **name** rule. `FREGAT R/B` is
+   * caught by the **group join** - a name no rule mentions - and it is the one that
+   * was actually reported: two of them in the live sky, one wearing military green and
+   * one not. Both must come out FAMILY.NONE while staying KIND.ROCKET_BODY, which is
+   * what makes them worth having: the check is that the mark and the voice are
+   * unchanged and only the hue is gone.
+   */
+  [16, null, null, 'YAOGAN 30 R/B', null],
+  [16, null, null, 'FREGAT R/B', FAMILY.MILITARY],
   /*
    * **Semi-synchronous, and the only thing here that is genuinely far.** Everything
    * else that passes tops out at 1,400 km, so `AUDIO.performer.byRange` - which only
@@ -145,7 +178,7 @@ for (const [count, altitude, inclination, label, family] of SHELLS) {
         OBJECT_NAME: `${label}-${catnr}`,
         NORAD_CAT_ID: catnr,
         // By name where production would match by name, explicitly where it would join.
-        FAMILY: family ?? familyOf(`${label}-${catnr}`, catnr, () => false),
+        FAMILY: familyOf(`${label}-${catnr}`, catnr, inGroupFor(family)),
         EPOCH: EPOCH.toISOString(),
         INCLINATION: fixed(inc, 4),
         RA_OF_ASC_NODE: fixed(wrap360((p / planes) * 360 + uniform(-1.5, 1.5)), 4) % 360,
@@ -236,7 +269,7 @@ for (let k = 0; k < CHOIR_COUNT; k++) {
 
   records.push({
     OBJECT_NAME: `${label} ${catnr}`,
-    FAMILY: geoFamily ?? FAMILY.NONE,
+    FAMILY: familyOf(`${label} ${catnr}`, catnr, inGroupFor(geoFamily)),
     NORAD_CAT_ID: catnr,
     EPOCH: EPOCH.toISOString(),
     INCLINATION: fixed(inc, 4),

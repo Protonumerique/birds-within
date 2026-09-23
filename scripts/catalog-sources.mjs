@@ -191,11 +191,29 @@ export function familyOf(name, catnr, inGroup) {
    * with them. That story is still in the sky - those fragments are drawn, they tear
    * the picture and they hiss - it simply is not told in Iridium's colour any more.
    *
-   * Rocket bodies are deliberately **not** covered: one Starlink stage is a spent
-   * launcher rather than wreckage, it sounds as a machine, and there is exactly one
-   * in the whole table. If that changes, this is the line to widen.
+   * **Rocket bodies joined it on 2026-09-24**, and the line is now the general one:
+   * only a payload can be in a family. This paragraph used to say spent stages were
+   * deliberately left in, on the grounds that a launcher is not wreckage and there
+   * was exactly one in the whole table. Both halves were wrong.
+   *
+   * It was reported from the live piece: two objects named `FREGAT R/B`, one wearing
+   * the military green and one not. That is the Iridium failure exactly - the mark is
+   * a round machine, the voice is the industrial knock, and the colour says *working
+   * military satellite* - and it is arguably worse, because the two stages sat in the
+   * same sky disagreeing with each other about what they were.
+   *
+   * A Fregat is an upper stage; it carried the payload and was discarded. Whatever
+   * the payload belonged to, the stage does not: a family names a constellation and a
+   * spent stage is not a member of one, any more than a fragment is. And "exactly one"
+   * only ever counted the **name** rules. A stage reaches a family through the catalog
+   * number join as easily as a payload does, which is how `FREGAT R/B` - a name no
+   * rule here mentions - ended up military in the first place.
+   *
+   * `KIND.ROCKET_BODY` is untouched and must stay that way: a stage is still a round
+   * mark rather than a shard, and still sings `machine` rather than hissing. What it
+   * loses is only the constellation hue it was never entitled to.
    */
-  if (kindFromName(name) === KIND.DEBRIS) return FAMILY.NONE;
+  if (kindFromName(name) !== KIND.OTHER) return FAMILY.NONE;
 
   for (const family of FAMILIES) {
     if (family.name && family.name.test(name)) return family.value;

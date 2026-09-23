@@ -92,7 +92,7 @@ on the live `.bin` files — so there is no hand-rolled compression.
 |---|---|---|---|
 | `full` | 20,992 | 835 KB gzipped | union of every CelesTrak GP dataset, newest elements win — **the default** |
 | `active` | 16,588 | 664 KB gzipped | every payload CelesTrak lists as active: the same sky with the wreckage removed |
-| `synthetic` | 1,692 | 129 KB | **invented** orbits, committed, development fallback only |
+| `synthetic` | 2,013 | 157 KB | **invented** orbits, committed, development fallback only |
 
 `?catalog=` switches without a rebuild: which image the piece wants is an aesthetic
 question, answered by looking. **`full` became the default on 2026-09-14**, once debris
@@ -2185,7 +2185,7 @@ silences between phrases — fine for a shard, which has no gaps and does exactl
 and wrong for anything with a phrase. Multiplying leaves silence silent.
 
 **The military voice is a hawk now, and the squawk it replaced became navigation.** A
-squawk is a *gregarious* sound — it says flock, and 408 objects spread across every orbit
+squawk is a *gregarious* sound — it says flock, and 407 objects spread across every orbit
 are not a flock. A hunting bird is solitary, holds one note far longer than a songbird
 can, and empties the sky around it. `noteMs` at 700–1500 is the whole patch: three to six
 times any other voice, which forces `perPhrase` to 1–2 and `gapMs` out to six seconds so
@@ -2383,18 +2383,21 @@ laid over the image.
 **The composition, measured on the real catalogue** (`full`, 20,992 objects,
 2026-09-22) — and the first row is the premise of the whole piece in one number:
 
-| family | count | share | in the belt | payloads | debris |
-|---|---|---|---|---|---|
-| **Starlink** | **11,110** | **52.9%** | 0 | 11,110 | 0 |
-| *no family* | 9,107 | 43.4% | 996 | 5,729 | 2,953 |
-| Military | 408 | 1.9% | 86 | 407 | 0 |
-| GNSS | 172 | 0.8% | 43 | 172 | 0 |
-| Iridium | 81 | 0.4% | 0 | 81 | 0 |
-| Weather | 69 | 0.3% | 22 | 69 | 0 |
-| Science | 45 | 0.2% | 1 | 45 | 0 |
+| family | count | share | in the belt | payloads | rocket bodies | debris |
+|---|---|---|---|---|---|---|
+| **Starlink** | **11,110** | **52.9%** | 0 | 11,110 | 0 | 0 |
+| *no family* | 9,108 | 43.4% | 996 | 5,729 | 426 | 2,953 |
+| Military | 407 | 1.9% | 86 | 407 | 0 | 0 |
+| GNSS | 172 | 0.8% | 43 | 172 | 0 | 0 |
+| Iridium | 81 | 0.4% | 0 | 81 | 0 | 0 |
+| Weather | 69 | 0.3% | 22 | 69 | 0 | 0 |
+| Science | 45 | 0.2% | 1 | 45 | 0 | 0 |
 
-**Every debris column is zero since 2026-09-23**, and Iridium went from 190 to 81 as a
-result — see *Wreckage has no family* below.
+**Every family is now 100% payloads**, which is the invariant rather than a coincidence:
+since 2026-09-24 nothing but a payload can be in one. Iridium went from 190 to 81 when
+debris was excluded and Military from 408 to 407 when rocket bodies followed — see
+*Wreckage has no family* below. Every non-payload in the catalogue is in *no family*,
+which is why that row carries all 426 rocket bodies and all 2,953 fragments.
 
 Over half of everything on orbit is one company's. *No family* is not "unnamed" — every
 one of those objects has a name; they match no family rule, and they are where all the
@@ -2509,15 +2512,62 @@ Starlink, GNSS, Weather and Science had none at all.
 Iridium's colour. That story is still in the sky — the fragments are drawn, they tear
 the picture and they hiss — it simply is not told in a hue any more.
 
-**Rocket bodies are deliberately not covered.** A spent stage is a launcher rather than
-wreckage, it sounds as a machine, and there was exactly one in the whole table. If that
-changes, `familyOf` is the one line to widen.
+**Rocket bodies joined them on 2026-09-24, and the rule is now the general one: only a
+payload can be in a family.** This paragraph used to say spent stages were deliberately
+left in — a launcher is not wreckage, it sounds as a machine, and there was exactly one
+in the whole table. Both halves of that were wrong.
 
-`synthetic.bin` carries an `IRIDIUM 33 DEB` shell so the exclusion runs offline by the
-path production takes — the name rule matches and the kind check overrules it first.
+Reported from the live piece: **two objects named `FREGAT R/B`, one wearing the military
+green and one not.** That is the Iridium failure exactly — the mark is a round machine,
+the voice is the industrial knock, and the hue says *working military satellite* — and
+arguably worse, because the two stages sat in the same sky disagreeing with each other
+about what they were. A Fregat is an upper stage: it carried the payload and was
+discarded. Whatever the payload belonged to, the stage does not.
+
+**"Exactly one" was true and still missed the point, because it was counting the wrong
+rule.** A stage reaches a family through the **catalog-number join** as readily as a
+payload does, and that is how a name no rule here mentions ended up military. The
+culprit is worth naming: **UCS lists 52146 as a military payload and CelesTrak's
+catalogue calls 52146 `FREGAT R/B`.** A launch's payload and its upper stage take
+adjacent numbers, so one of the two databases recorded the wrong one — and *which* does
+not matter, because the kind check settles it without having to trust either. This is
+the limit of joining on numbers, and the answer is not to stop joining on numbers.
+
+It is **one object in `full`**: 16 Fregat stages are in the catalogue and exactly one of
+them was tagged. Military 408 → 407; every other family was already clean.
+
+**`KIND.ROCKET_BODY` is untouched, and must stay that way.** A stage is still a round
+mark rather than a shard, and still sings `machine` rather than hissing — the knock
+under the birdsong is a documented texture and collapsing R/B into debris would delete
+it. What a stage loses is only the constellation hue it was never entitled to.
+
+`synthetic.bin` carries an `IRIDIUM 33 DEB` shell so the debris exclusion runs offline by
+the path production takes — the name rule matches and the kind check overrules it first.
 Nothing else in the dev sky is debris *and* in a family, so without it the rule is
 untestable. Verified: 56 Iridium-named fragments in `synthetic`, 109 in `full`, **zero
 carrying a family** in either.
+
+**Two rocket-body shells joined it for the same reason**, and one per *path*, because a
+stage can reach a family two ways and only one of them is a name: `YAOGAN 30 R/B` is
+caught by the military name rule, `FREGAT R/B` by the group join. The dev sky now
+carries 32 rocket bodies whose name or tag reaches a family rule; it carried **none**
+before, so the rule was untestable offline. Verified on the packed file: all 32 come out
+`FAMILY.NONE` while staying `KIND.ROCKET_BODY`, and every other tally is identical to
+the previous build.
+
+**And the generator was quietly bypassing the rule it was supposed to exercise.**
+`make-synthetic.mjs` wrote `FAMILY: family ?? familyOf(…)` — an explicitly tagged shell
+took the tag as the *answer* and never reached `familyOf` at all, so a tagged rocket body
+would have kept the military green offline while production stripped it, and the dev sky
+would have gone on showing the exact bug the rule removes. The tag now stands for **group
+membership** rather than for the result: it is fed through `inGroup`, so every synthetic
+object takes the path production takes and the only thing being stood in for is the group
+list that does not exist offline. Verified behaviour-preserving — Starlink 676, Iridium
+240, Military 196, GNSS 75, Weather 49, Science 30 before and after.
+
+**A test fixture that asserts the answer instead of running the rule is not a test**,
+which is the general form of that, and it is the fourth measurement trap this file
+records.
 
 **The belt outranks all of it at rest, and gave way under attention on 2026-09-23.**
 
@@ -2598,7 +2648,7 @@ sampled hourly over 24 hours, above the 2° floor:
 |---|---|---|---|---|
 | Starlink | 11,110 | 0 | 320–438 (median 362) | 0 |
 | GNSS | 172 | 43 | **44–51 (median 49)** | 14–20 |
-| Military | 408 | 86 | 16–35 (median 27) | 41–43 |
+| Military | 407 | 86 | 16–35 (median 27) | 41–43 |
 | Iridium | 81 | 0 | 2–8 (was 5–18 with its wreckage) | 0 |
 | Science | 45 | 1 | 3–11 (median 7) | 0–1 |
 | Weather | 69 | 22 | **0–3 (median 2)** | 12 |
@@ -2664,7 +2714,7 @@ no two of them overlap much:
 | `GROUP=military` | 24 | CelesTrak's bucket |
 | **UCS Satellite Database** | 613 numbers, **402** still on orbit | a published classification |
 | `YAOGAN` and `USA ###` | 187 | naming conventions that cannot drift |
-| **union, on `full`** | **408** | was 211 |
+| **union, on `full`** | **407** | was 211 |
 
 **The UCS list is what makes this a classification rather than our judgement**, which is
 the thing the rest of `FAMILIES` exists to preserve. Added 2026-09-23. The Union of
@@ -2684,7 +2734,7 @@ joining on numbers rather than names, arriving in one example.
 
 **The name rules stay, and they are not decoration.** UCS froze on **1 May 2023** — it is
 the last edition they published — and **57.9% of the catalogue launched after it**. Of
-the 408 objects the family now holds, **106 come from the name rules alone**: 76 YAOGAN,
+the 407 objects the family now holds, **106 come from the name rules alone**: 76 YAOGAN,
 21 Praetorian SDA, 8 USA, Victus Haze Puma, every one a launch UCS never saw. Only 105
 are found by both. So the list gives breadth and the names give currency, and **a
 UCS-only family would have been a third smaller in YAOGAN than what was already
@@ -2696,7 +2746,7 @@ written into `scripts/ucs-military.json` so the staleness is visible rather than
 inferred. The failure mode is the mild one this file already accepts for a thin family:
 an untagged object sings the default voice, which is not wrong.
 
-**86 of the 408 are in the belt.** `RING_VERT` tests `choir` before
+**86 of the 407 are in the belt.** `RING_VERT` tests `choir` before
 attention and `audio.ts` splits on the same byte, so a fifth of this family never reaches
 the colour or the voice at all — which is the belt rule working, not a loss.
 
