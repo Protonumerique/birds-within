@@ -329,7 +329,7 @@ export const IMMERSION = {
 /** The halo around a light. */
 export const GLOW = {
   /** How far the halo reaches, as a multiple of the dot's own radius. */
-  haloScale: 2.4,
+  haloScale: 2.8,
   /** How bright the halo is at the centre, against the core's own 1.9. */
   haloGain: 0.42,
 };
@@ -345,7 +345,7 @@ export const HIGHLIGHT = {
    * Hovered and marked objects, in the sky and in the readout alike - one colour is what
    * ties a ring to its row.
    */
-  markColor: '#ffb454',
+  markColor: '#faa12c',
   /** The hovered ring grows slightly, so the pointer's reach is legible. */
   hoverScale: 1.2,
   /**
@@ -410,14 +410,14 @@ export const GROUP_LOOK = {
 export const FAMILY_LOOK: Record<Family, string | null> = {
   [FAMILY.NONE]: null,
   /** 11,110 objects on 2026-09-22 - 52.9% of the catalogue, and all of it one company. */
-  [FAMILY.STARLINK]: '#6b51b8',
+  [FAMILY.STARLINK]: '#8e6cf5',
   /** 190, of which 109 are fragments of the 2009 collision. The loud one. */
   [FAMILY.IRIDIUM]: '#c6f910',
   /**
    * 211 objects, 210 of them payloads - and getting to that number took the one piece of
    * editorial judgement in the whole family table.
    */
-  [FAMILY.MILITARY]: '#46a466',
+  [FAMILY.MILITARY]: '#62e78e',
   /** 172 objects, 43 of them in the belt. */
   [FAMILY.GNSS]: '#ffd700',
   /** 69 objects, 22 of them in the belt. */
@@ -439,13 +439,13 @@ export const FAMILY_LEGEND = [
 /** The tracks drawn through kept objects - where each has been and where it is going. */
 export const TRAIL = {
   /** Minutes of past track to draw. */
-  pastMinutes: 35,
+  pastMinutes: 45,
   /** Minutes of future track to draw. */
-  futureMinutes: 35,
+  futureMinutes: 45,
   /** Seconds between sampled points along a trail. */
   stepSeconds: 20,
   /** Line width in CSS pixels. */
-  widthPx: 2,
+  widthPx: 3,
   /** Opacity of a track at full brightness. */
   opacity: 0.5,
   /**
