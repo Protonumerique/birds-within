@@ -2975,6 +2975,31 @@ Anything that computes range rate by hand must not repeat the naive version.
   font, so the binary is in git and `scripts/subset-fonts.py` is in git beside it.
   `vendor/` is gitignored. **Do not use a font weight outside the subset** - it carries
   400 and 700, and anything else is synthesised.
+- **`config.ts` is dials first, reasoning last.** Restructured 2026-09-23. Every value
+  sits in the first ~880 lines with a one-line comment; anything longer — what was
+  measured, what was tried and rejected, what breaks if it is changed — lives in **WHY
+  THESE NUMBERS** at the foot of the file, under a heading that is the value's own path
+  (`AUDIO.drone.soloRamp`, `SKY.ground.amount`). **Put a new note there rather than
+  inline**, and leave the first sentence with the value. It was 74% prose by line count —
+  1,460 comment lines against 515 of code — and `SKY` alone was 209 lines to hold 29
+  values; it is now 55.
+  - **There is no processing order.** The file is read once at module load and is almost
+    entirely literals. Only five things care where they sit, and all five are one value
+    borrowing another: `OBSERVER` spreads `DEFAULT_OBSERVER`; `CHOIR.color` and
+    `GROUP_LOOK` read `PALETTE`, `KIND_LOOK`, `HIGHLIGHT` and `dimmed()`; and
+    `AUDIO.performer.familyVoice` reads `FAMILY_VOICE`. The declaration order was not
+    changed, so those hold by construction.
+  - **The move was proved, not eyeballed**, which is the only way to touch a 2,000-line
+    file of tuned constants: both versions were loaded under Node's type stripping and
+    every one of the **29 exports deep-compared — identical**; the 515 code lines are
+    **byte-identical and in the same order**; **no prose line was lost**; and the entry
+    chunk stayed at 18.99 KB / 8.15 gzipped, which is the budget the convention above
+    asks about. Regenerate that proof before trusting any later reshuffle.
+  - **It turned up three essays that had drifted off their own declaration** — `GLOW`'s
+    sat above `BLOOM`, `TRAIL`'s and `AUDIO`'s above `GHOST`, each a couple of hundred
+    lines from the thing it described. That is the failure mode of long inline prose,
+    and it is the argument for the split as much as the scrolling was: a comment 200
+    lines from its value is already a note, just an unfiled one.
 - The observer's **default** lives in `src/config.ts` as `DEFAULT_OBSERVER` and **must**
   match `OBS_*` in `scripts/reference.py`, or the validation compares different things.
   `OBSERVER` itself is settable at runtime — see *Where you are standing* — so **nothing

@@ -1,14 +1,34 @@
+/**
+ * Every value the piece is tuned by, and nothing else.
+ *
+ * **The dials are above, the reasoning is below.** Read once when the module loads,
+ * top to bottom; there is no processing order and nothing here runs a pipeline. Each
+ * value keeps a one-line comment where it stands, and anything longer than that -
+ * what was measured, what was tried and rejected, what will break if it is changed -
+ * lives in WHY THESE NUMBERS at the foot of the file, under the value's own path.
+ * `SKY.ground.amount` is the heading to search for. Nothing was cut in the move.
+ *
+ * **Only five things here care where they sit**, and all five are one value borrowing
+ * another: `OBSERVER` spreads `DEFAULT_OBSERVER`; `CHOIR.color` and `GROUP_LOOK` read
+ * `PALETTE`, `KIND_LOOK`, `HIGHLIGHT` and `dimmed`; and `AUDIO.performer.familyVoice`
+ * reads `FAMILY_VOICE`. Everything else is a literal and could be anywhere. Seven of
+ * the nine functions are declarations rather than arrows, so they hoist and are free
+ * wherever they sit. `observerIsCustom` and `catalogUrl` are arrows on a const, so
+ * they exist only from their own line down.
+ *
+ * **Four values are read from the URL at load** - `OBSERVER`, `DATASET`, `DEBUG` and
+ * `IMMERSION.enabled` - which is why `OBSERVER` is mutable and why nothing anywhere
+ * may capture its fields at module load. See *Where you are standing* in CLAUDE.md.
+ *
+ * In order: DEFAULT_OBSERVER, OBSERVER, setObserver, resetObserver, observerIsCustom,
+ * observerLabel, Dataset, DATASET, catalogUrl, GATE, READOUT, CHOIR_GRID, PALETTE,
+ * KIND_LOOK, FEATURED, SKY, BLOOM, IMMERSION, GLOW, HIGHLIGHT, CHOIR, GROUP_LOOK,
+ * FAMILY_LOOK, FAMILY_LEGEND, TRAIL, CLOCK, GHOST, AUDIO, DEBUG, INTERFERENCE.
+ */
+
 import { FAMILY, type Family } from './catalog-format';
 
-/**
- * Where the observer stands. Everything in this app is relative to this point.
- *
- * **Berlin is the default, and the default must not move.** `scripts/reference.py`
- * pins `OBS_*` to these exact numbers and `npm run validate` compares against the
- * `reference.json` computed from them. A runtime override cannot reach that check -
- * nothing in the build imports this file, the scripts take `catalog-format.ts` alone -
- * but the default and `reference.py` still have to agree.
- */
+/** Where the observer stands. */
 export const DEFAULT_OBSERVER = {
   name: 'Berlin',
   latitudeDeg: 52.52,
@@ -17,12 +37,7 @@ export const DEFAULT_OBSERVER = {
   heightKm: 0.034,
 };
 
-/**
- * Coordinates off the URL: `?lat=48.86&lon=2.35`. Anything missing, unparseable or
- * out of range is ignored outright rather than clamped - a half-read coordinate is a
- * different place, and silently standing somewhere else is worse than standing in
- * Berlin.
- */
+/** Coordinates off the URL: */
 function observerFromUrl(): { latitudeDeg: number; longitudeDeg: number; name: string } | null {
   const q = new URLSearchParams(location.search);
   const lat = Number(q.get('lat'));
@@ -35,26 +50,10 @@ function observerFromUrl(): { latitudeDeg: number; longitudeDeg: number; name: s
   return { latitudeDeg: lat, longitudeDeg: lon, name: '' };
 }
 
-/**
- * The observer actually in force. **Mutable, and deliberately so.**
- *
- * `setObserver` writes into this object rather than replacing it, and every reader
- * takes its fields at use time - `createHud`, `createGate` and `run` all read inside a
- * function, never at module scope. That is what lets the first screen change where you
- * stand without a reload: at that moment the piece does not exist yet, because the
- * whole of it is behind the LAUNCH press. **Nothing may capture these fields at module
- * load**, or it will hold Berlin for the life of the page.
- */
+/** The observer actually in force. */
 export const OBSERVER = { ...DEFAULT_OBSERVER, ...observerFromUrl() };
 
-/**
- * Stand somewhere else, and put it in the URL so the sky is a link.
- *
- * **Rounded to two decimals, on purpose.** That is about a kilometre, which moves a
- * 500 km object by a tenth of a degree - invisible - and it means a shared URL never
- * carries anyone's precise coordinates. A location control that publishes a street
- * address in a link is not one worth having.
- */
+/** Stand somewhere else, and put it in the URL so the sky is a link. */
 export function setObserver(latitudeDeg: number, longitudeDeg: number, heightKm = 0): void {
   const round = (v: number) => Math.round(v * 100) / 100;
   OBSERVER.latitudeDeg = round(latitudeDeg);
@@ -74,9 +73,8 @@ export function resetObserver(): void {
 export const observerIsCustom = () => OBSERVER.name !== DEFAULT_OBSERVER.name;
 
 /**
- * How the observer reads on screen, in one place - the first screen and the panel both
- * use it, so they cannot format the same coordinates two ways. A location with no name
- * is its coordinates and nothing else.
+ * How the observer reads on screen, in one place - the first screen and the panel both use
+ * it, so they cannot format the same coordinates two ways.
  */
 export function observerLabel(): string {
   const { latitudeDeg: la, longitudeDeg: lo, name } = OBSERVER;
@@ -99,7 +97,869 @@ function syncUrl(lat: string | null, lon: string | null): void {
   history.replaceState(null, '', url);
 }
 
+/** Which packed catalogue to load - all src/catalog-format.ts binaries in public/data/. */
+export type Dataset = 'active' | 'full' | 'synthetic';
+
+/** `full` since 2026-09-14. */
+const DEFAULT_DATASET: Dataset = 'full';
+
+function datasetFromUrl(): Dataset {
+  const requested = new URLSearchParams(location.search).get('catalog');
+  return requested === 'active' || requested === 'full' || requested === 'synthetic'
+    ? requested
+    : DEFAULT_DATASET;
+}
+
+export const DATASET: Dataset = datasetFromUrl();
+
+export const catalogUrl = (dataset: Dataset) => `${import.meta.env.BASE_URL}data/${dataset}.bin`;
+
+/** The first screen. */
+export const GATE = {
+  title: 'Birds Within',
+  tagline: 'A visualization of crowded skies. An immersive panorama showing our traces in orbit, our observers above.',
+  /** Very short, and it has one job: */
+  lede:
+    'Referring to a satellite as "Bird" was common in sat-spotter networks years ago and approaching them as such, allows newcomers to discover the taxonomies of that environment. This piece is an immersive experience of the crowded skies above us, and tool to explore and understand them more, or simply, contemplate their dynamics.',
+  /** The one offer on the screen. */
+  launchLabel: 'LAUNCH',
+  /** What the press costs, said before it is pressed rather than after. */
+  loadingLabel: 'LAUNCHING…',
+  hint: 'drag to look · click to trace · press LISTEN for sound',
+  /** How long the screen takes to leave once the first frame is on the canvas. */
+  fadeMs: 700,
+  /** The drawing: */
+  poster: {
+    /** Passing objects. */
+    passing: 420,
+    /** Fragments, drawn as the shards they are on the sky. */
+    shards: 34,
+    /** The belt, as the fixed arc across the south it actually is. */
+    belt: 90,
+    /** The kept objects: */
+    orbits: 4,
+    /** White rings on objects the readout is listing. A cluster, as the panel makes. */
+    listed: 11,
+    /** Fixed, so the poster is the same drawing every time the page is opened. */
+    seed: 19,
+  },
+};
+
+/** The readout, redesigned 2026-09-15 as a single narrow column. */
+export const READOUT = {
+  /** Column width. Narrow on purpose; the sky is the piece, not the panel. */
+  widthPx: 272,
+  /** Default rows per group, before anything is kept. Names only. */
+  passingRows: 10,
+  debrisRows: 6,
+  /**
+   * Whether pointing at an object no row is showing gives it one, at the bottom of the
+   * open zone so nothing above it moves.
+   */
+  hoverOpensRow: true,
+  /** How to work it, top right. */
+  hint: 'drag to look · scroll to zoom · click to keep',
+};
+
+/** The belt's grid: */
+export const CHOIR_GRID = {
+  columns: 24,
+  /** The **hit box**, in CSS pixels. */
+  cellPx: 10,
+  /** The visual gap, taken out of the hit box rather than added between them. */
+  gapPx: 1,
+};
+
+/** The visual grammar, decided 2026-09-14. */
+export const PALETTE = {
+  /** The sky's own colour: the clear colour, and what the haze fades objects into. */
+  sky: '#05070a',
+  /** A passing satellite in sunlight. */
+  lit: '#fff2d6',
+  /** A passing satellite inside Earth's shadow: tracked, and invisible to the eye. */
+  eclipsed: '#808080',
+  /** Anything below the horizon, on the far side of the world. Neutral, never blue. */
+  below: '#4a4f54',
+  /** Geostationary, in every state. See CHOIR and *The choir* in CLAUDE.md. */
+  geostationary: '#8ad4ff',
+};
+
 /**
+ * How the `kind` byte reads on screen - the heuristic in catalog-format.ts, which knows
+ * debris and rocket bodies from CelesTrak's naming and nothing more.
+ */
+export const KIND_LOOK = {
+  /** A spent upper stage is still a payload's mark: smaller, and without the flare. */
+  rocketBody: { size: 0.9, glow: 0.5 },
+  /** Debris is not a light. */
+  debris: {
+    /** Slightly larger than a payload: a triangle needs pixels before it reads as one. */
+    size: 1.2,
+    /** Peak brightness against a payload's core. */
+    intensity: 0.5,
+    /** Turns per minute, before each fragment's own hash scales it. */
+    spinRpm: 2.5,
+  },
+};
+
+/** **The one object with people in it.** Added 2026-09-21. */
+export const FEATURED = {
+  /** NORAD catalog numbers drawn as featured. 25544 is the ISS. */
+  catnrs: [25544],
+  /**
+   * How much larger the mark is. Well clear of the `KIND_LOOK` multipliers (0.9 for a
+   * rocket body, 1.2 for a shard), so size reads as identity here rather than as kind.
+   */
+  size: 2.0,
+  /**
+   * **A cool white, and deliberately not the belt's blue.** Blue means geostationary and
+   * means only that - see *Colour and visual conventions*.
+   */
+  color: '#d8e8ff',
+  /** Its orbit: the same cool white, a little wider and a little more present. */
+  trackWidthPx: 3.2,
+  trackOpacity: 0.72,
+};
+
+export const SKY = {
+  /** Radius of the dome in scene units. Arbitrary - the sky has no scale. */
+  radius: 100,
+  /** Where the camera is pointing when the piece opens: */
+  startFacingDeg: 180,
+  startPitchDeg: 38,
+  /** The lowest elevation anything is drawn at. */
+  lowestVisibleDeg: 2,
+  /** Haze rising from the horizon: */
+  haze: {
+    topDeg: 20,
+    /** 1 = objects at the horizon are fully hidden. */
+    horizonOpacity: 1,
+  },
+  /** The backdrop: */
+  backdrop: {
+    /** What the sky lifts toward at the horizon. Cool - see above. */
+    color: '#16283a',
+    /** How much of that colour arrives at the horizon. 0 disables the lift entirely. */
+    strength: 0.32,
+    /** How far up it reaches. */
+    topDeg: 36,
+    /** Higher hugs the horizon more tightly. */
+    falloff: 2.6,
+    /** Grain amplitude, peak to peak, in **display** units - so 0.012 is about 3/255. */
+    grain: 0.014,
+  },
+  /** The ground. */
+  ground: {
+    /** The base. Clearly below the darkest sky, and cool rather than neutral. */
+    color: '#02040a',
+    /** What a sheen lifts toward: the horizon's own light, well under it. */
+    sheen: '#0a1927',
+    /** How much of that colour a sheen ever reaches. */
+    amount: 0.28,
+    /**
+     * How the sheens are stretched across the plane. Deliberately lopsided - equal
+     * numbers give round blobs, which is the one shape this must not have.
+     */
+    stretch: [1.15, 0.62] as [number, number],
+    /** How dark it gets where the observer is standing, 0-1. */
+    shadow: 0.45,
+    /** The window the crests come through, against a field running roughly -1 to 1. */
+    crest: [-0.05, 1.4] as [number, number],
+    /**
+     * How hard the crests are shaped after that window - an exponent, so higher is more
+     * concentrated and harder-edged, lower is blurrier.
+     */
+    contrast: 1.2,
+    /** How far the field folds back on itself. */
+    warp: 1.1,
+    /**
+     * How far down the ground the sheens reach, in degrees below the horizon. Past
+     * this the surface has turned to face the eye and there is no grazing light left.
+     */
+    reachDeg: 33,
+    /** The pace it evolves at. */
+    speed: 0.07,
+  },
+};
+
+/** The glow pass: */
+export const BLOOM = {
+  /** 0 turns it off and skips every pass and both render targets. */
+  strength: 0.85,
+  /** How bright a pixel has to be before it bleeds, 0-1 against the display value. */
+  threshold: 0.16,
+  /** How soft the threshold's edge is. A hard cut makes marks pop as they brighten. */
+  knee: 0.22,
+  /** Resolution divisor for the blur. */
+  downscale: 6,
+  /** Blur radius in low-resolution texels, and **it must stay near 1**. */
+  spread: 1,
+  /** How many across-and-down pairs to run. */
+  passes: 4,
+};
+
+/** Immersion: */
+export const IMMERSION = {
+  /** Whether the slider is offered at all. */
+  enabled: new URLSearchParams(location.search).has('immerse'),
+  /** At or inside this slant range, an object takes the effect in full. */
+  nearKm: 400,
+  /** Where a mark is fully background. */
+  farKm: 6000,
+  /** How much larger a **near** mark is drawn. */
+  maxGain: 6,
+  /** How much wider a **far** mark's disc gets as it goes out of focus. */
+  bokeh: 4,
+  /** Energy conservation on the **near** growth. */
+  nearDim: 0.7,
+  /**
+   * How much a near mark's bright core tightens as it is magnified, as an exponent on the
+   * gain:
+   */
+  coreTighten: 0.7,
+  /** A near mark stops being a glow and becomes a **body**: */
+  bodyEdge: 0.52,
+  bodyGain: 2.4,
+  /** Energy conservation on the **far** bokeh, and deliberately gentler than `nearDim`. */
+  farDim: 2,
+  /** Immersion at which rings and tracks have faded out completely. */
+  markersGoneAt: 0.3,
+};
+
+/** The halo around a light. */
+export const GLOW = {
+  /** How far the halo reaches, as a multiple of the dot's own radius. */
+  haloScale: 2.4,
+  /** How bright the halo is at the centre, against the core's own 1.9. */
+  haloGain: 0.42,
+};
+
+/** Rings around the objects the readout lists. */
+export const HIGHLIGHT = {
+  /** Outer diameter, CSS pixels. Fixed on screen, whatever the object's range. */
+  diameterPx: 30,
+  strokePx: 1.5,
+  /** The plain ring worn by whatever the readout happens to be listing. */
+  color: '#ffffff',
+  /**
+   * Hovered and marked objects, in the sky and in the readout alike - one colour is what
+   * ties a ring to its row.
+   */
+  markColor: '#ffb454',
+  /** The hovered ring grows slightly, so the pointer's reach is legible. */
+  hoverScale: 1.2,
+  /**
+   * A marked object's ring and its row dim together as it descends, so a glance at the sky
+   * reads the same ordering the readout is sorted by.
+   */
+  dimAtHorizon: 0.3,
+  fullBrightDeg: 55,
+  /**
+   * The attention colour for **wreckage**, replacing amber on anything the `kind` byte
+   * calls debris - its ring when touched or kept, its track, and its row in the panel.
+   */
+  debrisMarkColor: '#e2aac4',
+  /** How near the pointer has to be, in CSS pixels, to take an object. */
+  pickRadiusPx: 18,
+  /**
+   * A kept object is let go once it sinks below this, and its row goes back to whatever
+   * has risen.
+   */
+  releaseBelowDeg: 5,
+  /** The ring breathes with what its object is sounding: */
+  pulse: {
+    /** How far the ring swells at full level, as a fraction of its diameter. */
+    swell: 0.55,
+    /**
+     * Slots in the shader's uniform array. Has to cover every voice that can sound at
+     * once - `AUDIO.performer.maxVoices`, plus the station - with room to grow.
+     */
+    slots: 16,
+  },
+};
+
+/** The choir: */
+export const CHOIR = {
+  /** Ring diameter, CSS pixels. Smaller than HIGHLIGHT.diameterPx on purpose. */
+  diameterPx: 17,
+  strokePx: 1.2,
+  /** The ring matches the point: one blue means one thing. */
+  color: PALETTE.geostationary,
+};
+
+/** A hex colour scaled toward black: how a mark drawn at reduced intensity reads. */
+function dimmed(hex: string, k: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  const ch = (shift: number) => Math.round(((n >> shift) & 255) * k);
+  return `#${[ch(16), ch(8), ch(0)].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** How each group reads in the panel. */
+export const GROUP_LOOK = {
+  passing: { shape: 'dot', tone: PALETTE.lit, accent: HIGHLIGHT.markColor },
+  debris: {
+    shape: 'triangle',
+    tone: dimmed(PALETTE.lit, KIND_LOOK.debris.intensity),
+    // Not amber. Wreckage has its own attention colour now - see HIGHLIGHT.
+    accent: HIGHLIGHT.debrisMarkColor,
+  },
+  belt: { shape: 'dot', tone: PALETTE.geostationary, accent: PALETTE.geostationary },
+} as const;
+
+/** **The constellation narrative: */
+export const FAMILY_LOOK: Record<Family, string | null> = {
+  [FAMILY.NONE]: null,
+  /** 11,110 objects on 2026-09-22 - 52.9% of the catalogue, and all of it one company. */
+  [FAMILY.STARLINK]: '#6b51b8',
+  /** 190, of which 109 are fragments of the 2009 collision. The loud one. */
+  [FAMILY.IRIDIUM]: '#c6f910',
+  /**
+   * 211 objects, 210 of them payloads - and getting to that number took the one piece of
+   * editorial judgement in the whole family table.
+   */
+  [FAMILY.MILITARY]: '#46a466',
+  /** 172 objects, 43 of them in the belt. */
+  [FAMILY.GNSS]: '#ffd700',
+  /** 69 objects, 22 of them in the belt. */
+  [FAMILY.WEATHER]: '#00fff3',
+  /** 45 objects, the smallest family. Magenta, which reads as instrument. */
+  [FAMILY.SCIENCE]: '#e94cfa',
+};
+
+/** The families that carry a colour, in the order the legend lists them. */
+export const FAMILY_LEGEND = [
+  { family: FAMILY.STARLINK, label: 'STARLINK' },
+  { family: FAMILY.IRIDIUM, label: 'IRIDIUM' },
+  { family: FAMILY.MILITARY, label: 'MILITARY' },
+  { family: FAMILY.GNSS, label: 'NAVIGATION' },
+  { family: FAMILY.WEATHER, label: 'WEATHER' },
+  { family: FAMILY.SCIENCE, label: 'SCIENCE' },
+] as const;
+
+/** The tracks drawn through kept objects - where each has been and where it is going. */
+export const TRAIL = {
+  /** Minutes of past track to draw. */
+  pastMinutes: 35,
+  /** Minutes of future track to draw. */
+  futureMinutes: 35,
+  /** Seconds between sampled points along a trail. */
+  stepSeconds: 20,
+  /** Line width in CSS pixels. */
+  widthPx: 2,
+  /** Opacity of a track at full brightness. */
+  opacity: 0.5,
+  /**
+   * A track dissolves from this elevation down and is cut exactly at the horizon, so an
+   * orbit leaves the image rather than diving through the ground.
+   */
+  fadeTopDeg: 7,
+  /** Track colour for an object that is drawn but not kept. Kept ones use HIGHLIGHT.markColor. */
+  color: '#7fa6bf',
+  /** A track through every kept object, not only the most recent one. */
+  allMarked: true,
+  /** Scene seconds a track may drift before it is recomputed. */
+  refreshSeconds: 60,
+  /** Track requests allowed out at once, across all kept objects. */
+  maxInflight: 2,
+};
+
+export const CLOCK = {
+  /**
+   * Minimum propagation ticks per second. Rendering runs at display rate and the GPU
+   * blends between ticks, so at 1x this can be low without anything visibly stepping.
+   */
+  propagationHz: 5,
+  /** Most scene seconds allowed between ticks before the tick rate is raised. */
+  maxStepSeconds: 10,
+  /** Ceiling on ticks per second. A tick of `full` is ~17 ms in the worker. */
+  maxPropagationHz: 20,
+  /** Time multipliers offered by the scrub control. */
+  rates: [1, 10, 60, 100],
+};
+
+/** Which voice each family sings with. */
+const FAMILY_VOICE: Record<
+  Family,
+  'none' | 'starlink' | 'iridium' | 'military' | 'gnss' | 'weather' | 'science'
+> = {
+  [FAMILY.NONE]: 'none',
+  [FAMILY.STARLINK]: 'starlink',
+  [FAMILY.IRIDIUM]: 'iridium',
+  [FAMILY.MILITARY]: 'military',
+  [FAMILY.GNSS]: 'gnss',
+  [FAMILY.WEATHER]: 'weather',
+  [FAMILY.SCIENCE]: 'science',
+};
+
+/** Ghosting: */
+export const GHOST = {
+  /** Trails appear above this time rate, and fade in over the step above it. */
+  fromRate: 1,
+  /** Copies behind each object. */
+  count: 4,
+  /** How far back the furthest reaches, in tick intervals. */
+  spanTicks: 1.6,
+  /** Brightness of the first ghost, and what each one behind it keeps of the last. */
+  level: 0.5,
+  falloff: 0.66,
+  /** A ghost's width against its object. */
+  size: 0.6,
+};
+
+/** Sound - Step 4, beginning with the drone. */
+export const AUDIO = {
+  /** Master level once sound is on. Everything else is relative to this. */
+  masterGain: 0.45,
+  /** Seconds the master takes to arrive or leave when the button is pressed. */
+  fadeSeconds: 2.5,
+  /** **Sound runs at every time rate**, since 2026-09-18. */
+  rateDuck: {
+    /** Level at `fullAt` and above, as a share of `masterGain`. */
+    to: 0.3,
+    /** The rate the attenuation has fully arrived at. The top of the ladder. */
+    fullAt: 100,
+  },
+  /** What the sound does while the clock is held. */
+  paused: { level: 0.45 },
+  /** **The drone rises with the time rate**, added 2026-09-18. */
+  rateDrive: { cents: 1900 },
+  /** Seconds to duck and unduck for the rate or a pause. Shorter than a deliberate fade. */
+  duckSeconds: 0.7,
+  drone: {
+    /** Seconds the transpose takes to arrive. Long: a rate change is a ramp, not a jump. */
+    rateGlideSeconds: 1.4,
+    /**
+     * The bed's pitches, low to high, **one voice per ratio** - the slice count is this
+     * array's length, so the two can never disagree.
+     */
+    ratios: [1, 9 / 8, 4 / 3, 3 / 2, 5 / 3, 2, 9 / 4, 8 / 3, 3],
+    /** The root, Hz. C1 - under the bottom of a bass guitar. */
+    rootHz: 32.7,
+    /** One bed slice at full occupancy. */
+    bedGain: 0.04,
+    /** Members in a slice for it to reach full level. Below it the bed thins out. */
+    fullAt: 20,
+    /** The bed never falls below this fraction of its level while the belt is up. */
+    floorLevel: 0.25,
+    /** Detune between a slice's two sines. What makes the bed beat instead of sit. */
+    detuneCents: 7,
+    /** A triangle an octave up, under the pair, for body. */
+    bodyGain: 0.16,
+    /** Each voice breathes at its own rate, lowest slice slowest. Hz. */
+    breathHz: [0.043, 0.071],
+    /** How deep that breath cuts, as a fraction of the voice's level. */
+    breathDepth: 0.35,
+    /** A kept object's voice sits this many octaves above its slice. */
+    soloOctaves: 1,
+    /** A kept voice at full strength, over and above the bed. */
+    soloGain: 0.105,
+    /** How much of `soloGain` each kept voice gets, as a function of how many are kept. */
+    soloRamp: { first: 0.2, fullAt: 10, curve: 0.7 },
+    /** Spread across a slice, cents: neighbours kept together beat against each other. */
+    soloDetuneCents: 14,
+    /** The resonant lowpass that opens as a voice arrives. */
+    soloCutoffHz: 900,
+    soloQ: 7,
+    attackSeconds: 3,
+    releaseSeconds: 4,
+    /** Kept belt objects that can sound at once. */
+    maxSolo: 15,
+    /** How often the slices are recut, ms. The belt barely moves; this is not a tick. */
+    regroupMs: 2000,
+    /** Hard left and right are unpleasant on headphones; the field stops here. */
+    panSpread: 0.85,
+  },
+  /** The performers: */
+  performer: {
+    /** Kept passes that can sound at once. Past this a click still marks. */
+    maxVoices: 10,
+    /** Voice level before the elevation curve. */
+    gain: 0.33,
+    /** Relative levels. */
+    timbreGain: { bird: 1, machine: 1, shard: 0.8, station: 1 },
+    /** **Distance attenuates a voice**, added 2026-09-21. */
+    byRange: {
+      nearKm: 1500,
+      farKm: 25000,
+      /** How far down the furthest things go. */
+      floor: 0.25,
+    },
+    /** **The meter: */
+    meter: {
+      /** Samples per read. 256 is about 5 ms at 48 kHz: enough for an RMS, nothing to store. */
+      fftSize: 256,
+      /** Seconds. */
+      attackSeconds: 0.02,
+      releaseSeconds: 0.22,
+      /** The window the bar spans, in **decibels**, and it has to be decibels. */
+      floorDb: -50,
+      topDb: -8,
+    },
+    /** A kept object arrives and leaves over these, seconds. */
+    attackSeconds: 0.7,
+    releaseSeconds: 1.6,
+    /** Cents of pitch per km/s of range rate, against a literal 0.0017. */
+    dopplerCentsPerKmS: 100,
+    /** Base pitches: a just pentatonic from middle C, over three octaves. */
+    rootHz: 262,
+    ratios: [1, 9 / 8, 4 / 3, 3 / 2, 5 / 3],
+    octaves: 3,
+    /** How far ahead phrases are scheduled, seconds. Web Audio wants a lookahead. */
+    lookaheadSeconds: 0.35,
+    /**
+     * **Which bird a bird is.** The `family` byte the build packs picks one of these;
+     * anything untagged gets `none`, which is the whistle the piece started with.
+     */
+    voices: {
+      /** The default whistle: a songbird, sine, phrases of quick swept chirps. */
+      none: {
+        wave: 'sine' as OscillatorType,
+        octaveShift: 0,
+        q: 0.9,
+        perPhrase: [2, 5],
+        noteMs: [60, 170],
+        spacingMs: [35, 120],
+        gapMs: [900, 2600],
+        /** How far a note sweeps, as a frequency ratio, and how often it sweeps up. */
+        sweep: [1.15, 1.9],
+        rise: 0.5,
+        cutoffHz: [700, 5400],
+        /** Fraction of a note held before it releases - see `strike`. */
+        hold: 0.7,
+        attack: 0.006,
+        /** A parallel high-Q band that rings when the note is struck. 0 is off. */
+        ring: 0,
+        /** Soft clipping, for a voice that should sound forced rather than blown. */
+        drive: 0,
+        /**
+         * **How far a note may wander from the voice's own pitch, in scale degrees.** 0 is
+         * one motif repeated, which is what every voice did until 2026-09-23 and what the
+         * calls below still want:
+         */
+        steps: 0,
+        /** A tremolo multiplying the envelope - rate in Hz, depth 0-1. */
+        tremHz: 0,
+        tremDepth: 0,
+        /**
+         * **Measured, and corrected for register.** These are not proportional to
+         * anything:
+         */
+        gain: 1,
+      },
+      /** **Starlink: */
+      starlink: {
+        wave: 'sawtooth' as OscillatorType,
+        octaveShift: -1,
+        q: 3.2,
+        perPhrase: [1, 2],
+        noteMs: [180, 380],
+        spacingMs: [120, 260],
+        gapMs: [1400, 3600],
+        sweep: [1.02, 1.16],
+        rise: 0.15,
+        cutoffHz: [500, 2200],
+        hold: 0.55,
+        attack: 0.05,
+        ring: 0,
+        drive: 0.35,
+        steps: 0,
+        tremHz: 0,
+        tremDepth: 0,
+        gain: 1.9,
+      },
+      /** **Iridium: */
+      iridium: {
+        wave: 'square' as OscillatorType,
+        octaveShift: 1,
+        q: 1.2,
+        perPhrase: [4, 9],
+        noteMs: [25, 70],
+        spacingMs: [18, 55],
+        gapMs: [700, 1900],
+        sweep: [1.3, 2.6],
+        rise: 0.5,
+        cutoffHz: [1200, 7000],
+        hold: 0.35,
+        attack: 0.002,
+        ring: 0.6,
+        drive: 0.15,
+        steps: 0,
+        tremHz: 0,
+        tremDepth: 0,
+        gain: 0.55,
+      },
+      /** **Military: */
+      military: {
+        wave: 'sawtooth' as OscillatorType,
+        octaveShift: 0,
+        q: 4,
+        perPhrase: [1, 2],
+        noteMs: [700, 1500],
+        spacingMs: [260, 620],
+        gapMs: [2600, 6000],
+        sweep: [1.5, 2.4],
+        rise: 0,
+        cutoffHz: [600, 3200],
+        hold: 0.85,
+        attack: 0.03,
+        ring: 0,
+        drive: 0.3,
+        steps: 0,
+        tremHz: 21,
+        tremDepth: 0.45,
+        gain: 1,
+      },
+      /** **Navigation: */
+      gnss: {
+        wave: 'sawtooth' as OscillatorType,
+        octaveShift: -3,
+        q: 6,
+        perPhrase: [1, 2],
+        noteMs: [420, 900],
+        spacingMs: [300, 700],
+        gapMs: [2400, 5200],
+        sweep: [1.15, 1.5],
+        rise: 0.15,
+        cutoffHz: [180, 900],
+        hold: 0.8,
+        attack: 0.04,
+        ring: 0.15,
+        drive: 0.55,
+        steps: 0,
+        tremHz: 6,
+        tremDepth: 0.3,
+        gain: 1.8,
+      },
+      /** **Weather: */
+      weather: {
+        wave: 'triangle' as OscillatorType,
+        octaveShift: 0,
+        q: 1,
+        perPhrase: [3, 6],
+        noteMs: [90, 220],
+        spacingMs: [60, 160],
+        gapMs: [1200, 3000],
+        sweep: [1.05, 1.25],
+        rise: 0.5,
+        cutoffHz: [800, 4200],
+        hold: 0.75,
+        attack: 0.008,
+        ring: 0,
+        drive: 0,
+        steps: 3,
+        tremHz: 0,
+        tremDepth: 0,
+        gain: 1.0,
+      },
+      /** **Science: */
+      science: {
+        wave: 'sine' as OscillatorType,
+        octaveShift: 1,
+        q: 0.8,
+        perPhrase: [4, 9],
+        noteMs: [45, 130],
+        spacingMs: [30, 110],
+        gapMs: [900, 2400],
+        sweep: [1.1, 1.5],
+        rise: 0.5,
+        cutoffHz: [1400, 7000],
+        hold: 0.6,
+        attack: 0.004,
+        ring: 0.12,
+        drive: 0,
+        steps: 5,
+        tremHz: 0,
+        tremDepth: 0,
+        gain: 0.7,
+      },
+    },
+    /** Which voice each `FAMILY` value sings with. See FAMILY_VOICE. */
+    familyVoice: FAMILY_VOICE,
+    /** The inharmonic multiple the ring sits at, and how sharp it is. Bell, not tone. */
+    ringRatio: 2.76,
+    ringQ: 20,
+    /** **The station: */
+    station: {
+      /** Seconds between hits. */
+      periodSeconds: 4.5,
+      /** Where the pitch envelope starts and settles: the drop *is* the percussion. */
+      attackHz: 150,
+      baseHz: 52,
+      pitchDropSeconds: 0.085,
+      /** How long one hit rings before the reverb takes over. */
+      bodySeconds: 0.85,
+      attack: 0.004,
+      hold: 0.02,
+      /** How open the lowpass is, sunlit to eclipsed - the same mapping every voice has. */
+      cutoffHz: [140, 520],
+      /** The tail, in seconds, and how sharply it decays. Sent post-level, so it swells
+       *  with the pass and dies with it rather than hanging on after the ISS has set. */
+      reverbSeconds: 3.6,
+      reverbDecay: 2.4,
+      reverbSend: 0.5,
+      /** Measured, not nominal - see the table in CLAUDE.md. */
+      gain: 1.9,
+    },
+    machine: {
+      /** Lower than the birds, and it does not sweep. */
+      octaveDown: 2,
+      /**
+       * **A spent stage knocks; it does not sing.** Sharpened 2026-09-21, on the note that
+       * the wreckage all read as calm sea-waves and the rocket bodies wanted a more
+       * disruptive presence - faster, and more re
+       */
+      pulseMs: [60, 160],
+      gapMs: [110, 300],
+      cutoffHz: [400, 2600],
+      /** Short attack, flat hold, and the rest is release: */
+      attack: 0.004,
+      hold: 0.32,
+      /** Soft clipping, so it reads as machinery being driven rather than as a tone. */
+      drive: 0.45,
+    },
+    /**
+     * **Continuous, and eventless.** The first version fired short noise bursts, which was
+     * exactly wrong:
+     */
+    shard: {
+      /** The band centre sweeps between these - the swish. */
+      bandHz: [900, 4200],
+      /** Wide. A hiss, not a rattle; the burst version used 4 and rang like a snare. */
+      q: 1.2,
+      /**
+       * How fast the band sweeps and how fast it breathes, per object, and how deep the
+       * breathing goes.
+       */
+      swishHz: [0.04, 0.22],
+      pulseHz: [0.06, 0.4],
+      pulseDepth: [0.22, 0.46],
+      /**
+       * **Some wreckage is agitated, and that is the other half of the answer.** Widening
+       * the calm range alone still gives one kind of thing moving at different speeds.
+       */
+      agitatedShare: 0.3,
+      agitated: {
+        q: 3.6,
+        swishHz: [0.3, 1.1],
+        pulseHz: [1.7, 5.2],
+        pulseDepth: [0.4, 0.5],
+        /**
+         * **Measured, not nominal**, and it is the same trap `timbreGain` carries a note
+         * about:
+         */
+        gain: 2,
+      },
+    },
+  },
+};
+
+
+/** `?debug` shows frame timing and worker stats. Hidden otherwise - the piece has no chrome for it. */
+export const DEBUG = new URLSearchParams(location.search).has('debug');
+
+/** Debris deforming what it passes - in the ear and in the eye, off one geometry. */
+export const INTERFERENCE = {
+  /** Full depth at or inside this separation, degrees. */
+  nearDeg: 12,
+  /** Nothing at all beyond this. Wide, because a near miss is rare and this has to
+   *  happen often enough to be part of the piece rather than a curiosity. */
+  farDeg: 45,
+  /** Kept shards that can deform at once. Also the shader's array size. */
+  maxSources: 4,
+  /** What it does to a voice. */
+  sound: {
+    /** How far the wobble bends the pitch at full depth. Over a tone and a half. */
+    detuneCents: 320,
+    /** How deeply it chews the amplitude. */
+    amDepth: 0.7,
+    /** And how far it drags the lowpass, as a fraction of wherever that already is. */
+    cutoffDepth: 0.55,
+    /** Wobble rate per voice, Hz. Fast enough to be damage, not vibrato. */
+    wobbleHz: [4, 9],
+  },
+  /** What it does to the picture. */
+  sight: {
+    /** Radius of the disturbance around a shard, CSS pixels. Small, deliberately. */
+    radiusPx: 58,
+    /**
+     * Band thickness, **chosen per fragment** from a hash of its catalogue index, so a
+     * given piece of wreckage always tears the same way and several at once do not comb
+     * the image at one pitch.
+     */
+    bandPx: [2, 6],
+    /** How often a fragment tears in **columns** rather than rows. */
+    verticalChance: 0.4,
+    /** How far a torn band slides sideways. */
+    shiftPx: 7,
+    /** How far the brightest pixel in a row is dragged along it - the sorting look. */
+    smearPx: 11,
+    /** What fraction of bands tear on a given step. Under half: it must stay sparse. */
+    tearChance: 0.42,
+    /** Steps per second. Discrete, so it reads as breaking up rather than as wobbling. */
+    stepsPerSecond: 12,
+  },
+};
+
+/* ---------------------------------------------------------------------------------
+ *
+ *  WHY THESE NUMBERS
+ *
+ *  Everything below is documentation. Each heading is the path of the value it
+ *  explains, exactly as it is spelled above, so searching for `AUDIO.drone.soloRamp`
+ *  lands on its reasoning and searching for it again lands on the number. These are
+ *  the long-form comments this file used to carry inline, moved here whole so the
+ *  dials could sit together; the first sentence of each one stayed behind with its
+ *  value. Nothing was rewritten and nothing was dropped.
+ *
+ * --------------------------------------------------------------------------------- */
+
+/**
+ * ### DEFAULT_OBSERVER
+ *
+ * Where the observer stands. Everything in this app is relative to this point.
+ *
+ * **Berlin is the default, and the default must not move.** `scripts/reference.py`
+ * pins `OBS_*` to these exact numbers and `npm run validate` compares against the
+ * `reference.json` computed from them. A runtime override cannot reach that check -
+ * nothing in the build imports this file, the scripts take `catalog-format.ts` alone -
+ * but the default and `reference.py` still have to agree.
+ */
+
+/**
+ * ### OBSERVER
+ *
+ * The observer actually in force. **Mutable, and deliberately so.**
+ *
+ * `setObserver` writes into this object rather than replacing it, and every reader
+ * takes its fields at use time - `createHud`, `createGate` and `run` all read inside a
+ * function, never at module scope. That is what lets the first screen change where you
+ * stand without a reload: at that moment the piece does not exist yet, because the
+ * whole of it is behind the LAUNCH press. **Nothing may capture these fields at module
+ * load**, or it will hold Berlin for the life of the page.
+ */
+
+/**
+ * ### setObserver
+ *
+ * Stand somewhere else, and put it in the URL so the sky is a link.
+ *
+ * **Rounded to two decimals, on purpose.** That is about a kilometre, which moves a
+ * 500 km object by a tenth of a degree - invisible - and it means a shared URL never
+ * carries anyone's precise coordinates. A location control that publishes a street
+ * address in a link is not one worth having.
+ */
+
+/**
+ * ### observerLabel
+ *
+ * How the observer reads on screen, in one place - the first screen and the panel both
+ * use it, so they cannot format the same coordinates two ways. A location with no name
+ * is its coordinates and nothing else.
+ */
+
+/**
+ * ### Dataset
+ *
  * Which packed catalogue to load - all src/catalog-format.ts binaries in public/data/.
  *
  * - `full`      the union of every CelesTrak GP dataset. 20,933 on 2026-09-13 - all
@@ -116,31 +976,10 @@ function syncUrl(lat: string | null, lon: string | null): void {
  * Which of the two real images the piece wants is an aesthetic question, so it is
  * answerable by looking rather than by rebuilding: `?catalog=full` overrides this.
  */
-export type Dataset = 'active' | 'full' | 'synthetic';
 
 /**
- * `full` since 2026-09-14. The piece is about density, and `active` is payloads only:
- * it leaves out the ~3k debris fragments and ~500 rocket bodies that are the whole
- * argument for the image. Once debris had a mark of its own - a turning shard - there
- * was no reason to keep publishing a sky with the wreckage edited out.
+ * ### GATE
  *
- * It costs 831 KB gzipped against 661, and a worker tick of 14-17 ms against ~13.
- * Both measured, both fine.
- */
-const DEFAULT_DATASET: Dataset = 'full';
-
-function datasetFromUrl(): Dataset {
-  const requested = new URLSearchParams(location.search).get('catalog');
-  return requested === 'active' || requested === 'full' || requested === 'synthetic'
-    ? requested
-    : DEFAULT_DATASET;
-}
-
-export const DATASET: Dataset = datasetFromUrl();
-
-export const catalogUrl = (dataset: Dataset) => `${import.meta.env.BASE_URL}data/${dataset}.bin`;
-
-/**
  * The first screen.
  *
  * The piece is meant to sit in a hero section on another page, where a visitor who
@@ -162,59 +1001,48 @@ export const catalogUrl = (dataset: Dataset) => `${import.meta.env.BASE_URL}data
  * **The words are a placeholder and are meant to be rewritten.** They live here, in
  * one place, rather than inside the markup that draws them.
  */
-export const GATE = {
-  title: 'Birds Within',
-  tagline: 'A visualization of crowded skies. An immersive panorama showing our traces in orbit, our observers above.',
-  /**
-   * Very short, and it has one job: say what changed between 2010 and now. That
-   * change *is* the piece - see the top of CLAUDE.md - and it is the one thing a
-   * reader cannot get from looking at the sky, because they never saw the old one.
-   */
-  lede:
-    'Referring to a satellite as "Bird" was common in sat-spotter networks years ago and approaching them as such, allows newcomers to discover the taxonomies of that environment. This piece is an immersive experience of the crowded skies above us, and tool to explore and understand them more, or simply, contemplate their dynamics.',
-  /** The one offer on the screen. */
-  launchLabel: 'LAUNCH',
-  /** What the press costs, said before it is pressed rather than after. */
-  loadingLabel: 'LAUNCHING…',
-  hint: 'drag to look · click to trace · press LISTEN for sound',
-  /** How long the screen takes to leave once the first frame is on the canvas. */
-  fadeMs: 700,
-  /**
-   * The drawing: a poster of the sky in the sky's own grammar, built in poster.ts
-   * from the same palette the piece draws with, so the two cannot drift apart.
-   *
-   * It is deliberately a *drawing* and not a screenshot. A screenshot would go stale
-   * the first time anything about the image changed, and a loading screen that shows
-   * a photograph of what is behind it reads as a substitute rather than as a cover.
-   */
-  poster: {
-    /**
-     * Passing objects. Raised from 260 on 2026-09-22 along with the whole framing:
-     * the poster used to be the dome seen whole, and is now the piece **zoomed in**,
-     * which is how anyone actually looks at it. A closer field wants more grains and
-     * smaller ones, so the frame reads as a depth of sky rather than as a scatter of
-     * dots on a card.
-     */
-    passing: 420,
-    /** Fragments, drawn as the shards they are on the sky. */
-    shards: 34,
-    /** The belt, as the fixed arc across the south it actually is. */
-    belt: 90,
-    /**
-     * The kept objects: the long shallow arcs that cross the frame, each ending in a
-     * ring. This is what the cover is *of* now - not a crowd, but a handful of things
-     * somebody chose out of twenty thousand, which is the gesture the whole piece is
-     * built around. Each names its colour from the same constants the sky uses.
-     */
-    orbits: 4,
-    /** White rings on objects the readout is listing. A cluster, as the panel makes. */
-    listed: 11,
-    /** Fixed, so the poster is the same drawing every time the page is opened. */
-    seed: 19,
-  },
-};
 
 /**
+ * ### GATE.lede
+ *
+ * Very short, and it has one job: say what changed between 2010 and now. That
+ * change *is* the piece - see the top of CLAUDE.md - and it is the one thing a
+ * reader cannot get from looking at the sky, because they never saw the old one.
+ */
+
+/**
+ * ### GATE.poster
+ *
+ * The drawing: a poster of the sky in the sky's own grammar, built in poster.ts
+ * from the same palette the piece draws with, so the two cannot drift apart.
+ *
+ * It is deliberately a *drawing* and not a screenshot. A screenshot would go stale
+ * the first time anything about the image changed, and a loading screen that shows
+ * a photograph of what is behind it reads as a substitute rather than as a cover.
+ */
+
+/**
+ * ### GATE.poster.passing
+ *
+ * Passing objects. Raised from 260 on 2026-09-22 along with the whole framing:
+ * the poster used to be the dome seen whole, and is now the piece **zoomed in**,
+ * which is how anyone actually looks at it. A closer field wants more grains and
+ * smaller ones, so the frame reads as a depth of sky rather than as a scatter of
+ * dots on a card.
+ */
+
+/**
+ * ### GATE.poster.orbits
+ *
+ * The kept objects: the long shallow arcs that cross the frame, each ending in a
+ * ring. This is what the cover is *of* now - not a crowd, but a handful of things
+ * somebody chose out of twenty thousand, which is the gesture the whole piece is
+ * built around. Each names its colour from the same constants the sky uses.
+ */
+
+/**
+ * ### READOUT
+ *
  * The readout, redesigned 2026-09-15 as a single narrow column.
  *
  * The piece lives in a canvas that is often small, so the panel had to stop being a
@@ -226,33 +1054,32 @@ export const GATE = {
  * what is passing, what is wreckage, and the belt - which gets a grid rather than a
  * list, since five hundred objects that never move are not a list.
  */
-export const READOUT = {
-  /** Column width. Narrow on purpose; the sky is the piece, not the panel. */
-  widthPx: 272,
-  /** Default rows per group, before anything is kept. Names only. */
-  passingRows: 10,
-  debrisRows: 6,
-  /**
-   * Whether pointing at an object no row is showing gives it one, at the bottom of
-   * the open zone so nothing above it moves.
-   *
-   * **On, but only while the pointer is out in the sky.** An opened row is two lines
-   * tall instead of one, so opening one while the pointer is inside the list pushes
-   * every row below it down - including the one under the cursor, which slides away
-   * and marks the wrong object when clicked. Pointing at the sky cannot do that,
-   * because the pointer is nowhere near the rows. So the sky names what you point at,
-   * and the list only tints. The group tracks this itself; see ui-group.ts.
-   */
-  hoverOpensRow: true,
-  /**
-   * How to work it, top right. Thin on purpose - the panel is not here to explain
-   * itself. Full screen adds `esc to leave` to this while it is on, and only then:
-   * a way out is worth saying when there is something to get out of.
-   */
-  hint: 'drag to look · scroll to zoom · click to keep',
-};
 
 /**
+ * ### READOUT.hoverOpensRow
+ *
+ * Whether pointing at an object no row is showing gives it one, at the bottom of
+ * the open zone so nothing above it moves.
+ *
+ * **On, but only while the pointer is out in the sky.** An opened row is two lines
+ * tall instead of one, so opening one while the pointer is inside the list pushes
+ * every row below it down - including the one under the cursor, which slides away
+ * and marks the wrong object when clicked. Pointing at the sky cannot do that,
+ * because the pointer is nowhere near the rows. So the sky names what you point at,
+ * and the list only tints. The group tracks this itself; see ui-group.ts.
+ */
+
+/**
+ * ### READOUT.hint
+ *
+ * How to work it, top right. Thin on purpose - the panel is not here to explain
+ * itself. Full screen adds `esc to leave` to this while it is on, and only then:
+ * a way out is worth saying when there is something to get out of.
+ */
+
+/**
+ * ### CHOIR_GRID
+ *
  * The belt's grid: one square per geostationary object above the horizon.
  *
  * **Ordered by azimuth, filled column by column**, so horizontal position in the grid
@@ -264,22 +1091,21 @@ export const READOUT = {
  * Nothing is written in it. Data appears above the grid only while the pointer is on
  * a square, so five hundred objects cost five hundred squares and no text at all.
  */
-export const CHOIR_GRID = {
-  columns: 24,
-  /**
-   * The **hit box**, in CSS pixels. The visible square is this less `gapPx`, drawn
-   * inside it by padding, so the grid has no dead pixels between cells at all.
-   *
-   * It used to be the square itself, with a real CSS `gap` between them - and a click
-   * landing in a gap hit the grid rather than a cell and did nothing. On an 8 px
-   * target that is most of the time. See *The belt gets a grid* in CLAUDE.md.
-   */
-  cellPx: 10,
-  /** The visual gap, taken out of the hit box rather than added between them. */
-  gapPx: 1,
-};
 
 /**
+ * ### CHOIR_GRID.cellPx
+ *
+ * The **hit box**, in CSS pixels. The visible square is this less `gapPx`, drawn
+ * inside it by padding, so the grid has no dead pixels between cells at all.
+ *
+ * It used to be the square itself, with a real CSS `gap` between them - and a click
+ * landing in a gap hit the grid rather than a cell and did nothing. On an 8 px
+ * target that is most of the time. See *The belt gets a grid* in CLAUDE.md.
+ */
+
+/**
+ * ### PALETTE
+ *
  * The visual grammar, decided 2026-09-14. Two axes, kept strictly apart:
  *
  * - **Hue says what a thing is.** Warm white is a passing satellite; blue is
@@ -292,20 +1118,10 @@ export const CHOIR_GRID = {
  * blue had to be freed to mean one thing. Amber is the third hue and it is the
  * pointer's alone - nothing in the sky is amber until a person touches it.
  */
-export const PALETTE = {
-  /** The sky's own colour: the clear colour, and what the haze fades objects into. */
-  sky: '#05070a',
-  /** A passing satellite in sunlight. */
-  lit: '#fff2d6',
-  /** A passing satellite inside Earth's shadow: tracked, and invisible to the eye. */
-  eclipsed: '#808080',
-  /** Anything below the horizon, on the far side of the world. Neutral, never blue. */
-  below: '#4a4f54',
-  /** Geostationary, in every state. See CHOIR and *The choir* in CLAUDE.md. */
-  geostationary: '#8ad4ff',
-};
 
 /**
+ * ### KIND_LOOK
+ *
  * How the `kind` byte reads on screen - the heuristic in catalog-format.ts, which
  * knows debris and rocket bodies from CelesTrak's naming and nothing more.
  *
@@ -315,35 +1131,28 @@ export const PALETTE = {
  *
  * `active` is payloads only, so this is visible almost entirely on `?catalog=full`.
  */
-export const KIND_LOOK = {
-  /** A spent upper stage is still a payload's mark: smaller, and without the flare. */
-  rocketBody: { size: 0.9, glow: 0.5 },
-  /**
-   * Debris is not a light. It emits nothing, reflects badly, tumbles, and is the
-   * reason a spacecraft has to move - so it is drawn as a **shard**: a flat triangle,
-   * no glow, turning slowly, each fragment at its own rate and phase.
-   *
-   * Shape rather than brightness, because brightness was already spoken for. Range
-   * varies a point's size four-fold and shadow varies its brightness three-fold, so a
-   * debris mark that differed only in amount could not be read against that noise -
-   * measured at 0.67x peak and swamped. A different *kind* of mark survives it.
-   *
-   * It costs nothing: the triangle is a signed distance field inside the same point
-   * sprite, so there is no extra geometry, no extra draw, and no vertex work. Only
-   * fragments inside debris sprites pay for it. A real tetrahedron would need instanced
-   * meshes, and at four to sixteen pixels would look exactly like this anyway.
-   */
-  debris: {
-    /** Slightly larger than a payload: a triangle needs pixels before it reads as one. */
-    size: 1.2,
-    /** Peak brightness against a payload's core. */
-    intensity: 0.5,
-    /** Turns per minute, before each fragment's own hash scales it. */
-    spinRpm: 2.5,
-  },
-};
 
 /**
+ * ### KIND_LOOK.debris
+ *
+ * Debris is not a light. It emits nothing, reflects badly, tumbles, and is the
+ * reason a spacecraft has to move - so it is drawn as a **shard**: a flat triangle,
+ * no glow, turning slowly, each fragment at its own rate and phase.
+ *
+ * Shape rather than brightness, because brightness was already spoken for. Range
+ * varies a point's size four-fold and shadow varies its brightness three-fold, so a
+ * debris mark that differed only in amount could not be read against that noise -
+ * measured at 0.67x peak and swamped. A different *kind* of mark survives it.
+ *
+ * It costs nothing: the triangle is a signed distance field inside the same point
+ * sprite, so there is no extra geometry, no extra draw, and no vertex work. Only
+ * fragments inside debris sprites pay for it. A real tetrahedron would need instanced
+ * meshes, and at four to sixteen pixels would look exactly like this anyway.
+ */
+
+/**
+ * ### FEATURED
+ *
  * **The one object with people in it.**
  *
  * Added 2026-09-21. The ISS has always been in the catalogue - `GROUP=active` carries
@@ -368,219 +1177,187 @@ export const KIND_LOOK = {
  *
  * A list rather than one number, so Tiangong (48274) is one line when it is wanted.
  */
-export const FEATURED = {
-  /** NORAD catalog numbers drawn as featured. 25544 is the ISS. */
-  catnrs: [25544],
-  /**
-   * How much larger the mark is. Well clear of the `KIND_LOOK` multipliers (0.9 for a
-   * rocket body, 1.2 for a shard), so size reads as identity here rather than as kind.
-   */
-  size: 2.0,
-  /**
-   * **A cool white, and deliberately not the belt's blue.** Blue means geostationary
-   * and means only that - see *Colour and visual conventions*. What this is instead is
-   * the **cool counterpart of the warm white that already means "a passing satellite"**:
-   * `#fff2d6` is 16% saturated toward warm, this is 15% toward cool. It is not a new
-   * hue in the two-axis sense, it is the same white with the cast reversed - which is
-   * right, because the ISS *is* a passing satellite, just the one that matters.
-   *
-   * At sixteen pixels against the belt's 46%-saturated `#8ad4ff` the two are plainly
-   * different things, which a true blue would not have been.
-   */
-  color: '#d8e8ff',
-  /** Its orbit: the same cool white, a little wider and a little more present. */
-  trackWidthPx: 3.2,
-  trackOpacity: 0.72,
-};
-
-export const SKY = {
-  /** Radius of the dome in scene units. Arbitrary - the sky has no scale. */
-  radius: 100,
-  /**
-   * Where the camera is pointing when the piece opens: a compass bearing in degrees,
-   * 0 north and 180 south, with `startPitchDeg` above the horizon.
-   *
-   * **South, since 2026-09-18.** North was the default only because `sky-frame.ts` maps
-   * -Z to north and a camera with no yaw looks down -Z - which is a fact about the
-   * coordinate system rather than a decision about the image. South is where the piece
-   * actually is: from this latitude the geostationary belt is a fixed arc across the
-   * southern sky, and it is the one thing in the frame that holds still while
-   * everything else streams past. Opening facing away from it wasted the first look.
-   */
-  startFacingDeg: 180,
-  startPitchDeg: 38,
-  /**
-   * The lowest elevation anything is drawn at. **The sky ends here** - below it an
-   * object is not drawn, not listed, not in the belt's grid, and a mark on it is let
-   * go. One floor, so the panel can never name something the sky is not showing.
-   *
-   * It used to be -90: the whole sphere was drawn and the far side stayed faintly
-   * present through the ground. That produced a discontinuity nobody designed. The
-   * haze runs from `haze.topDeg` down to the horizon and is *opaque* at 0°, so an
-   * object at +1° is ~97% hazed away - but below 0° there is no haze at all, only the
-   * ground disc at 0.72, which leaves an object at -1° composited at 28% of its
-   * brightness. Things faded out as they sank and then **brightened again** the moment
-   * they crossed, which reads as the floor leaking rather than as a choice.
-   *
-   * Two degrees rather than zero, because a point sprite is 16 px wide: cutting at
-   * exactly 0° leaves half a sprite straddling the drawn horizon line.
-   */
-  lowestVisibleDeg: 2,
-  /**
-   * Haze rising from the horizon: sky-coloured at the horizon, clear by `topDeg`, so
-   * objects come into view gradually as they climb instead of popping over the edge.
-   * It dims objects, their rings and trails; the graticule and compass labels stay
-   * above it, so the dome's structure reads all the way down.
-   */
-  haze: {
-    topDeg: 20,
-    /** 1 = objects at the horizon are fully hidden. */
-    horizonOpacity: 1,
-  },
-  /**
-   * The backdrop: airglow, and the grain over it. Added 2026-09-18.
-   *
-   * The sky was one flat value everywhere above the haze, and a flat value is what
-   * makes a frame read as empty rather than as dark. Two nearly free things fix that,
-   * and neither is a post pass:
-   *
-   * - **A lift toward the horizon.** Real night sky is not uniform; it brightens
-   *   toward the rim. Here it is one gradient on a backdrop sphere drawn before
-   *   everything else, which gives the dome a floor to sit on and the objects near
-   *   the horizon something to be seen against.
-   * - **Grain.** At `#05070a` a gradient this shallow bands *badly* in 8 bits - the
-   *   steps are wider than the gradient. A pixel of noise dissolves the steps and,
-   *   at a slightly higher amplitude, reads as the image's own noise floor rather
-   *   than as dither.
-   *
-   * **Cool, not warm, and that is a rule rather than a taste.** A warm horizon glow
-   * reads as light pollution, which reads as a city, which is a *place* - and the
-   * piece is an abstract dome with no Earth geometry in it. It is also the one hue
-   * warm white is already spoken for by. `color` is the dial if that judgement ever
-   * changes.
-   */
-  backdrop: {
-    /** What the sky lifts toward at the horizon. Cool - see above. */
-    color: '#16283a',
-    /** How much of that colour arrives at the horizon. 0 disables the lift entirely. */
-    strength: 0.32,
-    /**
-     * How far up it reaches. Above the haze, so the two do not read as one band, but
-     * well short of the zenith: the first try ran to 58 deg and, at a 95 deg field of
-     * view, that is the whole sky - it read as fog rather than as a horizon.
-     */
-    topDeg: 36,
-    /** Higher hugs the horizon more tightly. */
-    falloff: 2.6,
-    /**
-     * Grain amplitude, peak to peak, in **display** units - so 0.012 is about 3/255.
-     * Added after the colour-space conversion, which is the whole trick: a linear
-     * 0.012 near black comes out around 39/255 once sRGB's steep toe is applied.
-     */
-    grain: 0.014,
-  },
-  /**
-   * The ground. Rewritten 2026-09-18, and it replaced a reflection that did not work.
-   *
-   * **What was there before was a mirror of the objects** - the same points drawn again
-   * with y negated. It was cheap and it was wrong: a satellite has a *shape*, and a
-   * legible upside-down copy of a legible mark reads as a duplicate of the data rather
-   * than as water. Sixteen-pixel discs and triangles do not stop being discs and
-   * triangles when you flip them.
-   *
-   * So there is nothing identifiable down here at all now. The ground is a dark field
-   * with slow, very elongated sheens drifting across it - no points, no edges, nothing
-   * with a period a viewer could count. It suggests a surface catching light off the
-   * horizon without claiming to be any particular surface.
-   *
-   * It is also **darker than the sky, which it has to be.** The old disc was 0.72 of
-   * `#070b10` over the unlifted backdrop, which came out within a shade of the sky's own
-   * colour - so once the horizon had an airglow above it, the ground below read as the
-   * same material with the glow inexplicably switched off. A horizon is a change of
-   * substance, and value is what says so.
-   */
-  ground: {
-    /** The base. Clearly below the darkest sky, and cool rather than neutral. */
-    color: '#02040a',
-    /** What a sheen lifts toward: the horizon's own light, well under it. */
-    sheen: '#0a1927',
-    /**
-     * How much of that colour a sheen ever reaches. 0 leaves a flat dark field.
-     *
-     * Low on purpose. These are meant to read as light that happens to be there, and
-     * anything bright enough to look like a source - or like something reflecting one -
-     * is too bright. It came down from 0.9 for exactly that.
-     */
-    amount: 0.28,
-    /**
-     * How the sheens are stretched across the plane. Deliberately lopsided - equal
-     * numbers give round blobs, which is the one shape this must not have.
-     */
-    stretch: [1.15, 0.62] as [number, number],
-    /**
-     * How dark it gets where the observer is standing, 0-1. Deepest straight down and
-     * gone by the horizon.
-     *
-     * It puts the viewer in the picture - a person on a dark plain always has one - but
-     * it is here for a second reason: **the shortest way across the ground from south
-     * to north runs straight through the observer**, so this cuts every sheen that
-     * tries it in half. It was the fix for swells reading as one mass crossing the
-     * whole frame, together with the frequency above.
-     */
-    shadow: 0.45,
-    /**
-     * The window the crests come through, against a field running roughly -1 to 1.
-     * **This is the softness dial**, and both ends fail differently: widen it and the
-     * whole field lifts at once, so the ground becomes one sheet of light sliding
-     * across it; narrow it and the crests thin into hard ribbons, which are as defined
-     * a shape as anything this exists to avoid. 0.18 to 0.72 gave ribbons.
-     */
-    crest: [-0.05, 1.4] as [number, number],
-    /**
-     * How hard the crests are shaped after that window - an exponent, so higher is
-     * more concentrated and harder-edged, lower is blurrier. 2 was the first value and
-     * read a little crisp.
-     */
-    contrast: 1.2,
-    /**
-     * How far the field folds back on itself. Above 1 the domain turns inside out and
-     * patches pinch off and reconnect, which is what stops the swells reading as one
-     * continuous mass; below 1 it is a gentle distortion and they join back up.
-     */
-    warp: 1.1,
-    /**
-     * How far down the ground the sheens reach, in degrees below the horizon. Past
-     * this the surface has turned to face the eye and there is no grazing light left.
-     */
-    reachDeg: 33,
-    /**
-     * The pace it evolves at. Slow enough that nothing in it reads as an event: the
-     * three waves in `swell` beat against each other over tens of seconds and never
-     * repeat, so there is change to notice but never a moment when something happens.
-     */
-    speed: 0.07,
-  },
-};
 
 /**
- * The halo around a light. Added 2026-09-18.
+ * ### FEATURED.color
  *
- * "Can we add some glow" has two answers, and this is the cheap one: a broad, soft
- * falloff *inside the sprite the object already draws*. No render target, no
- * fullscreen pass, no extra draw - the sprite grows and the fragment shader spends a
- * few more pixels. The expensive answer is bloom, which means an EffectComposer,
- * half-float targets for the whole scene, and moving the glitch's canvas readback
- * with it; see the render-target trap under **Rendering**.
+ * **A cool white, and deliberately not the belt's blue.** Blue means geostationary
+ * and means only that - see *Colour and visual conventions*. What this is instead is
+ * the **cool counterpart of the warm white that already means "a passing satellite"**:
+ * `#fff2d6` is 16% saturated toward warm, this is 15% toward cool. It is not a new
+ * hue in the two-axis sense, it is the same white with the cast reversed - which is
+ * right, because the ISS *is* a passing satellite, just the one that matters.
  *
- * It does something the piece wants beyond looking better: **haloes sum.** Blending is
- * additive, so a crowded patch of sky is brighter than a sparse one by more than the
- * count of its marks - density becomes a quantity the eye reads directly, which is
- * what this whole piece is about.
- *
- * Only lights have one. A shard is not a light and does not glow; `KIND_LOOK.debris`
- * already says so, and the halo obeys it.
+ * At sixteen pixels against the belt's 46%-saturated `#8ad4ff` the two are plainly
+ * different things, which a true blue would not have been.
  */
+
 /**
+ * ### SKY.startFacingDeg
+ *
+ * Where the camera is pointing when the piece opens: a compass bearing in degrees,
+ * 0 north and 180 south, with `startPitchDeg` above the horizon.
+ *
+ * **South, since 2026-09-18.** North was the default only because `sky-frame.ts` maps
+ * -Z to north and a camera with no yaw looks down -Z - which is a fact about the
+ * coordinate system rather than a decision about the image. South is where the piece
+ * actually is: from this latitude the geostationary belt is a fixed arc across the
+ * southern sky, and it is the one thing in the frame that holds still while
+ * everything else streams past. Opening facing away from it wasted the first look.
+ */
+
+/**
+ * ### SKY.lowestVisibleDeg
+ *
+ * The lowest elevation anything is drawn at. **The sky ends here** - below it an
+ * object is not drawn, not listed, not in the belt's grid, and a mark on it is let
+ * go. One floor, so the panel can never name something the sky is not showing.
+ *
+ * It used to be -90: the whole sphere was drawn and the far side stayed faintly
+ * present through the ground. That produced a discontinuity nobody designed. The
+ * haze runs from `haze.topDeg` down to the horizon and is *opaque* at 0°, so an
+ * object at +1° is ~97% hazed away - but below 0° there is no haze at all, only the
+ * ground disc at 0.72, which leaves an object at -1° composited at 28% of its
+ * brightness. Things faded out as they sank and then **brightened again** the moment
+ * they crossed, which reads as the floor leaking rather than as a choice.
+ *
+ * Two degrees rather than zero, because a point sprite is 16 px wide: cutting at
+ * exactly 0° leaves half a sprite straddling the drawn horizon line.
+ */
+
+/**
+ * ### SKY.haze
+ *
+ * Haze rising from the horizon: sky-coloured at the horizon, clear by `topDeg`, so
+ * objects come into view gradually as they climb instead of popping over the edge.
+ * It dims objects, their rings and trails; the graticule and compass labels stay
+ * above it, so the dome's structure reads all the way down.
+ */
+
+/**
+ * ### SKY.backdrop
+ *
+ * The backdrop: airglow, and the grain over it. Added 2026-09-18.
+ *
+ * The sky was one flat value everywhere above the haze, and a flat value is what
+ * makes a frame read as empty rather than as dark. Two nearly free things fix that,
+ * and neither is a post pass:
+ *
+ * - **A lift toward the horizon.** Real night sky is not uniform; it brightens
+ *   toward the rim. Here it is one gradient on a backdrop sphere drawn before
+ *   everything else, which gives the dome a floor to sit on and the objects near
+ *   the horizon something to be seen against.
+ * - **Grain.** At `#05070a` a gradient this shallow bands *badly* in 8 bits - the
+ *   steps are wider than the gradient. A pixel of noise dissolves the steps and,
+ *   at a slightly higher amplitude, reads as the image's own noise floor rather
+ *   than as dither.
+ *
+ * **Cool, not warm, and that is a rule rather than a taste.** A warm horizon glow
+ * reads as light pollution, which reads as a city, which is a *place* - and the
+ * piece is an abstract dome with no Earth geometry in it. It is also the one hue
+ * warm white is already spoken for by. `color` is the dial if that judgement ever
+ * changes.
+ */
+
+/**
+ * ### SKY.backdrop.topDeg
+ *
+ * How far up it reaches. Above the haze, so the two do not read as one band, but
+ * well short of the zenith: the first try ran to 58 deg and, at a 95 deg field of
+ * view, that is the whole sky - it read as fog rather than as a horizon.
+ */
+
+/**
+ * ### SKY.backdrop.grain
+ *
+ * Grain amplitude, peak to peak, in **display** units - so 0.012 is about 3/255.
+ * Added after the colour-space conversion, which is the whole trick: a linear
+ * 0.012 near black comes out around 39/255 once sRGB's steep toe is applied.
+ */
+
+/**
+ * ### SKY.ground
+ *
+ * The ground. Rewritten 2026-09-18, and it replaced a reflection that did not work.
+ *
+ * **What was there before was a mirror of the objects** - the same points drawn again
+ * with y negated. It was cheap and it was wrong: a satellite has a *shape*, and a
+ * legible upside-down copy of a legible mark reads as a duplicate of the data rather
+ * than as water. Sixteen-pixel discs and triangles do not stop being discs and
+ * triangles when you flip them.
+ *
+ * So there is nothing identifiable down here at all now. The ground is a dark field
+ * with slow, very elongated sheens drifting across it - no points, no edges, nothing
+ * with a period a viewer could count. It suggests a surface catching light off the
+ * horizon without claiming to be any particular surface.
+ *
+ * It is also **darker than the sky, which it has to be.** The old disc was 0.72 of
+ * `#070b10` over the unlifted backdrop, which came out within a shade of the sky's own
+ * colour - so once the horizon had an airglow above it, the ground below read as the
+ * same material with the glow inexplicably switched off. A horizon is a change of
+ * substance, and value is what says so.
+ */
+
+/**
+ * ### SKY.ground.amount
+ *
+ * How much of that colour a sheen ever reaches. 0 leaves a flat dark field.
+ *
+ * Low on purpose. These are meant to read as light that happens to be there, and
+ * anything bright enough to look like a source - or like something reflecting one -
+ * is too bright. It came down from 0.9 for exactly that.
+ */
+
+/**
+ * ### SKY.ground.shadow
+ *
+ * How dark it gets where the observer is standing, 0-1. Deepest straight down and
+ * gone by the horizon.
+ *
+ * It puts the viewer in the picture - a person on a dark plain always has one - but
+ * it is here for a second reason: **the shortest way across the ground from south
+ * to north runs straight through the observer**, so this cuts every sheen that
+ * tries it in half. It was the fix for swells reading as one mass crossing the
+ * whole frame, together with the frequency above.
+ */
+
+/**
+ * ### SKY.ground.crest
+ *
+ * The window the crests come through, against a field running roughly -1 to 1.
+ * **This is the softness dial**, and both ends fail differently: widen it and the
+ * whole field lifts at once, so the ground becomes one sheet of light sliding
+ * across it; narrow it and the crests thin into hard ribbons, which are as defined
+ * a shape as anything this exists to avoid. 0.18 to 0.72 gave ribbons.
+ */
+
+/**
+ * ### SKY.ground.contrast
+ *
+ * How hard the crests are shaped after that window - an exponent, so higher is
+ * more concentrated and harder-edged, lower is blurrier. 2 was the first value and
+ * read a little crisp.
+ */
+
+/**
+ * ### SKY.ground.warp
+ *
+ * How far the field folds back on itself. Above 1 the domain turns inside out and
+ * patches pinch off and reconnect, which is what stops the swells reading as one
+ * continuous mass; below 1 it is a gentle distortion and they join back up.
+ */
+
+/**
+ * ### SKY.ground.speed
+ *
+ * The pace it evolves at. Slow enough that nothing in it reads as an event: the
+ * three waves in `swell` beat against each other over tens of seconds and never
+ * repeat, so there is change to notice but never a moment when something happens.
+ */
+
+/**
+ * ### BLOOM
+ *
  * The glow pass: light bleeding out of everything on the canvas. Added 2026-09-18.
  *
  * `GLOW`'s halo is inside each object's own sprite, so it reaches objects and nothing
@@ -602,40 +1379,44 @@ export const SKY = {
  * down, composite. Three of them run at 1/`downscale` in each axis, so they cost a
  * sixteenth of a fullscreen pass each; only the composite is full-size.
  */
-export const BLOOM = {
-  /** 0 turns it off and skips every pass and both render targets. */
-  strength: 0.85,
-  /**
-   * How bright a pixel has to be before it bleeds, 0-1 against the display value. Low,
-   * because this sky's brightest marks are not close to white - but not 0, or the
-   * graticule and the haze bloom and the whole frame turns to soup.
-   */
-  threshold: 0.16,
-  /** How soft the threshold's edge is. A hard cut makes marks pop as they brighten. */
-  knee: 0.22,
-  /**
-   * Resolution divisor for the blur. Reach in screen pixels scales with it and cost
-   * falls as its square, so a bigger divisor is the cheap way to a wider glow; past
-   * about 8 the upsample starts to show as soft blocking.
-   */
-  downscale: 6,
-  /**
-   * Blur radius in low-resolution texels, and **it must stay near 1**. The kernel is a
-   * nine-tap Gaussian folded into five bilinear samples, and those offsets only weight
-   * correctly at their own spacing: stretching them pulls the taps into separate lobes
-   * and draws a **box** around every bright mark instead of a halo. That is what 2.2
-   * did. Reach comes from `passes` and `downscale`.
-   */
-  spread: 1,
-  /**
-   * How many across-and-down pairs to run. Blurs compose, so n passes of sigma give
-   * sigma*sqrt(n) - four is about twice the reach of one, for four sixteenths of a
-   * fullscreen pass at `downscale` 4, or four thirty-sixths at 6.
-   */
-  passes: 4,
-};
 
 /**
+ * ### BLOOM.threshold
+ *
+ * How bright a pixel has to be before it bleeds, 0-1 against the display value. Low,
+ * because this sky's brightest marks are not close to white - but not 0, or the
+ * graticule and the haze bloom and the whole frame turns to soup.
+ */
+
+/**
+ * ### BLOOM.downscale
+ *
+ * Resolution divisor for the blur. Reach in screen pixels scales with it and cost
+ * falls as its square, so a bigger divisor is the cheap way to a wider glow; past
+ * about 8 the upsample starts to show as soft blocking.
+ */
+
+/**
+ * ### BLOOM.spread
+ *
+ * Blur radius in low-resolution texels, and **it must stay near 1**. The kernel is a
+ * nine-tap Gaussian folded into five bilinear samples, and those offsets only weight
+ * correctly at their own spacing: stretching them pulls the taps into separate lobes
+ * and draws a **box** around every bright mark instead of a halo. That is what 2.2
+ * did. Reach comes from `passes` and `downscale`.
+ */
+
+/**
+ * ### BLOOM.passes
+ *
+ * How many across-and-down pairs to run. Blurs compose, so n passes of sigma give
+ * sigma*sqrt(n) - four is about twice the reach of one, for four sixteenths of a
+ * fullscreen pass at `downscale` 4, or four thirty-sixths at 6.
+ */
+
+/**
+ * ### IMMERSION
+ *
  * Immersion: bringing the near things close. Added 2026-09-18, **and it is an
  * experiment** - the slider is at the bottom of the screen, it starts at 0, and 0 is
  * exactly the piece as it was.
@@ -663,120 +1444,153 @@ export const BLOOM = {
  * also means an object arrives as it passes overhead, since that is when it is nearest,
  * which is the truthful version of the effect rather than a staged one.
  */
-export const IMMERSION = {
-  /**
-   * Whether the slider is offered at all. **Off, and behind `?immerse`** since
-   * 2026-09-18: the mechanism works and is cheap, but the *density* does not - at
-   * catalogue scale about 800 objects are above the horizon, so bringing the near ones
-   * forward brings hundreds forward and the frame becomes a wall of discs at any
-   * tuning. Narrowing the band swings to the other failure, where at some instants
-   * nothing is inside it and there is no subject at all.
-   *
-   * Nothing is deleted, because the finding underneath is worth keeping and the fix is
-   * known: immerse only the **kept** objects, which is the rule the sound already
-   * reached for the same reason. That needs picking to survive the effect first. Until
-   * then the slider is not drawn and `scene.immersion` stays at 0, which is exactly the
-   * piece as it was.
-   */
-  enabled: new URLSearchParams(location.search).has('immerse'),
-  /** At or inside this slant range, an object takes the effect in full. */
-  nearKm: 400,
-  /**
-   * Where a mark is fully background. **Wide on purpose**, and this is the number that
-   * decides what the picture is about: the passing sky is 300-2,500 km, so a generous
-   * far point leaves nearly all of it on the near side of the ramp - the subject, sharp
-   * and enlarged - while the belt at 36,000 km is flatly background. At 2,500 almost
-   * everything counted as far and the whole frame turned to bokeh with no subject in
-   * it, which is the opposite failure to the one before it.
-   */
-  farKm: 6000,
-  /**
-   * How much larger a **near** mark is drawn. These are the subject: they come forward
-   * and they stay **sharp**, because that is what a lens focused on something near
-   * does.
-   *
-   * Watch this one: a 16 px dot at 6x is 96 px, and **`gl_PointSize` has a hardware
-   * ceiling** that is 1024+ on desktop but as low as 63 or 255 on some mobile GPUs.
-   * Past that the driver silently clamps and the effect stops growing.
-   */
-  maxGain: 6,
-  /**
-   * How much wider a **far** mark's disc gets as it goes out of focus.
-   *
-   * This is the background bokeh, and it is the half that was backwards at first: the
-   * first version defocused the near objects and left the background crisp, which is a
-   * lens focused at infinity - the opposite of the effect. The subject is near and
-   * sharp; the belt and everything else far goes soft behind it.
-   */
-  bokeh: 4,
-  /**
-   * Energy conservation on the **near** growth. A real defocused point conserves
-   * energy, so brightness falls as the square of the size.
-   *
-   * It has to be the full 2 here, and that was found the hard way: at 1 the near marks
-   * summed additively into a single white cloud on a 20,582-object sky. There are
-   * hundreds of them, so anything less than conservation blows the frame out.
-   */
-  nearDim: 0.7,
-  /**
-   * How much a near mark's bright core tightens as it is magnified, as an exponent on
-   * the gain: 0 keeps the whole profile scaling together, 1 holds the core at a fixed
-   * size in pixels while the halo grows around it.
-   *
-   * **Without this the effect fails outright.** Scaling a soft profile up only gives a
-   * bigger soft profile, so a magnified mark reads as a 96 px *blur* - indistinguishable
-   * from the background bokeh it is meant to be the opposite of. Keeping a hot core
-   * inside a spreading halo is what makes a near mark read as a light that has come
-   * close rather than as one that has gone out of focus.
-   */
-  coreTighten: 0.7,
-  /**
-   * A near mark stops being a glow and becomes a **body**: a hard-edged disc, as a
-   * fraction of the dot's radius, at `bodyGain` brightness.
-   *
-   * **Additive blending cannot occlude** - it adds to whatever is behind it, so nothing
-   * drawn this way is ever truly opaque. What it can do is *saturate*: against a
-   * `#05070a` sky a disc at over 1.0 clamps to white, and once it has clamped, more
-   * light behind it adds nothing. It reads as solid because it is the brightest the
-   * screen goes. That is the honest cheap version of opacity here; real occlusion would
-   * need alpha blending and a depth buffer, which is a much larger change - see the
-   * note on depth at the end of this section.
-   */
-  bodyEdge: 0.52,
-  bodyGain: 2.4,
-  /**
-   * Energy conservation on the **far** bokeh, and deliberately gentler than `nearDim`.
-   *
-   * Full conservation would be correct and useless: a belt point is faint and two
-   * pixels wide, so spreading it over twenty-five times the area at 1/25 the brightness
-   * does not blur it, it **deletes** it. Out-of-focus background highlights are meant
-   * to be visible - that is what bokeh is - so this keeps them in the image. There are
-   * also far fewer of them than there are near marks, so they can afford it.
-   */
-  farDim: 2,
-  /**
-   * Immersion at which rings and tracks have faded out completely.
-   *
-   * They go because this is a first test and picking has not been dealt with: a mark
-   * that has grown eight times and gone soft is nowhere near where `picking.ts` thinks
-   * it is, so pointing at things would ring the wrong ones. Rather than leave a pointer
-   * that lies, the markers leave and picking stops. Both come back when the slider does.
-   */
-  markersGoneAt: 0.3,
-};
-
-export const GLOW = {
-  /**
-   * How far the halo reaches, as a multiple of the dot's own radius. The sprite grows
-   * by this, so the fill cost grows by its square - but only the ~6-9% of the
-   * catalogue that is above the horizon is drawn at all.
-   */
-  haloScale: 2.4,
-  /** How bright the halo is at the centre, against the core's own 1.9. */
-  haloGain: 0.42,
-};
 
 /**
+ * ### IMMERSION.enabled
+ *
+ * Whether the slider is offered at all. **Off, and behind `?immerse`** since
+ * 2026-09-18: the mechanism works and is cheap, but the *density* does not - at
+ * catalogue scale about 800 objects are above the horizon, so bringing the near ones
+ * forward brings hundreds forward and the frame becomes a wall of discs at any
+ * tuning. Narrowing the band swings to the other failure, where at some instants
+ * nothing is inside it and there is no subject at all.
+ *
+ * Nothing is deleted, because the finding underneath is worth keeping and the fix is
+ * known: immerse only the **kept** objects, which is the rule the sound already
+ * reached for the same reason. That needs picking to survive the effect first. Until
+ * then the slider is not drawn and `scene.immersion` stays at 0, which is exactly the
+ * piece as it was.
+ */
+
+/**
+ * ### IMMERSION.farKm
+ *
+ * Where a mark is fully background. **Wide on purpose**, and this is the number that
+ * decides what the picture is about: the passing sky is 300-2,500 km, so a generous
+ * far point leaves nearly all of it on the near side of the ramp - the subject, sharp
+ * and enlarged - while the belt at 36,000 km is flatly background. At 2,500 almost
+ * everything counted as far and the whole frame turned to bokeh with no subject in
+ * it, which is the opposite failure to the one before it.
+ */
+
+/**
+ * ### IMMERSION.maxGain
+ *
+ * How much larger a **near** mark is drawn. These are the subject: they come forward
+ * and they stay **sharp**, because that is what a lens focused on something near
+ * does.
+ *
+ * Watch this one: a 16 px dot at 6x is 96 px, and **`gl_PointSize` has a hardware
+ * ceiling** that is 1024+ on desktop but as low as 63 or 255 on some mobile GPUs.
+ * Past that the driver silently clamps and the effect stops growing.
+ */
+
+/**
+ * ### IMMERSION.bokeh
+ *
+ * How much wider a **far** mark's disc gets as it goes out of focus.
+ *
+ * This is the background bokeh, and it is the half that was backwards at first: the
+ * first version defocused the near objects and left the background crisp, which is a
+ * lens focused at infinity - the opposite of the effect. The subject is near and
+ * sharp; the belt and everything else far goes soft behind it.
+ */
+
+/**
+ * ### IMMERSION.nearDim
+ *
+ * Energy conservation on the **near** growth. A real defocused point conserves
+ * energy, so brightness falls as the square of the size.
+ *
+ * It has to be the full 2 here, and that was found the hard way: at 1 the near marks
+ * summed additively into a single white cloud on a 20,582-object sky. There are
+ * hundreds of them, so anything less than conservation blows the frame out.
+ */
+
+/**
+ * ### IMMERSION.coreTighten
+ *
+ * How much a near mark's bright core tightens as it is magnified, as an exponent on
+ * the gain: 0 keeps the whole profile scaling together, 1 holds the core at a fixed
+ * size in pixels while the halo grows around it.
+ *
+ * **Without this the effect fails outright.** Scaling a soft profile up only gives a
+ * bigger soft profile, so a magnified mark reads as a 96 px *blur* - indistinguishable
+ * from the background bokeh it is meant to be the opposite of. Keeping a hot core
+ * inside a spreading halo is what makes a near mark read as a light that has come
+ * close rather than as one that has gone out of focus.
+ */
+
+/**
+ * ### IMMERSION.bodyEdge
+ *
+ * A near mark stops being a glow and becomes a **body**: a hard-edged disc, as a
+ * fraction of the dot's radius, at `bodyGain` brightness.
+ *
+ * **Additive blending cannot occlude** - it adds to whatever is behind it, so nothing
+ * drawn this way is ever truly opaque. What it can do is *saturate*: against a
+ * `#05070a` sky a disc at over 1.0 clamps to white, and once it has clamped, more
+ * light behind it adds nothing. It reads as solid because it is the brightest the
+ * screen goes. That is the honest cheap version of opacity here; real occlusion would
+ * need alpha blending and a depth buffer, which is a much larger change - see the
+ * note on depth at the end of this section.
+ */
+
+/**
+ * ### IMMERSION.farDim
+ *
+ * Energy conservation on the **far** bokeh, and deliberately gentler than `nearDim`.
+ *
+ * Full conservation would be correct and useless: a belt point is faint and two
+ * pixels wide, so spreading it over twenty-five times the area at 1/25 the brightness
+ * does not blur it, it **deletes** it. Out-of-focus background highlights are meant
+ * to be visible - that is what bokeh is - so this keeps them in the image. There are
+ * also far fewer of them than there are near marks, so they can afford it.
+ */
+
+/**
+ * ### IMMERSION.markersGoneAt
+ *
+ * Immersion at which rings and tracks have faded out completely.
+ *
+ * They go because this is a first test and picking has not been dealt with: a mark
+ * that has grown eight times and gone soft is nowhere near where `picking.ts` thinks
+ * it is, so pointing at things would ring the wrong ones. Rather than leave a pointer
+ * that lies, the markers leave and picking stops. Both come back when the slider does.
+ */
+
+/**
+ * ### GLOW
+ *
+ * The halo around a light. Added 2026-09-18.
+ *
+ * "Can we add some glow" has two answers, and this is the cheap one: a broad, soft
+ * falloff *inside the sprite the object already draws*. No render target, no
+ * fullscreen pass, no extra draw - the sprite grows and the fragment shader spends a
+ * few more pixels. The expensive answer is bloom, which means an EffectComposer,
+ * half-float targets for the whole scene, and moving the glitch's canvas readback
+ * with it; see the render-target trap under **Rendering**.
+ *
+ * It does something the piece wants beyond looking better: **haloes sum.** Blending is
+ * additive, so a crowded patch of sky is brighter than a sparse one by more than the
+ * count of its marks - density becomes a quantity the eye reads directly, which is
+ * what this whole piece is about.
+ *
+ * Only lights have one. A shard is not a light and does not glow; `KIND_LOOK.debris`
+ * already says so, and the halo obeys it.
+ */
+
+/**
+ * ### GLOW.haloScale
+ *
+ * How far the halo reaches, as a multiple of the dot's own radius. The sprite grows
+ * by this, so the fill cost grows by its square - but only the ~6-9% of the
+ * catalogue that is above the horizon is drawn at all.
+ */
+
+/**
+ * ### HIGHLIGHT
+ *
  * Rings around the objects the readout lists. For now these are also the default
  * voices of the sonification to come.
  *
@@ -784,96 +1598,82 @@ export const GLOW = {
  * in `markColor`; clicking makes that ring stick, and a stuck object holds its row in
  * the readout until it sets. Nothing textual is ever drawn on the sky - see CLAUDE.md.
  */
-export const HIGHLIGHT = {
-  /** Outer diameter, CSS pixels. Fixed on screen, whatever the object's range. */
-  diameterPx: 30,
-  strokePx: 1.5,
-  /** The plain ring worn by whatever the readout happens to be listing. */
-  color: '#ffffff',
-  /**
-   * Hovered and marked objects, in the sky and in the readout alike - one colour is
-   * what ties a ring to its row. Amber reads as put there by a person: the sky's own
-   * marks are warm white (sunlit) and steel blue (eclipsed), and nothing in it is
-   * this saturated.
-   */
-  markColor: '#ffb454',
-  /** The hovered ring grows slightly, so the pointer's reach is legible. */
-  hoverScale: 1.2,
-  /**
-   * A marked object's ring and its row dim together as it descends, so a glance at
-   * the sky reads the same ordering the readout is sorted by. This is the brightness
-   * at the horizon; it reaches full by `fullBrightDeg`.
-   */
-  dimAtHorizon: 0.3,
-  fullBrightDeg: 55,
-  /**
-   * The attention colour for **wreckage**, replacing amber on anything the `kind` byte
-   * calls debris - its ring when touched or kept, its track, and its row in the panel.
-   *
-   * Added 2026-09-17, and it overturns the earlier "a second highlight hue for debris
-   * would have to disagree with its own ring" - it does not, because the ring changes
-   * with it. What the piece gained in exchange is that a collision of *kinds* is now
-   * visible: keep a fragment beside a satellite and the two marks are plainly not the
-   * same sort of thing, before anything moves or sounds.
-   *
-   * A desaturated pink rather than the green that was also on the table, and the
-   * deciding argument is that it must not shout. The eye's sensitivity peaks in the
-   * green, so a green of the same magnitude reads markedly brighter against a sky this
-   * dark - the exact "contamination" this hue is meant to avoid. Pink is also the
-   * furthest thing here from the belt's blue, and unlike a second warm-white it cannot
-   * be confused with a sunlit payload at sixteen pixels.
-   */
-  debrisMarkColor: '#e2aac4',
-  /** How near the pointer has to be, in CSS pixels, to take an object. */
-  pickRadiusPx: 18,
-  /**
-   * A kept object is let go once it sinks below this, and its row goes back to
-   * whatever has risen.
-   *
-   * Not zero. The haze is opaque at the horizon, so anything under a couple of
-   * degrees is already gone from the image - holding its row while it creeps the
-   * last degree reads as the readout being stuck. It also settles the geostationary
-   * case: a satellite parked at +0.4° in the south never sets at all, and would
-   * otherwise hold its row for the life of the page.
-   */
-  releaseBelowDeg: 5,
-  /**
-   * The ring breathes with what its object is sounding: the other half of *The pulse*,
-   * and the one thing in the piece that links a name in the column to a mark overhead
-   * by something that cannot be coincidence. The bar and the ring move together,
-   * because they are the same number - `AudioEngine.level`, read from an analyser.
-   *
-   * **Radius, not brightness.** A marked ring's brightness already means elevation,
-   * computed in the shader from the blended direction; pulsing it would put two
-   * meanings on one channel. Radius means nothing yet, and a ring that swells outward
-   * on a note reads as a ping, which is the "where is that coming from" affordance
-   * this exists to give. The dot's own size is likewise spoken for - kind, featured,
-   * range - so that was not available either.
-   *
-   * **It is cheap because the rings are an indexed draw.** The ring geometry holds
-   * every object but its draw range is the handful that are ringed, so the vertex
-   * shader runs perhaps twenty times a frame. A short uniform array scanned per vertex
-   * is nothing; what would have been expensive is a per-object *attribute*, which is
-   * 84 KB re-uploaded every frame for a value that changes on twenty of them.
-   */
-  pulse: {
-    /** How far the ring swells at full level, as a fraction of its diameter. */
-    swell: 0.55,
-    /**
-     * Slots in the shader's uniform array. Has to cover every voice that can sound at
-     * once - `AUDIO.performer.maxVoices`, plus the station - with room to grow.
-     */
-    slots: 16,
-  },
-};
 
 /**
- * The tracks drawn through kept objects - where each has been and where it is going.
+ * ### HIGHLIGHT.markColor
  *
- * Drawn as real pixel-width lines (three's `LineSegments2`), not GL hairlines, which
- * ANGLE renders one pixel wide whatever you ask for.
+ * Hovered and marked objects, in the sky and in the readout alike - one colour is
+ * what ties a ring to its row. Amber reads as put there by a person: the sky's own
+ * marks are warm white (sunlit) and steel blue (eclipsed), and nothing in it is
+ * this saturated.
  */
+
 /**
+ * ### HIGHLIGHT.dimAtHorizon
+ *
+ * A marked object's ring and its row dim together as it descends, so a glance at
+ * the sky reads the same ordering the readout is sorted by. This is the brightness
+ * at the horizon; it reaches full by `fullBrightDeg`.
+ */
+
+/**
+ * ### HIGHLIGHT.debrisMarkColor
+ *
+ * The attention colour for **wreckage**, replacing amber on anything the `kind` byte
+ * calls debris - its ring when touched or kept, its track, and its row in the panel.
+ *
+ * Added 2026-09-17, and it overturns the earlier "a second highlight hue for debris
+ * would have to disagree with its own ring" - it does not, because the ring changes
+ * with it. What the piece gained in exchange is that a collision of *kinds* is now
+ * visible: keep a fragment beside a satellite and the two marks are plainly not the
+ * same sort of thing, before anything moves or sounds.
+ *
+ * A desaturated pink rather than the green that was also on the table, and the
+ * deciding argument is that it must not shout. The eye's sensitivity peaks in the
+ * green, so a green of the same magnitude reads markedly brighter against a sky this
+ * dark - the exact "contamination" this hue is meant to avoid. Pink is also the
+ * furthest thing here from the belt's blue, and unlike a second warm-white it cannot
+ * be confused with a sunlit payload at sixteen pixels.
+ */
+
+/**
+ * ### HIGHLIGHT.releaseBelowDeg
+ *
+ * A kept object is let go once it sinks below this, and its row goes back to
+ * whatever has risen.
+ *
+ * Not zero. The haze is opaque at the horizon, so anything under a couple of
+ * degrees is already gone from the image - holding its row while it creeps the
+ * last degree reads as the readout being stuck. It also settles the geostationary
+ * case: a satellite parked at +0.4° in the south never sets at all, and would
+ * otherwise hold its row for the life of the page.
+ */
+
+/**
+ * ### HIGHLIGHT.pulse
+ *
+ * The ring breathes with what its object is sounding: the other half of *The pulse*,
+ * and the one thing in the piece that links a name in the column to a mark overhead
+ * by something that cannot be coincidence. The bar and the ring move together,
+ * because they are the same number - `AudioEngine.level`, read from an analyser.
+ *
+ * **Radius, not brightness.** A marked ring's brightness already means elevation,
+ * computed in the shader from the blended direction; pulsing it would put two
+ * meanings on one channel. Radius means nothing yet, and a ring that swells outward
+ * on a note reads as a ping, which is the "where is that coming from" affordance
+ * this exists to give. The dot's own size is likewise spoken for - kind, featured,
+ * range - so that was not available either.
+ *
+ * **It is cheap because the rings are an indexed draw.** The ring geometry holds
+ * every object but its draw range is the handful that are ringed, so the vertex
+ * shader runs perhaps twenty times a frame. A short uniform array scanned per vertex
+ * is nothing; what would have been expensive is a per-object *attribute*, which is
+ * 84 KB re-uploaded every frame for a value that changes on twenty of them.
+ */
+
+/**
+ * ### CHOIR
+ *
  * The choir: the geosynchronous belt, which from Berlin is a fixed arc across the
  * southern sky, peaking at 30° due south. Those objects never rise and never set.
  *
@@ -883,22 +1683,10 @@ export const HIGHLIGHT = {
  * marked as one. Which objects qualify is decided in catalog-format.ts, from the
  * elements; this is only how they look.
  */
-export const CHOIR = {
-  /** Ring diameter, CSS pixels. Smaller than HIGHLIGHT.diameterPx on purpose. */
-  diameterPx: 17,
-  strokePx: 1.2,
-  /** The ring matches the point: one blue means one thing. */
-  color: PALETTE.geostationary,
-};
-
-/** A hex colour scaled toward black: how a mark drawn at reduced intensity reads. */
-function dimmed(hex: string, k: number): string {
-  const n = parseInt(hex.slice(1), 16);
-  const ch = (shift: number) => Math.round(((n >> shift) & 255) * k);
-  return `#${[ch(16), ch(8), ch(0)].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
-}
 
 /**
+ * ### GROUP_LOOK
+ *
  * How each group reads in the panel. Two colours, and they mean different things:
  *
  * - **`tone` is the colour the object already is on the sky.** It is what a row rests
@@ -922,18 +1710,10 @@ function dimmed(hex: string, k: number): string {
  * matches what the sky does, which draws a round sprite and a triangle by hand rather
  * than asking a font for either.
  */
-export const GROUP_LOOK = {
-  passing: { shape: 'dot', tone: PALETTE.lit, accent: HIGHLIGHT.markColor },
-  debris: {
-    shape: 'triangle',
-    tone: dimmed(PALETTE.lit, KIND_LOOK.debris.intensity),
-    // Not amber. Wreckage has its own attention colour now - see HIGHLIGHT.
-    accent: HIGHLIGHT.debrisMarkColor,
-  },
-  belt: { shape: 'dot', tone: PALETTE.geostationary, accent: PALETTE.geostationary },
-} as const;
 
 /**
+ * ### FAMILY_LOOK
+ *
  * **The constellation narrative: which family a kept object belongs to, said in the
  * attention colour.** Added 2026-09-22.
  *
@@ -962,69 +1742,68 @@ export const GROUP_LOOK = {
  * kept at once, so none of these ever covers the frame the way a resting colour would.
  * Iridium is deliberately the loud one.
  */
-export const FAMILY_LOOK: Record<Family, string | null> = {
-  [FAMILY.NONE]: null,
-  /** 11,110 objects on 2026-09-22 - 52.9% of the catalogue, and all of it one company. */
-  [FAMILY.STARLINK]: '#6b51b8',
-  /** 190, of which 109 are fragments of the 2009 collision. The loud one. */
-  [FAMILY.IRIDIUM]: '#c6f910',
-  /**
-   * 211 objects, 210 of them payloads - and getting to that number took the one
-   * piece of editorial judgement in the whole family table. CelesTrak publishes no
-   * all-military group, its `military` group is a leftover bucket of 24, and the
-   * `radar` group that used to feed this family is ten passive calibration spheres.
-   * The first object ever to rise wearing this colour was CALSPHERE 1, a 1964
-   * aluminium ball. It is now `military` plus YAOGAN and `USA ###` by name, and
-   * deliberately **not** COSMOS. See FAMILIES in catalog-sources.mjs for why.
-   *
-   * 19 of the 211 sit in the geosynchronous belt and stay blue there - belonging to
-   * the belt outranks family, exactly as it does in the sound, where audio.ts routes
-   * on the choir byte and a belt object never reaches a family voice at all.
-   */
-  [FAMILY.MILITARY]: '#46a466',
-  /**
-   * 172 objects, 43 of them in the belt. A gold, and **the one colour in the table
-   * that does not clear the threshold** - deliberately, and by the smallest margin
-   * available.
-   *
-   * It measures **dE 16.6 from `HIGHLIGHT.markColor`**, the amber every kept satellite
-   * *without* a family wears, against a ~18 bar. That is the best any warm yellow can
-   * do, because the band is a pincer: amber sits at hue 34 and Iridium's chartreuse at
-   * 70, so moving off one walks into the other. Measured across the whole run -
-   *
-   *   #ffcb00  13.1 from amber     the first choice, plainly too close
-   *   #ffd700  16.6 from amber     this, and 18.9 from Iridium
-   *   #ffe000  19.2 from amber     but 16.4 from Iridium - the pincer closing
-   *   #ffee00  23.0 from amber     and 12.9 from Iridium
-   *   #c6b410  18.4 worst          clears, and reads as olive next to Iridium
-   *
-   * The olive is the only thing that passes and it was rejected on looking, which is
-   * the right way to settle this: at sixteen pixels it sits in Iridium's chartreuse
-   * rather than beside it, so a number that clears hides a confusion the eye does not.
-   *
-   * What makes 16.6 survivable is the thing that bought six families in the first
-   * place: **the legend names it**. Keep a navigation satellite and NAVIGATION lights
-   * in the corner; keep an ordinary one and nothing does, so the pair resolves in a
-   * glance even where the hues are close. The residual cost is real and worth stating -
-   * scanning a sky with several objects kept, gold and amber are neighbours.
-   */
-  [FAMILY.GNSS]: '#ffd700',
-  /**
-   * 69 objects, 22 of them in the belt. A cyan reaching from Iridium's chartreuse
-   * toward the belt's blue without arriving: dE 22.9 from the belt, 28.5 from the
-   * military green, 25.2 from the ISS white.
-   *
-   * A teal was tried for this on 2026-09-23 and measured **worse** - 19.9 against the
-   * military green. The difference is lightness: those sat at L* 78-81 and this is at
-   * **91**, fully saturated, which is what lifts it clear of both greens. The earlier
-   * note saying "a cyan collided with the belt's blue" was measuring a duller one.
-   */
-  [FAMILY.WEATHER]: '#00fff3',
-  /** 45 objects, the smallest family. Magenta, which reads as instrument. */
-  [FAMILY.SCIENCE]: '#e94cfa',
-};
 
 /**
+ * ### FAMILY_LOOK.MILITARY
+ *
+ * 211 objects, 210 of them payloads - and getting to that number took the one
+ * piece of editorial judgement in the whole family table. CelesTrak publishes no
+ * all-military group, its `military` group is a leftover bucket of 24, and the
+ * `radar` group that used to feed this family is ten passive calibration spheres.
+ * The first object ever to rise wearing this colour was CALSPHERE 1, a 1964
+ * aluminium ball. It is now `military` plus YAOGAN and `USA ###` by name, and
+ * deliberately **not** COSMOS. See FAMILIES in catalog-sources.mjs for why.
+ *
+ * 19 of the 211 sit in the geosynchronous belt and stay blue there - belonging to
+ * the belt outranks family, exactly as it does in the sound, where audio.ts routes
+ * on the choir byte and a belt object never reaches a family voice at all.
+ */
+
+/**
+ * ### FAMILY_LOOK.GNSS
+ *
+ * 172 objects, 43 of them in the belt. A gold, and **the one colour in the table
+ * that does not clear the threshold** - deliberately, and by the smallest margin
+ * available.
+ *
+ * It measures **dE 16.6 from `HIGHLIGHT.markColor`**, the amber every kept satellite
+ * *without* a family wears, against a ~18 bar. That is the best any warm yellow can
+ * do, because the band is a pincer: amber sits at hue 34 and Iridium's chartreuse at
+ * 70, so moving off one walks into the other. Measured across the whole run -
+ *
+ *   #ffcb00  13.1 from amber     the first choice, plainly too close
+ *   #ffd700  16.6 from amber     this, and 18.9 from Iridium
+ *   #ffe000  19.2 from amber     but 16.4 from Iridium - the pincer closing
+ *   #ffee00  23.0 from amber     and 12.9 from Iridium
+ *   #c6b410  18.4 worst          clears, and reads as olive next to Iridium
+ *
+ * The olive is the only thing that passes and it was rejected on looking, which is
+ * the right way to settle this: at sixteen pixels it sits in Iridium's chartreuse
+ * rather than beside it, so a number that clears hides a confusion the eye does not.
+ *
+ * What makes 16.6 survivable is the thing that bought six families in the first
+ * place: **the legend names it**. Keep a navigation satellite and NAVIGATION lights
+ * in the corner; keep an ordinary one and nothing does, so the pair resolves in a
+ * glance even where the hues are close. The residual cost is real and worth stating -
+ * scanning a sky with several objects kept, gold and amber are neighbours.
+ */
+
+/**
+ * ### FAMILY_LOOK.WEATHER
+ *
+ * 69 objects, 22 of them in the belt. A cyan reaching from Iridium's chartreuse
+ * toward the belt's blue without arriving: dE 22.9 from the belt, 28.5 from the
+ * military green, 25.2 from the ISS white.
+ *
+ * A teal was tried for this on 2026-09-23 and measured **worse** - 19.9 against the
+ * military green. The difference is lightness: those sat at L* 78-81 and this is at
+ * **91**, fully saturated, which is what lifts it clear of both greens. The earlier
+ * note saying "a cyan collided with the belt's blue" was measuring a duller one.
+ */
+
+/**
+ * ### FAMILY_LEGEND
+ *
  * The families that carry a colour, in the order the legend lists them.
  *
  * **All six, since 2026-09-23**, which needed the paragraph above to be re-measured
@@ -1044,97 +1823,106 @@ export const FAMILY_LOOK: Record<Family, string | null> = {
  * the military green at dE 19.9. Meaning lost to separation on that one, which is why
  * weather is the storm orange rather than an ice blue.
  */
-export const FAMILY_LEGEND = [
-  { family: FAMILY.STARLINK, label: 'STARLINK' },
-  { family: FAMILY.IRIDIUM, label: 'IRIDIUM' },
-  { family: FAMILY.MILITARY, label: 'MILITARY' },
-  { family: FAMILY.GNSS, label: 'NAVIGATION' },
-  { family: FAMILY.WEATHER, label: 'WEATHER' },
-  { family: FAMILY.SCIENCE, label: 'SCIENCE' },
-] as const;
-
-export const TRAIL = {
-  /** Minutes of past track to draw. */
-  pastMinutes: 35,
-  /** Minutes of future track to draw. */
-  futureMinutes: 35,
-  /** Seconds between sampled points along a trail. */
-  stepSeconds: 20,
-  /** Line width in CSS pixels. */
-  widthPx: 2,
-  /** Opacity of a track at full brightness. */
-  opacity: 0.5,
-  /**
-   * A track dissolves from this elevation down and is cut exactly at the horizon,
-   * so an orbit leaves the image rather than diving through the ground. Keep it near
-   * the haze's own scale - below a couple of degrees nothing is visible anyway.
-   */
-  fadeTopDeg: 7,
-  /** Track colour for an object that is drawn but not kept. Kept ones use HIGHLIGHT.markColor. */
-  color: '#7fa6bf',
-  /**
-   * A track through every kept object, not only the most recent one. Several at once
-   * is the point of keeping several - and also the thing most likely to turn the sky
-   * into wool, so it is one line to turn off.
-   */
-  allMarked: true,
-  /**
-   * Scene seconds a track may drift before it is recomputed. A track spans 70 minutes,
-   * so a minute of drift is invisible; at high time rates this is what stops the
-   * worker being asked for tracks faster than it can answer frames.
-   */
-  refreshSeconds: 60,
-  /** Track requests allowed out at once, across all kept objects. */
-  maxInflight: 2,
-};
-
-export const CLOCK = {
-  /**
-   * Minimum propagation ticks per second. Rendering runs at display rate and the GPU
-   * blends between ticks, so at 1x this can be low without anything visibly stepping.
-   */
-  propagationHz: 5,
-  /** Most scene seconds allowed between ticks before the tick rate is raised. */
-  maxStepSeconds: 10,
-  /** Ceiling on ticks per second. A tick of `full` is ~17 ms in the worker. */
-  maxPropagationHz: 20,
-  /**
-   * Time multipliers offered by the scrub control.
-   *
-   * **Capped at 100x since 2026-09-16.** It used to run to 1800x, where a pass
-   * crossed the sky in two seconds. That is a curiosity rather than an image - the
-   * blends cut the corners of the arcs, the tracks lag by design, and there is
-   * nothing to look at that a slower rate does not show better. 100x is a pass in
-   * under a minute, which is the fastest rate that still reads as motion.
-   *
-   * It also settles the sound, and is why the sound no longer stops above 1x: at
-   * 1800x a pass's whole Doppler bend landed in two seconds and was a siren. At 100x
-   * it takes forty and is a swoop. See AUDIO.rateDuck.
-   */
-  rates: [1, 10, 60, 100],
-};
 
 /**
- * Which voice each family sings with.
+ * ### TRAIL
  *
- * Typed as a **total** map over `Family` rather than an array or a lookup with a
- * fallback, so adding a family to `FAMILY` and forgetting to give it a voice is a
- * compile error rather than a satellite that quietly sings the default.
+ * The tracks drawn through kept objects - where each has been and where it is going.
+ *
+ * Drawn as real pixel-width lines (three's `LineSegments2`), not GL hairlines, which
+ * ANGLE renders one pixel wide whatever you ask for.
  */
-const FAMILY_VOICE: Record<
-  Family,
-  'none' | 'starlink' | 'iridium' | 'military' | 'gnss' | 'weather' | 'science'
-> = {
-  [FAMILY.NONE]: 'none',
-  [FAMILY.STARLINK]: 'starlink',
-  [FAMILY.IRIDIUM]: 'iridium',
-  [FAMILY.MILITARY]: 'military',
-  [FAMILY.GNSS]: 'gnss',
-  [FAMILY.WEATHER]: 'weather',
-  [FAMILY.SCIENCE]: 'science',
-};
 
 /**
+ * ### TRAIL.fadeTopDeg
+ *
+ * A track dissolves from this elevation down and is cut exactly at the horizon,
+ * so an orbit leaves the image rather than diving through the ground. Keep it near
+ * the haze's own scale - below a couple of degrees nothing is visible anyway.
+ */
+
+/**
+ * ### TRAIL.allMarked
+ *
+ * A track through every kept object, not only the most recent one. Several at once
+ * is the point of keeping several - and also the thing most likely to turn the sky
+ * into wool, so it is one line to turn off.
+ */
+
+/**
+ * ### TRAIL.refreshSeconds
+ *
+ * Scene seconds a track may drift before it is recomputed. A track spans 70 minutes,
+ * so a minute of drift is invisible; at high time rates this is what stops the
+ * worker being asked for tracks faster than it can answer frames.
+ */
+
+/**
+ * ### CLOCK.rates
+ *
+ * Time multipliers offered by the scrub control.
+ *
+ * **Capped at 100x since 2026-09-16.** It used to run to 1800x, where a pass
+ * crossed the sky in two seconds. That is a curiosity rather than an image - the
+ * blends cut the corners of the arcs, the tracks lag by design, and there is
+ * nothing to look at that a slower rate does not show better. 100x is a pass in
+ * under a minute, which is the fastest rate that still reads as motion.
+ *
+ * It also settles the sound, and is why the sound no longer stops above 1x: at
+ * 1800x a pass's whole Doppler bend landed in two seconds and was a siren. At 100x
+ * it takes forty and is a swoop. See AUDIO.rateDuck.
+ */
+
+/**
+ * ### GHOST
+ *
+ * Ghosting: where a thing has just been, drawn only while the clock runs fast.
+ *
+ * At 1x an object crosses a couple of pixels in a tick and a trail would be a
+ * smudge on the sprite. At 100x it crosses the sky in forty seconds, and the
+ * question the ramp raises - how fast is this actually going? - has no answer in the
+ * image at all. A trail answers it, and adds a density in *time* beside the density
+ * in space the piece is already about.
+ *
+ * **It is extra draws of the same points, not a screen effect**, and that is the
+ * whole design. A feedback buffer smears in screen space, so turning the camera would
+ * drag the entire sky into streaks - and the fix for that (clear the buffer on any
+ * camera motion) reads as a flicker exactly when a person is looking around. A ghost
+ * here is a *position*, re-projected every frame like everything else, so it holds
+ * still under the drag and no special case is needed.
+ *
+ * It costs no buffers and no uploads either: `mix` extrapolates outside [0, 1], so a
+ * ghost is the same two ticks the GPU already holds, blended at a negative `uT`, which
+ * runs the chord between them backwards. The error against the real past path is a
+ * fraction of a degree over the span used here, and the thing being drawn is a
+ * smudge behind a moving dot.
+ */
+
+/**
+ * ### GHOST.count
+ *
+ * Copies behind each object. Each one is another draw of the points.
+ *
+ * **Each is a stroke, not a dot**, and that is what decides the number. Three dots
+ * over a span this long read as beads on a string; a ghost instead sweeps its
+ * sprite along the step back to the ghost behind it, so four of them join into one
+ * tapering streak. Filling the same span with dots close enough to touch would have
+ * taken fifteen draws.
+ */
+
+/**
+ * ### GHOST.size
+ *
+ * A ghost's width against its object. Smaller reads as a trail rather than a queue
+ * of satellites, and it is where most of the cost is: a point sprite is all
+ * fragment, and a swept one is a square of side `width + streak` for a capsule that
+ * only occupies a band across it. The streak is capped at 96 CSS px in the shader
+ * for the same reason - past that it is a smear, not a trail.
+ */
+
+/**
+ * ### AUDIO
+ *
  * Sound - Step 4, beginning with the drone.
  *
  * The belt sings and nothing else does, yet. `src/drone.ts` builds the bed; the
@@ -1158,773 +1946,541 @@ const FAMILY_VOICE: Record<
  *   keeping an object pulls one voice out of it and gives it its own pitch, filter
  *   and envelope. Keep a dozen and the drone becomes invasive, which is the point.
  */
+
 /**
- * Ghosting: where a thing has just been, drawn only while the clock runs fast.
+ * ### AUDIO.rateDuck
  *
- * At 1x an object crosses a couple of pixels in a tick and a trail would be a
- * smudge on the sprite. At 100x it crosses the sky in forty seconds, and the
- * question the ramp raises - how fast is this actually going? - has no answer in the
- * image at all. A trail answers it, and adds a density in *time* beside the density
- * in space the piece is already about.
+ * **Sound runs at every time rate**, since 2026-09-18. It used to stop dead above
+ * 1x, on the reasoning that a drone whose pans sweep at that speed is a siren.
  *
- * **It is extra draws of the same points, not a screen effect**, and that is the
- * whole design. A feedback buffer smears in screen space, so turning the camera would
- * drag the entire sky into streaks - and the fix for that (clear the buffer on any
- * camera motion) reads as a flicker exactly when a person is looking around. A ghost
- * here is a *position*, re-projected every frame like everything else, so it holds
- * still under the drag and no special case is needed.
+ * That was true of the 1800x ladder and stopped being true when the ladder was
+ * capped at 100x, but the mute stayed behind. Nothing in the audio path actually
+ * accelerates: every continuous parameter moves through `setTargetAtTime` with a
+ * time constant in *real* seconds, and phrases are scheduled on the audio context's
+ * own clock, so the song keeps its tempo however fast the sky runs. What does
+ * change is welcome - the Doppler bend is the same +-650 cents but sweeps across a
+ * pass in forty seconds instead of thirty-five minutes, which is the swoop the
+ * exaggeration was for.
  *
- * It costs no buffers and no uploads either: `mix` extrapolates outside [0, 1], so a
- * ghost is the same two ticks the GPU already holds, blended at a negative `uT`, which
- * runs the chord between them backwards. The error against the real past path is a
- * fraction of a degree over the span used here, and the thing being drawn is a
- * smudge behind a moving dot.
+ * So the rate attenuates rather than silences: the sky gets faster and the sound
+ * steps back, which also answers the thing a mute could not - that a listener has
+ * no way to tell a silenced piece from a broken one.
  */
-export const GHOST = {
-  /** Trails appear above this time rate, and fade in over the step above it. */
-  fromRate: 1,
-  /**
-   * Copies behind each object. Each one is another draw of the points.
-   *
-   * **Each is a stroke, not a dot**, and that is what decides the number. Three dots
-   * over a span this long read as beads on a string; a ghost instead sweeps its
-   * sprite along the step back to the ghost behind it, so four of them join into one
-   * tapering streak. Filling the same span with dots close enough to touch would have
-   * taken fifteen draws.
-   */
-  count: 4,
-  /** How far back the furthest reaches, in tick intervals. */
-  spanTicks: 1.6,
-  /** Brightness of the first ghost, and what each one behind it keeps of the last. */
-  level: 0.5,
-  falloff: 0.66,
-  /**
-   * A ghost's width against its object. Smaller reads as a trail rather than a queue
-   * of satellites, and it is where most of the cost is: a point sprite is all
-   * fragment, and a swept one is a square of side `width + streak` for a capsule that
-   * only occupies a band across it. The streak is capped at 96 CSS px in the shader
-   * for the same reason - past that it is a smear, not a trail.
-   */
-  size: 0.6,
-};
-
-export const AUDIO = {
-  /** Master level once sound is on. Everything else is relative to this. */
-  masterGain: 0.45,
-  /** Seconds the master takes to arrive or leave when the button is pressed. */
-  fadeSeconds: 2.5,
-  /**
-   * **Sound runs at every time rate**, since 2026-09-18. It used to stop dead above
-   * 1x, on the reasoning that a drone whose pans sweep at that speed is a siren.
-   *
-   * That was true of the 1800x ladder and stopped being true when the ladder was
-   * capped at 100x, but the mute stayed behind. Nothing in the audio path actually
-   * accelerates: every continuous parameter moves through `setTargetAtTime` with a
-   * time constant in *real* seconds, and phrases are scheduled on the audio context's
-   * own clock, so the song keeps its tempo however fast the sky runs. What does
-   * change is welcome - the Doppler bend is the same +-650 cents but sweeps across a
-   * pass in forty seconds instead of thirty-five minutes, which is the swoop the
-   * exaggeration was for.
-   *
-   * So the rate attenuates rather than silences: the sky gets faster and the sound
-   * steps back, which also answers the thing a mute could not - that a listener has
-   * no way to tell a silenced piece from a broken one.
-   */
-  rateDuck: {
-    /**
-     * Level at `fullAt` and above, as a share of `masterGain`. 1x is always full.
-     *
-     * Cut from 0.55 to 0.30 when `rateDrive` arrived, and the reason is the ear, not
-     * the meter: the bed's centroid climbs from 58 Hz to 181 Hz, and equal-loudness
-     * puts the ear some 15 dB more sensitive there. Holding the same level would have
-     * made the hum arrive far louder than the drone it grew out of. -10.5 dB gives
-     * back about two thirds of that, which leaves the rise plainly audible without it
-     * taking the room.
-     */
-    to: 0.3,
-    /** The rate the attenuation has fully arrived at. The top of the ladder. */
-    fullAt: 100,
-  },
-  /**
-   * What the sound does while the clock is held.
-   *
-   * **Pause freezes the instrument; it does not silence it.** The sound here is state
-   * plus events - where a thing is, how high, lit or eclipsed, and the phrases a bird
-   * sings. Pause stops the events: no chirp, honk or squawk is scheduled while the
-   * clock is held, and the state simply stops changing because the frame does. What
-   * is left is what does not move anyway - the belt's bed and the shards' hiss - a
-   * step quieter, so the press is audible. Turning the camera still sweeps the belt
-   * across the field, because looking is not time passing.
-   */
-  paused: { level: 0.45 },
-  /**
-   * **The drone rises with the time rate**, added 2026-09-18.
-   *
-   * Attenuating was not enough: it told a listener the sound had not broken, and
-   * nothing else. This makes the clock itself audible - the bed runs up from its C1
-   * towards a hum as the sky speeds up, so a ramp is something you hear before you
-   * read the number. Cents at `rateDuck.fullAt`, on the same logarithmic reading of
-   * the ladder, and it is **the drone's alone**: the birds keep their register,
-   * because a satellite's own song is not what the clock is doing.
-   *
-   * There is a reasonable objection - the belt does not move, so why would it change
-   * with the rate? Because the bed is not the sound of five hundred objects, it is
-   * the sound of the sky they are the floor of, and that is what is running.
-   */
-  rateDrive: { cents: 1900 },
-  /** Seconds to duck and unduck for the rate or a pause. Shorter than a deliberate fade. */
-  duckSeconds: 0.7,
-  drone: {
-    /** Seconds the transpose takes to arrive. Long: a rate change is a ramp, not a jump. */
-    rateGlideSeconds: 1.4,
-    /**
-     * The bed's pitches, low to high, **one voice per ratio** - the slice count is
-     * this array's length, so the two can never disagree.
-     *
-     * A just pentatonic over an octave and a half. Adjacent slices are adjacent in
-     * the sky as well as in pitch, so sweeping the arc from east to west rises.
-     * Nine bass voices a whole tone apart would be mud; a pentatonic is not.
-     */
-    ratios: [1, 9 / 8, 4 / 3, 3 / 2, 5 / 3, 2, 9 / 4, 8 / 3, 3],
-    /** The root, Hz. C1 - under the bottom of a bass guitar. */
-    rootHz: 32.7,
-    /**
-     * One bed slice at full occupancy. Nine of these sum to the whole drone.
-     *
-     * Lowered from 0.085 on 2026-09-16, after listening to it on the real sky rather
-     * than the synthetic one. It matters which: `synthetic` has 240 belt objects, so
-     * its slices sit at half occupancy and the bed is 4 dB quieter than `full`, where
-     * every slice saturates. The first tuning was done against the quiet one.
-     */
-    bedGain: 0.04,
-    /** Members in a slice for it to reach full level. Below it the bed thins out. */
-    fullAt: 20,
-    /** The bed never falls below this fraction of its level while the belt is up. */
-    floorLevel: 0.25,
-    /** Detune between a slice's two sines. What makes the bed beat instead of sit. */
-    detuneCents: 7,
-    /** A triangle an octave up, under the pair, for body. */
-    bodyGain: 0.16,
-    /** Each voice breathes at its own rate, lowest slice slowest. Hz. */
-    breathHz: [0.043, 0.071],
-    /** How deep that breath cuts, as a fraction of the voice's level. */
-    breathDepth: 0.35,
-    /** A kept object's voice sits this many octaves above its slice. */
-    soloOctaves: 1,
-    /**
-     * A kept voice at full strength, over and above the bed. Lowered from 0.17 with
-     * the bed, but by less: it sits an octave up with a resonant edge, so it arrives
-     * clearly at a level well under the bed's, and cutting both by the same amount
-     * would have made keeping an object louder in relative terms than it was before.
-     *
-     * **A voice only reaches this when the belt is being played as a chord.** See
-     * `soloRamp`.
-     */
-    soloGain: 0.105,
-    /**
-     * How much of `soloGain` each kept voice gets, as a function of how many are kept.
-     *
-     * One voice on its own was overpowering: it arrived at full strength over a bed
-     * deliberately tuned to sit back, so a single click jumped out of the image. The
-     * belt is a choir, and one singer stepping forward at full voice is the wrong
-     * shape for it. So the **first** voice enters at `first` of its level and every
-     * voice - the first one included - rises toward full as more are kept, reaching it
-     * at `fullAt`.
-     *
-     * **This only ever attenuates.** At `fullAt` voices the sum is exactly what that
-     * many voices cost before; below it, less. Keeping ten is unchanged, keeping one
-     * is 14 dB quieter, and the grid stops being a set of switches and becomes
-     * something that rewards playing it.
-     *
-     * `curve` under 1 makes the first few additions count for more than the last few,
-     * so going from one voice to three is a clear swell rather than a slow crawl.
-     */
-    soloRamp: { first: 0.2, fullAt: 10, curve: 0.7 },
-    /** Spread across a slice, cents: neighbours kept together beat against each other. */
-    soloDetuneCents: 14,
-    /** The resonant lowpass that opens as a voice arrives. */
-    soloCutoffHz: 900,
-    soloQ: 7,
-    attackSeconds: 3,
-    releaseSeconds: 4,
-    /**
-     * Kept belt objects that can sound at once. Past this, a click still marks.
-     *
-     * Raised from 12 on 2026-09-21. A kept object that cannot sound is the one place
-     * the grammar breaks - it takes the attention colour and its square lights, and
-     * nothing happens - so the cap wants to be past what anyone reaches by playing.
-     * `soloRamp` is saturated from ten upward, so every voice past that arrives at
-     * full and the sum climbs linearly; the master compressor is what takes the top
-     * off, which is why it is there.
-     */
-    maxSolo: 15,
-    /** How often the slices are recut, ms. The belt barely moves; this is not a tick. */
-    regroupMs: 2000,
-    /** Hard left and right are unpleasant on headphones; the field stops here. */
-    panSpread: 0.85,
-  },
-  /**
-   * The performers: passes, and only the ones being kept.
-   *
-   * The name of the piece comes from what radio amateurs call satellites - birds -
-   * and the 2010 original assigned looped birdsong to passes over a stereo field.
-   * This is that, synthesised. Synthesised **first**, deliberately: a recorded bird
-   * sounds good on its own, so it would sound fine badly panned and badly gated, and
-   * a wrong mapping would survive for months behind it. A swept sine is unforgiving,
-   * which is the useful property right now. Samples are a later decision, and the
-   * byte budget is an argument against them - the whole catalogue is 831 KB.
-   *
-   * **Nothing sounds until it is kept.** A thousand objects are above the horizon;
-   * sonifying what is merely *there* is the mush this piece exists to avoid. The
-   * click is the instrument.
-   *
-   * Three textures, from the one byte the catalogue actually has:
-   *
-   * - **bird** (payload): phrases of two to five swept chirps, then a gap. Each
-   *   object's pitch, sweep, phrase length and gap come from a hash of its index, so
-   *   a given satellite always sings the same song, and several kept at once drift
-   *   apart instead of locking into a pulse.
-   * - **machine** (rocket body): a spent upper stage is not a bird. Lower, a
-   *   sawtooth, and **regular** where the bird is not - the industrial chant under
-   *   the birdsong that the brief asks for.
-   * - **shard** (debris): dry noise bursts through a narrow band. Provisional. Debris
-   *   is meant to become interference *on* other voices rather than a voice of its
-   *   own, but a click that makes no sound reads as a broken click, and this previews
-   *   the grain that idea will use.
-   *
-   * Four mappings, and three of them are already the visual grammar:
-   *
-   * - **pitch <- range rate**, exaggerated. Literal Doppler is 0.04 cents - see the
-   *   note in CLAUDE.md - so it is scaled into the audio band the way a receiver
-   *   does it. A pass glides down through closest approach, which is the sound the
-   *   whole metaphor was built on.
-   * - **level <- elevation**, on `HIGHLIGHT`'s own curve. The voice swells and fades
-   *   in exact step with how the object's ring dims, because it is the same numbers.
-   * - **pan <- direction**, head-relative, exactly as the drone pans.
-   * - **timbre <- shadow.** A sunlit object is bright; one inside Earth's umbra is
-   *   muffled. The one axis here that the eye already reads as brightness, and the
-   *   ear reads better as colour.
-   */
-  performer: {
-    /** Kept passes that can sound at once. Past this a click still marks. */
-    maxVoices: 10,
-    /** Voice level before the elevation curve. */
-    gain: 0.33,
-    /**
-     * Relative levels. **Measured, not nominal** - these are whatever makes the three
-     * sit together, and they are not proportional to anything. Bandpassed noise throws
-     * most of its energy away, so a shard needs several times a sine's gain to reach
-     * the same loudness; a sawtooth through an open lowpass needs less.
-     */
-    timbreGain: { bird: 1, machine: 1, shard: 0.8, station: 1 },
-    /**
-     * **Distance attenuates a voice**, added 2026-09-21. Level was elevation alone, and
-     * elevation is not distance: a navigation satellite at 20,000 km or a Molniya near
-     * apogee sits high in the sky for a long time and arrived at the *same* level as a
-     * Starlink at 550 km. Overhead and far is exactly the case that got invasive.
-     *
-     * **The belt is untouched, and not by a rule here.** `audio.ts` splits what is kept
-     * on the `choir` byte: belt objects go to `Drone` and never reach this class at all,
-     * so its bed keeps its own level whatever this does.
-     *
-     * **Slant range, not altitude**, which the frame does not carry - and the wide band
-     * is what makes that safe. A LEO pass runs about 550 km overhead to 2,300 km at the
-     * horizon, so the whole of it sits at the near end and comes through at 1.0 to 0.89:
-     * the dense sky is essentially untouched and there is no double-counting against the
-     * elevation curve. The ramp only bites on orbits that are genuinely far.
-     *
-     * **Logarithmic, because orbital distance is.** These span more than a decade, and a
-     * linear ramp would spend nearly all its travel between 1,500 and 8,000 km and then
-     * be flat across everything above. Per doubling is also roughly how loudness is
-     * heard.
-     *
-     * | slant range | gain |
-     * |---|---|
-     * | 550 km, LEO overhead | 1.00 |
-     * | 2,300 km, LEO setting | 0.89 |
-     * | 5,000 km | 0.68 |
-     * | 10,000 km | 0.49 |
-     * | 20,000 km, navigation | 0.31 |
-     * | 25,000 km and beyond | 0.25 |
-     *
-     * `nearKm` sits above the whole populated LEO shell - 550, 780 and 1,200 km - on
-     * purpose, so nothing in the sky the piece is actually about is attenuated at all.
-     */
-    byRange: {
-      nearKm: 1500,
-      farKm: 25000,
-      /**
-       * How far down the furthest things go. **0.25, which is −12 dB**, from 0.3 on
-       * listening: −10.5 still read as *near*. Lowering this deepens the whole ramp in
-       * proportion, since the curve is a lerp toward it - 20,000 km goes from −9.0 to
-       * −10.2 dB - so the floor is the one dial worth turning here. Still a voice,
-       * deliberately: a far object is quiet, not absent.
-       */
-      floor: 0.25,
-    },
-    /**
-     * **The meter: what the panel reads to draw a voice's pulse.**
-     *
-     * Added 2026-09-21, and it is the first time anything has flowed *back* from the
-     * audio to the image. Everything else goes one way — the frame drives the sound —
-     * so this is a new seam, kept deliberately narrow: one number per sounding object,
-     * sampled once a frame, and the panel is the only thing that reads it.
-     *
-     * **It is measured from the signal, never predicted from the schedule.** Phrases
-     * are written up to `lookaheadSeconds` ahead on the audio context's own clock,
-     * which is not the frame clock; anything derived from the schedule would drift
-     * against what is actually audible. An `AnalyserNode` on each voice reads what is
-     * sounding *now*, so the bar cannot disagree with the ear.
-     */
-    meter: {
-      /** Samples per read. 256 is about 5 ms at 48 kHz: enough for an RMS, nothing to store. */
-      fftSize: 256,
-      /**
-       * Seconds. **Fast up, slow down** — an onset has to arrive on the frame it
-       * happens or the bar reads as lagging, and a decay has to be visible for longer
-       * than a frame or a chirp is a single-frame flash nobody sees.
-       */
-      attackSeconds: 0.02,
-      releaseSeconds: 0.22,
-      /**
-       * The window the bar spans, in **decibels**, and it has to be decibels.
-       *
-       * Measured on the real voices: a bird runs 0.0002 RMS in its gaps and 0.42 in a
-       * note - a factor of **two thousand** - while a shard sits flat at 0.03 because
-       * it is continuous and eventless. A linear full-scale cannot show both: set it
-       * for the shard and every bird pins at full through its whole phrase, which is
-       * what the first version did and it read as a blink rather than a pulse.
-       *
-       * On this window: a bird's gaps fall under the floor and read as nothing, its
-       * notes reach the top, and a shard settles around 0.45 and breathes. Which is
-       * exactly the three textures telling themselves apart in the panel.
-       */
-      floorDb: -50,
-      topDb: -8,
-    },
-    /** A kept object arrives and leaves over these, seconds. */
-    attackSeconds: 0.7,
-    releaseSeconds: 1.6,
-    /**
-     * Cents of pitch per km/s of range rate, against a literal 0.0017. A pass swings
-     * +/- 7 km/s either side of closest approach, so this is a glide of a fifth down
-     * through the middle of the pass.
-     */
-    dopplerCentsPerKmS: 100,
-    /** Base pitches: a just pentatonic from middle C, over three octaves. */
-    rootHz: 262,
-    ratios: [1, 9 / 8, 4 / 3, 3 / 2, 5 / 3],
-    octaves: 3,
-    /** How far ahead phrases are scheduled, seconds. Web Audio wants a lookahead. */
-    lookaheadSeconds: 0.35,
-    /**
-     * **Which bird a bird is.** The `family` byte the build packs picks one of these;
-     * anything untagged gets `none`, which is the whistle the piece started with.
-     * `kind` still decides the class - a Starlink rocket body is a machine and a
-     * Starlink fragment is a shard - so this only ever refines a payload.
-     *
-     * The point is the megaconstellations. Starlink is thousands of objects, and a
-     * name in the list ought to have a sound you already recognise before you read it;
-     * hearing a *skein* rather than a solo is the constellation becoming audible as a
-     * constellation. Everything else follows from wanting that to be legible: the
-     * families have to differ in register, timbre and **rhythm**, not just in pitch.
-     *
-     * Each voice is a full parameter set rather than a patch on a default, because a
-     * family that differs in one number is not a family.
-     */
-    voices: {
-      /** The default whistle: a songbird, sine, phrases of quick swept chirps. */
-      none: {
-        wave: 'sine' as OscillatorType,
-        octaveShift: 0,
-        q: 0.9,
-        perPhrase: [2, 5],
-        noteMs: [60, 170],
-        spacingMs: [35, 120],
-        gapMs: [900, 2600],
-        /** How far a note sweeps, as a frequency ratio, and how often it sweeps up. */
-        sweep: [1.15, 1.9],
-        rise: 0.5,
-        cutoffHz: [700, 5400],
-        /** Fraction of a note held before it releases - see `strike`. */
-        hold: 0.7,
-        attack: 0.006,
-        /** A parallel high-Q band that rings when the note is struck. 0 is off. */
-        ring: 0,
-        /** Soft clipping, for a voice that should sound forced rather than blown. */
-        drive: 0,
-        /**
-         * **How far a note may wander from the voice's own pitch, in scale degrees.**
-         * 0 is one motif repeated, which is what every voice did until 2026-09-23 and
-         * what the calls below still want: a goose honks the same honk, a squawk is
-         * the same squawk. Above 0 each note picks a degree of the object's own
-         * pentatonic and the phrase differs from the last one, which is the whole
-         * difference between a call and a *song*. See `weather` and `science`.
-         */
-        steps: 0,
-        /**
-         * A tremolo multiplying the envelope - rate in Hz, depth 0-1. Off everywhere
-         * but the hawk, where about 20 Hz is fast enough to read as a rasp in the
-         * voice rather than as a wobble on it.
-         *
-         * It is a **separate gain after the VCA**, not an LFO on the VCA itself. On the
-         * VCA an LFO adds to the scheduled envelope, so it would sound through the
-         * gaps between phrases - fine for a shard, which has no gaps, and wrong for
-         * anything with a phrase. Multiplying leaves silence silent.
-         */
-        tremHz: 0,
-        tremDepth: 0,
-        /**
-         * **Measured, and corrected for register.** These are not proportional to
-         * anything: the ear is roughly 6 dB less sensitive at 220 Hz than at 1 kHz and
-         * 8 dB less at 175, so the low families have to measure *hotter* than the
-         * songbird to sit level with it. Tuning them by RMS alone buried the geese.
-         */
-        gain: 1,
-      },
-      /**
-       * **Starlink: geese.** Long nasal honks that fall slightly, one or two at a time,
-       * with real silence between - so a dozen kept at once interleave into a skein
-       * instead of a chord. Low, because the whole point is that it is not a songbird.
-       */
-      starlink: {
-        wave: 'sawtooth' as OscillatorType,
-        octaveShift: -1,
-        q: 3.2,
-        perPhrase: [1, 2],
-        noteMs: [180, 380],
-        spacingMs: [120, 260],
-        gapMs: [1400, 3600],
-        sweep: [1.02, 1.16],
-        rise: 0.15,
-        cutoffHz: [500, 2200],
-        hold: 0.55,
-        attack: 0.05,
-        ring: 0,
-        drive: 0.35,
-        steps: 0,
-        tremHz: 0,
-        tremDepth: 0,
-        gain: 1.9,
-      },
-      /**
-       * **Iridium: starlings.** Metallic chatter - many very short notes, wide sweeps,
-       * and a high-Q band ringing behind each one. Iridium is the constellation whose
-       * flares people used to plan evenings around, and a ringing, rattling voice is
-       * the one that says *metal* rather than *bird*. Not peepy: the ring carries it.
-       */
-      iridium: {
-        wave: 'square' as OscillatorType,
-        octaveShift: 1,
-        q: 1.2,
-        perPhrase: [4, 9],
-        noteMs: [25, 70],
-        spacingMs: [18, 55],
-        gapMs: [700, 1900],
-        sweep: [1.3, 2.6],
-        rise: 0.5,
-        cutoffHz: [1200, 7000],
-        hold: 0.35,
-        attack: 0.002,
-        ring: 0.6,
-        drive: 0.15,
-        steps: 0,
-        tremHz: 0,
-        tremDepth: 0,
-        gain: 0.55,
-      },
-      /**
-       * **Military: a hawk.** One or two very long descending screams with a rasp in
-       * them, and a great deal of silence either side.
-       *
-       * This replaced the squawk on 2026-09-23, and the squawk was not thrown away -
-       * it became `gnss` below, an octave lower. The reason for the swap is that a
-       * squawk is a *gregarious* sound: it says flock, and 409 objects spread over
-       * every orbit are not a flock. A hunting bird is solitary, it holds one note
-       * far longer than a songbird can, and everything else in the sky goes quiet
-       * around it. That reads as what this family is.
-       *
-       * `noteMs` is the whole patch. At 700-1500 ms a note is three to six times any
-       * other voice's, which is why `perPhrase` drops to one or two and `gapMs` runs
-       * to six seconds: one hawk must not fill the mix it is supposed to hang over.
-       * `rise: 0` because a scream only ever falls, and `hold: 0.85` because it is
-       * sustained - the envelope, not the pitch, is what makes it a whistle and not a
-       * squawk.
-       *
-       * The rasp is `tremHz` at 21, which is above the flutter rate and below the
-       * pitch rate: the ear hears it as roughness in the tone. A slower tremolo here
-       * is a warble and reads as comic.
-       */
-      military: {
-        wave: 'sawtooth' as OscillatorType,
-        octaveShift: 0,
-        q: 4,
-        perPhrase: [1, 2],
-        noteMs: [700, 1500],
-        spacingMs: [260, 620],
-        gapMs: [2600, 6000],
-        sweep: [1.5, 2.4],
-        rise: 0,
-        cutoffHz: [600, 3200],
-        hold: 0.85,
-        attack: 0.03,
-        ring: 0,
-        drive: 0.3,
-        steps: 0,
-        tremHz: 21,
-        tremDepth: 0.45,
-        gain: 1,
-      },
-      /**
-       * **Navigation: the old military squawk, dropped an octave and slowed into a
-       * boom.** Long, low, nasal calls with a throb in them - a bittern or a grouse
-       * rather than a songbird, which is what "call to mating" asks for.
-       *
-       * Three octaves down puts it under everything else in the piece except the
-       * belt's bed, and that is the point: GNSS is a dozen-odd satellites that are
-       * always up and that everything on the ground depends on, so a floor is the
-       * right register for it. `cutoffHz` comes down with it or the sawtooth's upper
-       * harmonics keep it in the songbirds' band and the drop is inaudible.
-       *
-       * `tremHz: 6` is a throb rather than a rasp - slow enough to count, which is
-       * what separates it from the hawk that used to own this patch.
-       */
-      gnss: {
-        wave: 'sawtooth' as OscillatorType,
-        octaveShift: -3,
-        q: 6,
-        perPhrase: [1, 2],
-        noteMs: [420, 900],
-        spacingMs: [300, 700],
-        gapMs: [2400, 5200],
-        sweep: [1.15, 1.5],
-        rise: 0.15,
-        cutoffHz: [180, 900],
-        hold: 0.8,
-        attack: 0.04,
-        ring: 0.15,
-        drive: 0.55,
-        steps: 0,
-        tremHz: 6,
-        tremDepth: 0.3,
-        gain: 1.8,
-      },
-      /**
-       * **Weather: a blackbird.** Mellow, fluted, unhurried, and - the point of the
-       * whole patch - *melodic*: `steps: 3` lets each note take its own degree of the
-       * object's pentatonic, so a phrase is a little tune rather than one motif
-       * repeated, and the next phrase is a different tune.
-       *
-       * A triangle rather than a sine, which is most of the flute in it: one soft odd
-       * harmonic where a sine has none, without the buzz a sawtooth brings.
-       *
-       * Small `sweep`, deliberately. Every other voice here gets its motion from
-       * bending one note; this one gets it from *changing* note, and doing both at
-       * once reads as a slide whistle rather than as singing.
-       */
-      weather: {
-        wave: 'triangle' as OscillatorType,
-        octaveShift: 0,
-        q: 1,
-        perPhrase: [3, 6],
-        noteMs: [90, 220],
-        spacingMs: [60, 160],
-        gapMs: [1200, 3000],
-        sweep: [1.05, 1.25],
-        rise: 0.5,
-        cutoffHz: [800, 4200],
-        hold: 0.75,
-        attack: 0.008,
-        ring: 0,
-        drive: 0,
-        steps: 3,
-        tremHz: 0,
-        tremDepth: 0,
-        gain: 1.0,
-      },
-      /**
-       * **Science: a nightingale.** The same melodic machinery as the weather voice
-       * and pushed much further - twice the notes, half their length, an octave up and
-       * `steps: 5`, which is a whole pentatonic octave of leap available to any note.
-       *
-       * The two are deliberately a *pair* rather than two unrelated calls. Weather and
-       * Science are the two smallest families, 69 and 45 objects, and they are the two
-       * that carry instruments rather than a service - so what they share is that they
-       * sing, and what separates them is how virtuosic it is. Hearing one and then the
-       * other should read as two birds of the same kind, not two kinds.
-       *
-       * A faint `ring` for shimmer. It is the one thing here borrowed from Iridium,
-       * at a fifth of the depth: enough to put an edge on a very short high note.
-       */
-      science: {
-        wave: 'sine' as OscillatorType,
-        octaveShift: 1,
-        q: 0.8,
-        perPhrase: [4, 9],
-        noteMs: [45, 130],
-        spacingMs: [30, 110],
-        gapMs: [900, 2400],
-        sweep: [1.1, 1.5],
-        rise: 0.5,
-        cutoffHz: [1400, 7000],
-        hold: 0.6,
-        attack: 0.004,
-        ring: 0.12,
-        drive: 0,
-        steps: 5,
-        tremHz: 0,
-        tremDepth: 0,
-        gain: 0.7,
-      },
-    },
-    /** Which voice each `FAMILY` value sings with. See FAMILY_VOICE. */
-    familyVoice: FAMILY_VOICE,
-    /** The inharmonic multiple the ring sits at, and how sharp it is. Bell, not tone. */
-    ringRatio: 2.76,
-    ringQ: 20,
-    /**
-     * **The station: a slow low beat under everything, for as long as it is over.**
-     *
-     * Added 2026-09-21, and the one voice that does **not** wait to be kept. Every
-     * other performer does - sonifying what is merely *there* is the mush this piece
-     * exists to avoid - but that rule is about a thousand objects, and this is one. It
-     * sounds whenever the ISS is above the horizon, which is the same rule its mark and
-     * its orbit already follow, and it is what makes a pass an *event*: the soundscape
-     * changes for the ten minutes it is up and then goes back.
-     *
-     * Nothing is sprung on anyone: the audio context still only exists after LISTEN or
-     * a first click, so a page nobody turned the sound on for stays silent.
-     *
-     * **The reverb does the work, not the level.** The brief was that it should change
-     * the whole soundscape without taking it over, and those pull opposite ways if the
-     * answer is volume. A tail nearly as long as the gap between hits fills the space
-     * *under* the birds instead: the room changes, the foreground does not move. Bass
-     * also barely competes with the birds, which sit two to five octaves above it.
-     *
-     * **Regular, and slow enough not to be counted.** 4.5 s is about 13 to the minute -
-     * a heartbeat rather than a pulse. The machine voice is already the thing you can
-     * count along with; this one should register as a presence.
-     */
-    station: {
-      /** Seconds between hits. */
-      periodSeconds: 4.5,
-      /** Where the pitch envelope starts and settles: the drop *is* the percussion. */
-      attackHz: 150,
-      baseHz: 52,
-      pitchDropSeconds: 0.085,
-      /** How long one hit rings before the reverb takes over. */
-      bodySeconds: 0.85,
-      attack: 0.004,
-      hold: 0.02,
-      /** How open the lowpass is, sunlit to eclipsed - the same mapping every voice has. */
-      cutoffHz: [140, 520],
-      /** The tail, in seconds, and how sharply it decays. Sent post-level, so it swells
-       *  with the pass and dies with it rather than hanging on after the ISS has set. */
-      reverbSeconds: 3.6,
-      reverbDecay: 2.4,
-      reverbSend: 0.5,
-      /** Measured, not nominal - see the table in CLAUDE.md. */
-      gain: 1.9,
-    },
-    machine: {
-      /** Lower than the birds, and it does not sweep. */
-      octaveDown: 2,
-      /**
-       * **A spent stage knocks; it does not sing.** Sharpened 2026-09-21, on the note
-       * that the wreckage all read as calm sea-waves and the rocket bodies wanted a
-       * more disruptive presence - faster, and more regular.
-       *
-       * A pulse and its gap are picked once per object and never jittered, so a
-       * machine is a metronome where a bird deliberately is not. The period lands at
-       * 170-460 ms, which is 2-6 Hz: fast enough to read as a mechanism running rather
-       * than as a slow tolling, and the one texture in the piece you can count.
-       */
-      pulseMs: [60, 160],
-      gapMs: [110, 300],
-      cutoffHz: [400, 2600],
-      /**
-       * Short attack, flat hold, and the rest is release: a knock rather than a note.
-       * The hold still matters - see `strike` - but a machine wants much less of it
-       * than a bird, which is most of what separates the two.
-       */
-      attack: 0.004,
-      hold: 0.32,
-      /** Soft clipping, so it reads as machinery being driven rather than as a tone. */
-      drive: 0.45,
-    },
-    /**
-     * **Continuous, and eventless.** The first version fired short noise bursts, which
-     * was exactly wrong: a repeating transient is the most attention-getting thing a
-     * mix can contain, and debris is not asking for attention - it is contamination.
-     * There is no phrase, no gap and nothing to schedule. A shard is a band of noise
-     * that is simply *there*, swelling and sinking, brighter than the drone and quieter
-     * than a bird, and several of them are a wash rather than a rhythm.
-     */
-    shard: {
-      /** The band centre sweeps between these - the swish. */
-      bandHz: [900, 4200],
-      /** Wide. A hiss, not a rattle; the burst version used 4 and rang like a snare. */
-      q: 1.2,
-      /**
-       * How fast the band sweeps and how fast it breathes, per object, and how deep
-       * the breathing goes. **Widened 2026-09-21**: these were [0.05, 0.13] and
-       * [0.09, 0.27] at a fixed depth of 0.38, which is one cycle every four to
-       * twenty seconds at one intensity - so every fragment in the sky was the same
-       * calm sea-wave and the per-object hash had nothing audible to vary.
-       *
-       * `pulseDepth` is half the swing: the gain rides `1 - depth` plus or minus
-       * `depth`, so 0.5 is total modulation and anything above it would drive the
-       * trough negative.
-       */
-      swishHz: [0.04, 0.22],
-      pulseHz: [0.06, 0.4],
-      pulseDepth: [0.22, 0.46],
-      /**
-       * **Some wreckage is agitated, and that is the other half of the answer.**
-       * Widening the calm range alone still gives one kind of thing moving at
-       * different speeds. A share of fragments instead get a different character:
-       * a pulse in the *audible rhythm* range rather than the drift range, nearly
-       * total depth, and a tighter band so it bites rather than washes.
-       *
-       * **The LFO is a sawtooth at negative depth**, which is what makes these read
-       * as impulses rather than as fast tremolo: the ramp snaps to full and decays
-       * linearly, so each cycle has an attack. A sine at the same rate and depth is
-       * a wobble, and a wobble is not a presence.
-       *
-       * This is a deliberate reversal of the note under `shard` above, which argued
-       * that a repeating transient is the most attention-getting thing a mix can
-       * hold. It still is. The difference is that this is a *minority* of fragments
-       * and it is still one continuous band of noise with an LFO on it - there is no
-       * scheduled event anywhere in it, so it stays eventless in the way that
-       * mattered, while having something to hear.
-       */
-      agitatedShare: 0.3,
-      agitated: {
-        q: 3.6,
-        swishHz: [0.3, 1.1],
-        pulseHz: [1.7, 5.2],
-        pulseDepth: [0.4, 0.5],
-        /**
-         * **Measured, not nominal**, and it is the same trap `timbreGain` carries a
-         * note about: a tighter band throws more energy away, and a sawtooth at this
-         * depth spends most of each cycle decaying. Rendered offline the agitated
-         * shards came out **5 dB under the calm ones** - so the fragment meant to be
-         * the more present of the two was the quietest thing in the mix.
-         *
-         * This puts them a shade above the calm ones instead, which is where a
-         * disruption belongs. Peaks stay at 0.15-0.17, level with a calm shard.
-         */
-        gain: 2,
-      },
-    },
-  },
-};
-
-
-/** `?debug` shows frame timing and worker stats. Hidden otherwise - the piece has no chrome for it. */
-export const DEBUG = new URLSearchParams(location.search).has('debug');
 
 /**
+ * ### AUDIO.rateDuck.to
+ *
+ * Level at `fullAt` and above, as a share of `masterGain`. 1x is always full.
+ *
+ * Cut from 0.55 to 0.30 when `rateDrive` arrived, and the reason is the ear, not
+ * the meter: the bed's centroid climbs from 58 Hz to 181 Hz, and equal-loudness
+ * puts the ear some 15 dB more sensitive there. Holding the same level would have
+ * made the hum arrive far louder than the drone it grew out of. -10.5 dB gives
+ * back about two thirds of that, which leaves the rise plainly audible without it
+ * taking the room.
+ */
+
+/**
+ * ### AUDIO.paused
+ *
+ * What the sound does while the clock is held.
+ *
+ * **Pause freezes the instrument; it does not silence it.** The sound here is state
+ * plus events - where a thing is, how high, lit or eclipsed, and the phrases a bird
+ * sings. Pause stops the events: no chirp, honk or squawk is scheduled while the
+ * clock is held, and the state simply stops changing because the frame does. What
+ * is left is what does not move anyway - the belt's bed and the shards' hiss - a
+ * step quieter, so the press is audible. Turning the camera still sweeps the belt
+ * across the field, because looking is not time passing.
+ */
+
+/**
+ * ### AUDIO.rateDrive
+ *
+ * **The drone rises with the time rate**, added 2026-09-18.
+ *
+ * Attenuating was not enough: it told a listener the sound had not broken, and
+ * nothing else. This makes the clock itself audible - the bed runs up from its C1
+ * towards a hum as the sky speeds up, so a ramp is something you hear before you
+ * read the number. Cents at `rateDuck.fullAt`, on the same logarithmic reading of
+ * the ladder, and it is **the drone's alone**: the birds keep their register,
+ * because a satellite's own song is not what the clock is doing.
+ *
+ * There is a reasonable objection - the belt does not move, so why would it change
+ * with the rate? Because the bed is not the sound of five hundred objects, it is
+ * the sound of the sky they are the floor of, and that is what is running.
+ */
+
+/**
+ * ### AUDIO.drone.ratios
+ *
+ * The bed's pitches, low to high, **one voice per ratio** - the slice count is
+ * this array's length, so the two can never disagree.
+ *
+ * A just pentatonic over an octave and a half. Adjacent slices are adjacent in
+ * the sky as well as in pitch, so sweeping the arc from east to west rises.
+ * Nine bass voices a whole tone apart would be mud; a pentatonic is not.
+ */
+
+/**
+ * ### AUDIO.drone.bedGain
+ *
+ * One bed slice at full occupancy. Nine of these sum to the whole drone.
+ *
+ * Lowered from 0.085 on 2026-09-16, after listening to it on the real sky rather
+ * than the synthetic one. It matters which: `synthetic` has 240 belt objects, so
+ * its slices sit at half occupancy and the bed is 4 dB quieter than `full`, where
+ * every slice saturates. The first tuning was done against the quiet one.
+ */
+
+/**
+ * ### AUDIO.drone.soloGain
+ *
+ * A kept voice at full strength, over and above the bed. Lowered from 0.17 with
+ * the bed, but by less: it sits an octave up with a resonant edge, so it arrives
+ * clearly at a level well under the bed's, and cutting both by the same amount
+ * would have made keeping an object louder in relative terms than it was before.
+ *
+ * **A voice only reaches this when the belt is being played as a chord.** See
+ * `soloRamp`.
+ */
+
+/**
+ * ### AUDIO.drone.soloRamp
+ *
+ * How much of `soloGain` each kept voice gets, as a function of how many are kept.
+ *
+ * One voice on its own was overpowering: it arrived at full strength over a bed
+ * deliberately tuned to sit back, so a single click jumped out of the image. The
+ * belt is a choir, and one singer stepping forward at full voice is the wrong
+ * shape for it. So the **first** voice enters at `first` of its level and every
+ * voice - the first one included - rises toward full as more are kept, reaching it
+ * at `fullAt`.
+ *
+ * **This only ever attenuates.** At `fullAt` voices the sum is exactly what that
+ * many voices cost before; below it, less. Keeping ten is unchanged, keeping one
+ * is 14 dB quieter, and the grid stops being a set of switches and becomes
+ * something that rewards playing it.
+ *
+ * `curve` under 1 makes the first few additions count for more than the last few,
+ * so going from one voice to three is a clear swell rather than a slow crawl.
+ */
+
+/**
+ * ### AUDIO.drone.maxSolo
+ *
+ * Kept belt objects that can sound at once. Past this, a click still marks.
+ *
+ * Raised from 12 on 2026-09-21. A kept object that cannot sound is the one place
+ * the grammar breaks - it takes the attention colour and its square lights, and
+ * nothing happens - so the cap wants to be past what anyone reaches by playing.
+ * `soloRamp` is saturated from ten upward, so every voice past that arrives at
+ * full and the sum climbs linearly; the master compressor is what takes the top
+ * off, which is why it is there.
+ */
+
+/**
+ * ### AUDIO.performer
+ *
+ * The performers: passes, and only the ones being kept.
+ *
+ * The name of the piece comes from what radio amateurs call satellites - birds -
+ * and the 2010 original assigned looped birdsong to passes over a stereo field.
+ * This is that, synthesised. Synthesised **first**, deliberately: a recorded bird
+ * sounds good on its own, so it would sound fine badly panned and badly gated, and
+ * a wrong mapping would survive for months behind it. A swept sine is unforgiving,
+ * which is the useful property right now. Samples are a later decision, and the
+ * byte budget is an argument against them - the whole catalogue is 831 KB.
+ *
+ * **Nothing sounds until it is kept.** A thousand objects are above the horizon;
+ * sonifying what is merely *there* is the mush this piece exists to avoid. The
+ * click is the instrument.
+ *
+ * Three textures, from the one byte the catalogue actually has:
+ *
+ * - **bird** (payload): phrases of two to five swept chirps, then a gap. Each
+ *   object's pitch, sweep, phrase length and gap come from a hash of its index, so
+ *   a given satellite always sings the same song, and several kept at once drift
+ *   apart instead of locking into a pulse.
+ * - **machine** (rocket body): a spent upper stage is not a bird. Lower, a
+ *   sawtooth, and **regular** where the bird is not - the industrial chant under
+ *   the birdsong that the brief asks for.
+ * - **shard** (debris): dry noise bursts through a narrow band. Provisional. Debris
+ *   is meant to become interference *on* other voices rather than a voice of its
+ *   own, but a click that makes no sound reads as a broken click, and this previews
+ *   the grain that idea will use.
+ *
+ * Four mappings, and three of them are already the visual grammar:
+ *
+ * - **pitch <- range rate**, exaggerated. Literal Doppler is 0.04 cents - see the
+ *   note in CLAUDE.md - so it is scaled into the audio band the way a receiver
+ *   does it. A pass glides down through closest approach, which is the sound the
+ *   whole metaphor was built on.
+ * - **level <- elevation**, on `HIGHLIGHT`'s own curve. The voice swells and fades
+ *   in exact step with how the object's ring dims, because it is the same numbers.
+ * - **pan <- direction**, head-relative, exactly as the drone pans.
+ * - **timbre <- shadow.** A sunlit object is bright; one inside Earth's umbra is
+ *   muffled. The one axis here that the eye already reads as brightness, and the
+ *   ear reads better as colour.
+ */
+
+/**
+ * ### AUDIO.performer.timbreGain
+ *
+ * Relative levels. **Measured, not nominal** - these are whatever makes the three
+ * sit together, and they are not proportional to anything. Bandpassed noise throws
+ * most of its energy away, so a shard needs several times a sine's gain to reach
+ * the same loudness; a sawtooth through an open lowpass needs less.
+ */
+
+/**
+ * ### AUDIO.performer.byRange
+ *
+ * **Distance attenuates a voice**, added 2026-09-21. Level was elevation alone, and
+ * elevation is not distance: a navigation satellite at 20,000 km or a Molniya near
+ * apogee sits high in the sky for a long time and arrived at the *same* level as a
+ * Starlink at 550 km. Overhead and far is exactly the case that got invasive.
+ *
+ * **The belt is untouched, and not by a rule here.** `audio.ts` splits what is kept
+ * on the `choir` byte: belt objects go to `Drone` and never reach this class at all,
+ * so its bed keeps its own level whatever this does.
+ *
+ * **Slant range, not altitude**, which the frame does not carry - and the wide band
+ * is what makes that safe. A LEO pass runs about 550 km overhead to 2,300 km at the
+ * horizon, so the whole of it sits at the near end and comes through at 1.0 to 0.89:
+ * the dense sky is essentially untouched and there is no double-counting against the
+ * elevation curve. The ramp only bites on orbits that are genuinely far.
+ *
+ * **Logarithmic, because orbital distance is.** These span more than a decade, and a
+ * linear ramp would spend nearly all its travel between 1,500 and 8,000 km and then
+ * be flat across everything above. Per doubling is also roughly how loudness is
+ * heard.
+ *
+ * | slant range | gain |
+ * |---|---|
+ * | 550 km, LEO overhead | 1.00 |
+ * | 2,300 km, LEO setting | 0.89 |
+ * | 5,000 km | 0.68 |
+ * | 10,000 km | 0.49 |
+ * | 20,000 km, navigation | 0.31 |
+ * | 25,000 km and beyond | 0.25 |
+ *
+ * `nearKm` sits above the whole populated LEO shell - 550, 780 and 1,200 km - on
+ * purpose, so nothing in the sky the piece is actually about is attenuated at all.
+ */
+
+/**
+ * ### AUDIO.performer.byRange.floor
+ *
+ * How far down the furthest things go. **0.25, which is −12 dB**, from 0.3 on
+ * listening: −10.5 still read as *near*. Lowering this deepens the whole ramp in
+ * proportion, since the curve is a lerp toward it - 20,000 km goes from −9.0 to
+ * −10.2 dB - so the floor is the one dial worth turning here. Still a voice,
+ * deliberately: a far object is quiet, not absent.
+ */
+
+/**
+ * ### AUDIO.performer.meter
+ *
+ * **The meter: what the panel reads to draw a voice's pulse.**
+ *
+ * Added 2026-09-21, and it is the first time anything has flowed *back* from the
+ * audio to the image. Everything else goes one way — the frame drives the sound —
+ * so this is a new seam, kept deliberately narrow: one number per sounding object,
+ * sampled once a frame, and the panel is the only thing that reads it.
+ *
+ * **It is measured from the signal, never predicted from the schedule.** Phrases
+ * are written up to `lookaheadSeconds` ahead on the audio context's own clock,
+ * which is not the frame clock; anything derived from the schedule would drift
+ * against what is actually audible. An `AnalyserNode` on each voice reads what is
+ * sounding *now*, so the bar cannot disagree with the ear.
+ */
+
+/**
+ * ### AUDIO.performer.meter.attackSeconds
+ *
+ * Seconds. **Fast up, slow down** — an onset has to arrive on the frame it
+ * happens or the bar reads as lagging, and a decay has to be visible for longer
+ * than a frame or a chirp is a single-frame flash nobody sees.
+ */
+
+/**
+ * ### AUDIO.performer.meter.floorDb
+ *
+ * The window the bar spans, in **decibels**, and it has to be decibels.
+ *
+ * Measured on the real voices: a bird runs 0.0002 RMS in its gaps and 0.42 in a
+ * note - a factor of **two thousand** - while a shard sits flat at 0.03 because
+ * it is continuous and eventless. A linear full-scale cannot show both: set it
+ * for the shard and every bird pins at full through its whole phrase, which is
+ * what the first version did and it read as a blink rather than a pulse.
+ *
+ * On this window: a bird's gaps fall under the floor and read as nothing, its
+ * notes reach the top, and a shard settles around 0.45 and breathes. Which is
+ * exactly the three textures telling themselves apart in the panel.
+ */
+
+/**
+ * ### AUDIO.performer.dopplerCentsPerKmS
+ *
+ * Cents of pitch per km/s of range rate, against a literal 0.0017. A pass swings
+ * +/- 7 km/s either side of closest approach, so this is a glide of a fifth down
+ * through the middle of the pass.
+ */
+
+/**
+ * ### AUDIO.performer.voices
+ *
+ * **Which bird a bird is.** The `family` byte the build packs picks one of these;
+ * anything untagged gets `none`, which is the whistle the piece started with.
+ * `kind` still decides the class - a Starlink rocket body is a machine and a
+ * Starlink fragment is a shard - so this only ever refines a payload.
+ *
+ * The point is the megaconstellations. Starlink is thousands of objects, and a
+ * name in the list ought to have a sound you already recognise before you read it;
+ * hearing a *skein* rather than a solo is the constellation becoming audible as a
+ * constellation. Everything else follows from wanting that to be legible: the
+ * families have to differ in register, timbre and **rhythm**, not just in pitch.
+ *
+ * Each voice is a full parameter set rather than a patch on a default, because a
+ * family that differs in one number is not a family.
+ */
+
+/**
+ * ### AUDIO.performer.voices.none.steps
+ *
+ * **How far a note may wander from the voice's own pitch, in scale degrees.**
+ * 0 is one motif repeated, which is what every voice did until 2026-09-23 and
+ * what the calls below still want: a goose honks the same honk, a squawk is
+ * the same squawk. Above 0 each note picks a degree of the object's own
+ * pentatonic and the phrase differs from the last one, which is the whole
+ * difference between a call and a *song*. See `weather` and `science`.
+ */
+
+/**
+ * ### AUDIO.performer.voices.none.tremHz
+ *
+ * A tremolo multiplying the envelope - rate in Hz, depth 0-1. Off everywhere
+ * but the hawk, where about 20 Hz is fast enough to read as a rasp in the
+ * voice rather than as a wobble on it.
+ *
+ * It is a **separate gain after the VCA**, not an LFO on the VCA itself. On the
+ * VCA an LFO adds to the scheduled envelope, so it would sound through the
+ * gaps between phrases - fine for a shard, which has no gaps, and wrong for
+ * anything with a phrase. Multiplying leaves silence silent.
+ */
+
+/**
+ * ### AUDIO.performer.voices.none.gain
+ *
+ * **Measured, and corrected for register.** These are not proportional to
+ * anything: the ear is roughly 6 dB less sensitive at 220 Hz than at 1 kHz and
+ * 8 dB less at 175, so the low families have to measure *hotter* than the
+ * songbird to sit level with it. Tuning them by RMS alone buried the geese.
+ */
+
+/**
+ * ### AUDIO.performer.voices.starlink
+ *
+ * **Starlink: geese.** Long nasal honks that fall slightly, one or two at a time,
+ * with real silence between - so a dozen kept at once interleave into a skein
+ * instead of a chord. Low, because the whole point is that it is not a songbird.
+ */
+
+/**
+ * ### AUDIO.performer.voices.iridium
+ *
+ * **Iridium: starlings.** Metallic chatter - many very short notes, wide sweeps,
+ * and a high-Q band ringing behind each one. Iridium is the constellation whose
+ * flares people used to plan evenings around, and a ringing, rattling voice is
+ * the one that says *metal* rather than *bird*. Not peepy: the ring carries it.
+ */
+
+/**
+ * ### AUDIO.performer.voices.military
+ *
+ * **Military: a hawk.** One or two very long descending screams with a rasp in
+ * them, and a great deal of silence either side.
+ *
+ * This replaced the squawk on 2026-09-23, and the squawk was not thrown away -
+ * it became `gnss` below, an octave lower. The reason for the swap is that a
+ * squawk is a *gregarious* sound: it says flock, and 409 objects spread over
+ * every orbit are not a flock. A hunting bird is solitary, it holds one note
+ * far longer than a songbird can, and everything else in the sky goes quiet
+ * around it. That reads as what this family is.
+ *
+ * `noteMs` is the whole patch. At 700-1500 ms a note is three to six times any
+ * other voice's, which is why `perPhrase` drops to one or two and `gapMs` runs
+ * to six seconds: one hawk must not fill the mix it is supposed to hang over.
+ * `rise: 0` because a scream only ever falls, and `hold: 0.85` because it is
+ * sustained - the envelope, not the pitch, is what makes it a whistle and not a
+ * squawk.
+ *
+ * The rasp is `tremHz` at 21, which is above the flutter rate and below the
+ * pitch rate: the ear hears it as roughness in the tone. A slower tremolo here
+ * is a warble and reads as comic.
+ */
+
+/**
+ * ### AUDIO.performer.voices.gnss
+ *
+ * **Navigation: the old military squawk, dropped an octave and slowed into a
+ * boom.** Long, low, nasal calls with a throb in them - a bittern or a grouse
+ * rather than a songbird, which is what "call to mating" asks for.
+ *
+ * Three octaves down puts it under everything else in the piece except the
+ * belt's bed, and that is the point: GNSS is a dozen-odd satellites that are
+ * always up and that everything on the ground depends on, so a floor is the
+ * right register for it. `cutoffHz` comes down with it or the sawtooth's upper
+ * harmonics keep it in the songbirds' band and the drop is inaudible.
+ *
+ * `tremHz: 6` is a throb rather than a rasp - slow enough to count, which is
+ * what separates it from the hawk that used to own this patch.
+ */
+
+/**
+ * ### AUDIO.performer.voices.weather
+ *
+ * **Weather: a blackbird.** Mellow, fluted, unhurried, and - the point of the
+ * whole patch - *melodic*: `steps: 3` lets each note take its own degree of the
+ * object's pentatonic, so a phrase is a little tune rather than one motif
+ * repeated, and the next phrase is a different tune.
+ *
+ * A triangle rather than a sine, which is most of the flute in it: one soft odd
+ * harmonic where a sine has none, without the buzz a sawtooth brings.
+ *
+ * Small `sweep`, deliberately. Every other voice here gets its motion from
+ * bending one note; this one gets it from *changing* note, and doing both at
+ * once reads as a slide whistle rather than as singing.
+ */
+
+/**
+ * ### AUDIO.performer.voices.science
+ *
+ * **Science: a nightingale.** The same melodic machinery as the weather voice
+ * and pushed much further - twice the notes, half their length, an octave up and
+ * `steps: 5`, which is a whole pentatonic octave of leap available to any note.
+ *
+ * The two are deliberately a *pair* rather than two unrelated calls. Weather and
+ * Science are the two smallest families, 69 and 45 objects, and they are the two
+ * that carry instruments rather than a service - so what they share is that they
+ * sing, and what separates them is how virtuosic it is. Hearing one and then the
+ * other should read as two birds of the same kind, not two kinds.
+ *
+ * A faint `ring` for shimmer. It is the one thing here borrowed from Iridium,
+ * at a fifth of the depth: enough to put an edge on a very short high note.
+ */
+
+/**
+ * ### AUDIO.performer.station
+ *
+ * **The station: a slow low beat under everything, for as long as it is over.**
+ *
+ * Added 2026-09-21, and the one voice that does **not** wait to be kept. Every
+ * other performer does - sonifying what is merely *there* is the mush this piece
+ * exists to avoid - but that rule is about a thousand objects, and this is one. It
+ * sounds whenever the ISS is above the horizon, which is the same rule its mark and
+ * its orbit already follow, and it is what makes a pass an *event*: the soundscape
+ * changes for the ten minutes it is up and then goes back.
+ *
+ * Nothing is sprung on anyone: the audio context still only exists after LISTEN or
+ * a first click, so a page nobody turned the sound on for stays silent.
+ *
+ * **The reverb does the work, not the level.** The brief was that it should change
+ * the whole soundscape without taking it over, and those pull opposite ways if the
+ * answer is volume. A tail nearly as long as the gap between hits fills the space
+ * *under* the birds instead: the room changes, the foreground does not move. Bass
+ * also barely competes with the birds, which sit two to five octaves above it.
+ *
+ * **Regular, and slow enough not to be counted.** 4.5 s is about 13 to the minute -
+ * a heartbeat rather than a pulse. The machine voice is already the thing you can
+ * count along with; this one should register as a presence.
+ */
+
+/**
+ * ### AUDIO.performer.machine.pulseMs
+ *
+ * **A spent stage knocks; it does not sing.** Sharpened 2026-09-21, on the note
+ * that the wreckage all read as calm sea-waves and the rocket bodies wanted a
+ * more disruptive presence - faster, and more regular.
+ *
+ * A pulse and its gap are picked once per object and never jittered, so a
+ * machine is a metronome where a bird deliberately is not. The period lands at
+ * 170-460 ms, which is 2-6 Hz: fast enough to read as a mechanism running rather
+ * than as a slow tolling, and the one texture in the piece you can count.
+ */
+
+/**
+ * ### AUDIO.performer.machine.attack
+ *
+ * Short attack, flat hold, and the rest is release: a knock rather than a note.
+ * The hold still matters - see `strike` - but a machine wants much less of it
+ * than a bird, which is most of what separates the two.
+ */
+
+/**
+ * ### AUDIO.performer.shard
+ *
+ * **Continuous, and eventless.** The first version fired short noise bursts, which
+ * was exactly wrong: a repeating transient is the most attention-getting thing a
+ * mix can contain, and debris is not asking for attention - it is contamination.
+ * There is no phrase, no gap and nothing to schedule. A shard is a band of noise
+ * that is simply *there*, swelling and sinking, brighter than the drone and quieter
+ * than a bird, and several of them are a wash rather than a rhythm.
+ */
+
+/**
+ * ### AUDIO.performer.shard.swishHz
+ *
+ * How fast the band sweeps and how fast it breathes, per object, and how deep
+ * the breathing goes. **Widened 2026-09-21**: these were [0.05, 0.13] and
+ * [0.09, 0.27] at a fixed depth of 0.38, which is one cycle every four to
+ * twenty seconds at one intensity - so every fragment in the sky was the same
+ * calm sea-wave and the per-object hash had nothing audible to vary.
+ *
+ * `pulseDepth` is half the swing: the gain rides `1 - depth` plus or minus
+ * `depth`, so 0.5 is total modulation and anything above it would drive the
+ * trough negative.
+ */
+
+/**
+ * ### AUDIO.performer.shard.agitatedShare
+ *
+ * **Some wreckage is agitated, and that is the other half of the answer.**
+ * Widening the calm range alone still gives one kind of thing moving at
+ * different speeds. A share of fragments instead get a different character:
+ * a pulse in the *audible rhythm* range rather than the drift range, nearly
+ * total depth, and a tighter band so it bites rather than washes.
+ *
+ * **The LFO is a sawtooth at negative depth**, which is what makes these read
+ * as impulses rather than as fast tremolo: the ramp snaps to full and decays
+ * linearly, so each cycle has an attack. A sine at the same rate and depth is
+ * a wobble, and a wobble is not a presence.
+ *
+ * This is a deliberate reversal of the note under `shard` above, which argued
+ * that a repeating transient is the most attention-getting thing a mix can
+ * hold. It still is. The difference is that this is a *minority* of fragments
+ * and it is still one continuous band of noise with an LFO on it - there is no
+ * scheduled event anywhere in it, so it stays eventless in the way that
+ * mattered, while having something to hear.
+ */
+
+/**
+ * ### AUDIO.performer.shard.agitated.gain
+ *
+ * **Measured, not nominal**, and it is the same trap `timbreGain` carries a
+ * note about: a tighter band throws more energy away, and a sawtooth at this
+ * depth spends most of each cycle decaying. Rendered offline the agitated
+ * shards came out **5 dB under the calm ones** - so the fragment meant to be
+ * the more present of the two was the quietest thing in the mix.
+ *
+ * This puts them a shade above the calm ones instead, which is where a
+ * disruption belongs. Peaks stay at 0.15-0.17, level with a calm shard.
+ */
+
+/**
+ * ### INTERFERENCE
+ *
  * Debris deforming what it passes - in the ear and in the eye, off one geometry.
  *
  * **"Close" is an angle, not a pixel count.** Depth comes from the dot product of two
@@ -1943,70 +2499,76 @@ export const DEBUG = new URLSearchParams(location.search).has('debug');
  * enough, but things would bend for reasons a listener cannot see; counting the kept
  * ones makes the wreckage something you can aim.
  */
-export const INTERFERENCE = {
-  /** Full depth at or inside this separation, degrees. */
-  nearDeg: 12,
-  /** Nothing at all beyond this. Wide, because a near miss is rare and this has to
-   *  happen often enough to be part of the piece rather than a curiosity. */
-  farDeg: 45,
-  /** Kept shards that can deform at once. Also the shader's array size. */
-  maxSources: 4,
-  /** What it does to a voice. */
-  sound: {
-    /** How far the wobble bends the pitch at full depth. Over a tone and a half. */
-    detuneCents: 320,
-    /** How deeply it chews the amplitude. */
-    amDepth: 0.7,
-    /** And how far it drags the lowpass, as a fraction of wherever that already is. */
-    cutoffDepth: 0.55,
-    /** Wobble rate per voice, Hz. Fast enough to be damage, not vibrato. */
-    wobbleHz: [4, 9],
-  },
-  /**
-   * What it does to the picture.
-   *
-   * **A post-effect in a small disc, not a displacement of the objects.** The first
-   * version moved the marks themselves in the vertex shader, on the same angular
-   * falloff the sound uses, and it was wrong twice over. 45° is a third of the sky, so
-   * it read as everything in view being shaken rather than as something local. And
-   * moving the objects reads as *physics* - as if the wreckage were shoving satellites
-   * about - when what is meant is that the image of them is corrupted. A screen
-   * artefact belongs in screen space, after the scene is drawn.
-   *
-   * So the two senses now deliberately disagree about reach: the sound's is angular,
-   * because it is about the sky, and the picture's is a radius in pixels, because it is
-   * about the display. They still share a cause - the same kept shards - which is the
-   * part that mattered.
-   *
-   * The pass costs a render target and a fullscreen draw, and **only runs while
-   * wreckage is kept**: with nothing kept the scene goes straight to the canvas as it
-   * always did, so a page nobody clicks a fragment on pays nothing.
-   */
-  sight: {
-    /** Radius of the disturbance around a shard, CSS pixels. Small, deliberately. */
-    radiusPx: 58,
-    /**
-     * Band thickness, **chosen per fragment** from a hash of its catalogue index, so a
-     * given piece of wreckage always tears the same way and several at once do not comb
-     * the image at one pitch.
-     */
-    bandPx: [2, 6],
-    /**
-     * How often a fragment tears in **columns** rather than rows.
-     *
-     * With everything horizontal, several active shards added far too much sideways
-     * motion to the frame - the tears agreed with each other and read as one gesture.
-     * Turning some of them ninety degrees breaks that up at no cost: it is the same
-     * shader with the two axes swapped.
-     */
-    verticalChance: 0.4,
-    /** How far a torn band slides sideways. */
-    shiftPx: 7,
-    /** How far the brightest pixel in a row is dragged along it - the sorting look. */
-    smearPx: 11,
-    /** What fraction of bands tear on a given step. Under half: it must stay sparse. */
-    tearChance: 0.42,
-    /** Steps per second. Discrete, so it reads as breaking up rather than as wobbling. */
-    stepsPerSecond: 12,
-  },
-};
+
+/**
+ * ### INTERFERENCE.sight
+ *
+ * What it does to the picture.
+ *
+ * **A post-effect in a small disc, not a displacement of the objects.** The first
+ * version moved the marks themselves in the vertex shader, on the same angular
+ * falloff the sound uses, and it was wrong twice over. 45° is a third of the sky, so
+ * it read as everything in view being shaken rather than as something local. And
+ * moving the objects reads as *physics* - as if the wreckage were shoving satellites
+ * about - when what is meant is that the image of them is corrupted. A screen
+ * artefact belongs in screen space, after the scene is drawn.
+ *
+ * So the two senses now deliberately disagree about reach: the sound's is angular,
+ * because it is about the sky, and the picture's is a radius in pixels, because it is
+ * about the display. They still share a cause - the same kept shards - which is the
+ * part that mattered.
+ *
+ * The pass costs a render target and a fullscreen draw, and **only runs while
+ * wreckage is kept**: with nothing kept the scene goes straight to the canvas as it
+ * always did, so a page nobody clicks a fragment on pays nothing.
+ */
+
+/**
+ * ### INTERFERENCE.sight.bandPx
+ *
+ * Band thickness, **chosen per fragment** from a hash of its catalogue index, so a
+ * given piece of wreckage always tears the same way and several at once do not comb
+ * the image at one pitch.
+ */
+
+/**
+ * ### INTERFERENCE.sight.verticalChance
+ *
+ * How often a fragment tears in **columns** rather than rows.
+ *
+ * With everything horizontal, several active shards added far too much sideways
+ * motion to the frame - the tears agreed with each other and read as one gesture.
+ * Turning some of them ninety degrees breaks that up at no cost: it is the same
+ * shader with the two axes swapped.
+ */
+
+/**
+ * ### observerFromUrl
+ *
+ * Coordinates off the URL: `?lat=48.86&lon=2.35`. Anything missing, unparseable or
+ * out of range is ignored outright rather than clamped - a half-read coordinate is a
+ * different place, and silently standing somewhere else is worse than standing in
+ * Berlin.
+ */
+
+/**
+ * ### DEFAULT_DATASET
+ *
+ * `full` since 2026-09-14. The piece is about density, and `active` is payloads only:
+ * it leaves out the ~3k debris fragments and ~500 rocket bodies that are the whole
+ * argument for the image. Once debris had a mark of its own - a turning shard - there
+ * was no reason to keep publishing a sky with the wreckage edited out.
+ *
+ * It costs 831 KB gzipped against 661, and a worker tick of 14-17 ms against ~13.
+ * Both measured, both fine.
+ */
+
+/**
+ * ### FAMILY_VOICE
+ *
+ * Which voice each family sings with.
+ *
+ * Typed as a **total** map over `Family` rather than an array or a lookup with a
+ * fallback, so adding a family to `FAMILY` and forgetting to give it a voice is a
+ * compile error rather than a satellite that quietly sings the default.
+ */
