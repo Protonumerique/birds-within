@@ -126,6 +126,9 @@ export const GATE = {
   /** What the press costs, said before it is pressed rather than after. */
   loadingLabel: 'LAUNCHING…',
   hint: 'drag to look · click to trace · press LISTEN for sound',
+  touchHint: 'drag to look · tap to trace · press LISTEN for sound',
+  /** Said under LAUNCH on a small screen, and never in the way of it. */
+  smallScreenNote: 'Made for a larger screen. It runs here, just not at its best.',
   /** How long the screen takes to leave once the first frame is on the canvas. */
   fadeMs: 700,
   /** The drawing: */
@@ -159,6 +162,10 @@ export const READOUT = {
   hoverOpensRow: true,
   /** How to work it, top right. */
   hint: 'drag to look · scroll to zoom · click to keep',
+  /** The same, where the pointer is a finger. */
+  touchHint: 'drag to look · pinch to zoom · tap to keep',
+  /** When the panel folds away behind a PANEL button, and starts folded. */
+  compactQuery: '(max-width: 620px), (max-height: 520px)',
 };
 
 /** The belt's grid: */
@@ -332,6 +339,8 @@ export const GLOW = {
   haloScale: 2.8,
   /** How bright the halo is at the centre, against the core's own 1.9. */
   haloGain: 0.42,
+  /** What an eclipsed object keeps of its halo. 1 is the same as a lit one. */
+  eclipsedHalo: 0.2,
 };
 
 /** Rings around the objects the readout lists. */
@@ -1078,6 +1087,34 @@ export const INTERFERENCE = {
  */
 
 /**
+ * ### READOUT.compactQuery
+ *
+ * Added 2026-09-24, from a phone. The column is 272 px of a 390 px portrait screen and
+ * about a third of a landscape one, and a sky you cannot see is not the piece. Below
+ * this the panel starts **folded** to the title, the clock, LISTEN and a PANEL button,
+ * and opens as a drawer on request. Folded is the default because the sky is the
+ * piece and the panel is the reading of it; someone who wants the names asks.
+ *
+ * Height is in the query as well as width, because a phone on its side is 844 px wide
+ * and only 390 tall - wide enough to pass a width test, far too short for a column
+ * whose header alone is 290 px. Open in landscape, the column splits in two: controls
+ * on the left, the lists and the belt's grid beside them.
+ *
+ * It is a class set from `matchMedia` rather than a media query in the stylesheet, so
+ * this string is the one place the threshold lives. Rotating the phone re-evaluates it
+ * but leaves open or folded as the person left it.
+ */
+
+/**
+ * ### READOUT.touchHint
+ *
+ * Chosen on `(pointer: coarse)`, not on screen size: a tablet is large and still has
+ * no wheel and no hover. It says *pinch* because there is one now - two fingers on the
+ * canvas narrow the field of view by the ratio of their spread, and a pinch is never
+ * taken as a tap.
+ */
+
+/**
  * ### CHOIR_GRID
  *
  * The belt's grid: one square per geostationary object above the horizon.
@@ -1586,6 +1623,19 @@ export const INTERFERENCE = {
  * How far the halo reaches, as a multiple of the dot's own radius. The sprite grows
  * by this, so the fill cost grows by its square - but only the ~6-9% of the
  * catalogue that is above the horizon is drawn at all.
+ */
+
+/**
+ * ### GLOW.eclipsedHalo
+ *
+ * Added 2026-09-24, from a phone: at night most of what is up is in the Earth's shadow,
+ * and a grey dot at 0.6 alpha carrying a full halo read as **a glow separated from its
+ * mark** - it was reported as the glow pass being misaligned, which it was not. An
+ * eclipsed object emits nothing you could see, so the soft light around it was the one
+ * thing claiming otherwise. It keeps its core, which is what says "here, but dark", and
+ * value stays the axis that carries the state. The belt is exempt: its brightness is
+ * steady by rule, whatever its shadow. Below the horizon is exempt too, since it is not
+ * drawn above the sky's floor anyway.
  */
 
 /**

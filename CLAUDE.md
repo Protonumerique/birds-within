@@ -1073,6 +1073,38 @@ about the sky rather than a bug.** Passing objects go the other way — 76 from 
 103 at 85°N, 28 at the equator — because most of what is up there is in a
 high-inclination shell.
 
+### The small screen
+
+Added 2026-09-24, from a phone. The column was 272 px of a 390 px portrait screen and
+about 2/5 of a landscape one; the sky, which is the piece, was mostly behind it.
+
+- **Below `READOUT.compactQuery` the panel starts folded**: title, clock, LISTEN and a
+  PANEL button. Open, it is a drawer — the full width under a wash when standing up,
+  **two columns** lying down (controls beside the lists and grid), because a 390 px tall
+  column cannot hold a 290 px header *and* lists. The query tests height as well as
+  width for exactly that reason. It is a class set from `matchMedia`, so the threshold
+  lives in config alone; rotating re-lays it out and leaves open or folded as it was.
+- **PANEL carries the kept count** (`PANEL · 2`). Folded, it is the only sign that a tap
+  on the sky put something in a list you cannot see.
+- **A folded column must not stretch.** `#hud` is a flex row, so the column stretched to
+  full height with `pointer-events: auto` and swallowed every touch down the left of the
+  screen — found by `elementFromPoint` returning the header at mid-screen, not by
+  looking. `align-self: flex-start` is the fix.
+- **Pinch zooms.** There is no wheel on glass. Two pointers on the canvas scale the field
+  of view by the ratio of their spread; a pinch is never a tap, and the finger left
+  behind restarts the drag from where it is rather than jumping the view. Verified with
+  real CDP touch events: 95° → 25° on a 6× spread.
+- **Touch has no hover**, so the hint says `tap` (chosen on `(pointer: coarse)`, not on
+  size), and a legend name holds its reveal on a tap and lets go on a second.
+- **The first screen says so** on a small screen (`GATE.smallScreenNote`), under LAUNCH
+  and never in its way. Warn, not block: much of a hero section's traffic is phones.
+- Hints and legend move to the **foot** of the frame, clear of the title. `#hud` pads by
+  `env(safe-area-inset-*)`, since `viewport-fit=cover` hands the notch to the page.
+
+**Eclipsed objects keep a fifth of their halo** (`GLOW.eclipsedHalo`), from the same
+phone: at night most of the sky is eclipsed, and a grey dot carrying a full halo read as
+*glow adrift from its mark* — reported as a misaligned glow pass, which it was not.
+
 ### Full screen
 
 Added 2026-09-18, in `src/fullscreen.ts`. The button lives in the hints corner rather

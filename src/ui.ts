@@ -122,8 +122,9 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
         <div class="controls">
           <input id="scrub" type="range" min="-720" max="720" step="1" value="0" title="offset from now, minutes" />
         </div>
-        <div class="controls">
+        <div class="controls sound">
           <button id="listen">LISTEN</button>
+          <button id="panel" type="button" aria-expanded="false">PANEL</button>
         </div>
         <div class="sub" id="soundnote"></div>
       </header>
@@ -188,8 +189,35 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
   // Full screen. Its own corner rather than the controls block, because it changes
   // the frame and not the image - see fullscreen.ts. Escape is the browser's own way
   // out; the hint for it is only drawn while there is something to get out of.
+  /*
+   * Folding, on a small screen only. The panel starts folded there - title, clock,
+   * LISTEN and this button - because the column is most of a phone's width and the
+   * sky is the piece. See READOUT.compactQuery. Everything below is CSS keyed off two
+   * classes on the root, so the components inside still do not know where they are.
+   */
+  const panelBtn = $<HTMLButtonElement>('panel');
+  const compact = matchMedia(READOUT.compactQuery);
+  let folded = compact.matches;
+  let keptShown = -1;
+  const paintPanel = () => {
+    root.classList.toggle('compact', compact.matches);
+    root.classList.toggle('folded', folded);
+    panelBtn.setAttribute('aria-expanded', String(!folded));
+    panelBtn.classList.toggle('on', !folded);
+  };
+  // Rotating re-evaluates the layout but leaves open or folded as it was left.
+  compact.addEventListener('change', paintPanel);
+  panelBtn.onclick = () => {
+    folded = !folded;
+    paintPanel();
+  };
+  paintPanel();
+
   const fullBtn = $<HTMLButtonElement>('full');
   const hintEl = $('hint');
+  // Chosen on the kind of pointer rather than the size of the screen: a tablet is
+  // large and still has no wheel, no hover and no Escape key.
+  const coarse = matchMedia('(pointer: coarse)');
   const fullscreen = createFullscreen(document.documentElement);
   fullBtn.hidden = !fullscreen.available;
   fullBtn.onclick = () => void fullscreen.toggle();
@@ -199,7 +227,8 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
     const on = fullscreen.active;
     fullBtn.textContent = on ? 'LEAVE FULL SCREEN' : 'FULL SCREEN';
     fullBtn.classList.toggle('on', on);
-    hintEl.textContent = on ? `${READOUT.hint} · esc to leave` : READOUT.hint;
+    const hint = coarse.matches ? READOUT.touchHint : READOUT.hint;
+    hintEl.textContent = on && !coarse.matches ? `${hint} · esc to leave` : hint;
   };
   fullscreen.onchange = paintFullscreen;
   paintFullscreen();
@@ -268,8 +297,15 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
    */
   let revealed = -1;
   convRows.forEach((row, n) => {
-    row.onpointerenter = () => { revealed = n; };
-    row.onpointerleave = () => { if (revealed === n) revealed = -1; };
+    row.onpointerenter = (e) => { if (e.pointerType === 'mouse') revealed = n; };
+    row.onpointerleave = (e) => { if (e.pointerType === 'mouse' && revealed === n) revealed = -1; };
+    // A finger has no hover, so on touch a tap holds the reveal and a second tap, or a
+    // tap on another name, lets it go. It still keeps nothing.
+    row.onpointerup = (e) => {
+      if (e.pointerType === 'mouse') return;
+      revealed = revealed === n ? -1 : n;
+      convRows.forEach((r, m) => r.classList.toggle('held', m === revealed));
+    };
   });
 
   const cols = [names, selection, featured, family] as const;
@@ -311,6 +347,13 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
       // because nothing is silenced any more: a held clock stops the phrases and a
       // fast one stands the whole mix back, and in both the belt goes on humming.
       soundNote.textContent = source.audio.attenuated ? (clock.isPaused ? 'held' : 'stood back') : '';
+      // Folded, the kept count on PANEL is the only sign the lists have something in
+      // them - a tap on the sky keeps an object whose row is out of sight.
+      const kept = selection.marked.size;
+      if (kept !== keptShown) {
+        keptShown = kept;
+        panelBtn.textContent = kept ? `PANEL · ${kept}` : 'PANEL';
+      }
       if (!frame) return;
 
       if (frame !== scanned) {

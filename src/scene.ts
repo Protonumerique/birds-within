@@ -304,6 +304,7 @@ const HIDE_GLSL = /* glsl */ `
     vAlpha = 0.0;
     vColor = vec3(0.0);
     vGlow = 0.0;
+    vHalo = 0.0;
     vShard = 0.0;
     vSpin = vec2(1.0, 0.0);
     vSizePx = 0.0;
@@ -357,8 +358,11 @@ const POINT_VERT = /* glsl */ `
    */
   uniform float uGhostStreak;
   uniform vec2 uViewport;
-  /** GLOW: x how far the halo reaches as a multiple of the dot, y how bright it is. */
-  uniform vec2 uHalo;
+  /**
+   * GLOW: x how far the halo reaches as a multiple of the dot, y how bright it is,
+   * z what an eclipsed object keeps of it.
+   */
+  uniform vec3 uHalo;
   /** IMMERSION: x amount 0-1, y nearKm, z farKm, w how much larger a near mark gets. */
   uniform vec4 uImmerse;
   /** x bokeh width for a far mark, y nearDim, z farDim. See IMMERSION. */
@@ -373,6 +377,8 @@ const POINT_VERT = /* glsl */ `
   varying float vAlpha;
   varying vec3 vColor;
   varying float vGlow;
+  /** How much of the halo this object carries: all of it lit, a little eclipsed. */
+  varying float vHalo;
   /** 0 = a light, 1 = a shard. */
   varying float vShard;
   /** cos/sin of this fragment's own tumble, so no two agree. */
@@ -455,6 +461,10 @@ const POINT_VERT = /* glsl */ `
     float size = aKind > 1.5 ? uDebrisLook.x : (aKind > 0.5 ? uRocketLook.x : 1.0);
     if (featured) size *= uFeaturedSize;
     vGlow = aKind > 1.5 ? uDebrisLook.y : (aKind > 0.5 ? uRocketLook.y : 1.0);
+    // An eclipsed object is not a light: it keeps its dot and loses most of its halo,
+    // or a night sky full of them reads as haloes adrift from their marks. The belt
+    // keeps its own, since its brightness is steady by rule. See GLOW.eclipsedHalo.
+    vHalo = (lit || choir || !above) ? 1.0 : uHalo.z;
 
     // A hash off the object's own index: every fragment tumbles at its own rate, from
     // its own starting angle, and the field never falls into step with itself.
@@ -528,6 +538,7 @@ const POINT_FRAG = /* glsl */ `
   varying float vAlpha;
   varying vec3 vColor;
   varying float vGlow;
+  varying float vHalo;
   varying float vShard;
   varying vec2 vSpin;
   varying float vSizePx;
@@ -538,7 +549,7 @@ const POINT_FRAG = /* glsl */ `
   varying float vGain;
   varying float vSolid;
 
-  uniform vec2 uHalo;
+  uniform vec3 uHalo;
   /** 1 the lights, 2 the shards, 0 both. See RENDER_ORDER.shards. */
   uniform float uOnly;
   /** How much the core tightens as a near mark is magnified. See IMMERSION.coreTighten. */
@@ -633,7 +644,7 @@ const POINT_FRAG = /* glsl */ `
      * off the image directly, which is the thing this piece is about.
      */
     float halo = pow(max(1.0 - r / uHalo.x, 0.0), 2.0);
-    float focused = 0.22 * core + 1.9 * glow * vGlow + uHalo.y * halo * vGlow;
+    float focused = 0.22 * core + 1.9 * glow * vGlow + uHalo.y * halo * vGlow * vHalo;
     /*
      * Out of focus, a point is not a softer point: it is a **disc**, nearly flat across
      * its face with a soft rim, because the lens spreads the light evenly over the
@@ -1223,7 +1234,7 @@ export class SkyScene {
      * rotation rate in the elements to be faithful to anyway.
      */
     uTime: { value: 0 },
-    uHalo: { value: new THREE.Vector2(GLOW.haloScale, GLOW.haloGain) },
+    uHalo: { value: new THREE.Vector3(GLOW.haloScale, GLOW.haloGain, GLOW.eclipsedHalo) },
     /**
      * Immersion, shared with the ghosts so a streak can never disagree with the mark it
      * follows about how near or how soft it is. x is the slider; the rest are constants
@@ -2059,22 +2070,65 @@ export class SkyScene {
     let lastX = 0;
     let lastY = 0;
     let travelled = 0;
+    /**
+     * Every finger on the glass. Two of them is a pinch, which is the phone's zoom -
+     * there is no wheel on a touch screen. A pinch is never a click, and the finger
+     * left behind when the other lifts must not jump the view, so it restarts the drag
+     * from where it is.
+     */
+    const touches = new Map<number, { x: number; y: number }>();
+    let pinchFrom = 0;
+    const spread = () => {
+      const [a, b] = [...touches.values()];
+      return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
+    };
 
     canvas.addEventListener('pointerdown', (e) => {
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      canvas.setPointerCapture(e.pointerId);
+      if (touches.size === 2) {
+        pinchFrom = spread();
+        travelled = Infinity;
+        return;
+      }
       dragging = true;
       travelled = 0;
       lastX = e.clientX;
       lastY = e.clientY;
-      canvas.setPointerCapture(e.pointerId);
     });
     canvas.addEventListener('pointerup', (e) => {
-      dragging = false;
+      const wasPinch = touches.size > 1;
+      touches.delete(e.pointerId);
       canvas.releasePointerCapture(e.pointerId);
+      if (wasPinch) {
+        const [rest] = [...touches.values()];
+        if (rest) {
+          lastX = rest.x;
+          lastY = rest.y;
+        }
+        return;
+      }
+      dragging = false;
       if (travelled < DRAG_SLOP) this.pointer?.click(e.clientX, e.clientY);
       // The view may have turned under a still pointer: re-read what is beneath it.
       this.pointer?.hover(e.clientX, e.clientY);
     });
     canvas.addEventListener('pointermove', (e) => {
+      const touch = touches.get(e.pointerId);
+      if (touch) {
+        touch.x = e.clientX;
+        touch.y = e.clientY;
+      }
+      if (touches.size >= 2) {
+        const now = spread();
+        if (pinchFrom > 0 && now > 0) {
+          // Fingers apart is closer in: the field of view shrinks by their ratio.
+          this.camera.fov = THREE.MathUtils.clamp((this.camera.fov * pinchFrom) / now, 25, 130);
+          this.camera.updateProjectionMatrix();
+        }
+        pinchFrom = now;
+        return;
+      }
       if (!dragging) {
         this.pointer?.hover(e.clientX, e.clientY);
         return;
@@ -2088,7 +2142,8 @@ export class SkyScene {
       lastY = e.clientY;
     });
     canvas.addEventListener('pointerleave', () => this.pointer?.leave());
-    canvas.addEventListener('pointercancel', () => {
+    canvas.addEventListener('pointercancel', (e) => {
+      touches.delete(e.pointerId);
       dragging = false;
       this.pointer?.leave();
     });
