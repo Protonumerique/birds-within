@@ -1162,6 +1162,15 @@ screen-rotation term are all things only hardware answers.
 
 Embedded, the iframe needs `allow="accelerometer; gyroscope; magnetometer"` as well.
 
+**Testing it from a phone needs `npm run dev:https`, and plain `npm run dev` hides the
+button.** Found on a Xiaomi 15 Pro, with every sensor, showing no button at all: over the
+local network the page is `http://192.168…`, which is not a secure context, and browsers
+only deliver motion sensors to secure pages. `canPoint` asks exactly that and declines to
+draw a button that could never work. `dev:https` is the same server behind a self-signed
+certificate (`@vitejs/plugin-basic-ssl`, active only in that mode); the phone warns once
+about the certificate. Nothing reads `import.meta.env.MODE`, so the mode changes nothing
+else. Geolocation has the same rule, which is why USE MY LOCATION was also missing there.
+
 ### Full screen
 
 Added 2026-09-18, in `src/fullscreen.ts`. The button lives in the hints corner rather
@@ -3203,6 +3212,8 @@ intact in any fork; pointing browsers straight at CelesTrak earns 403s and an IP
 ```bash
 npm install
 npm run dev              # localhost:5173 - the synthetic sky until you fetch; add ?debug
+npm run dev:https        # the same over a self-signed certificate, for a phone on the
+                         # local network: sensors and location need a secure page
 npm run fetch:catalog    # CelesTrak -> .catalog-cache/ -> public/data/{active,full}.bin
                          # in Claude Code on the web this needs celestrak.org added to the
                          # environment's network egress allowlist, or every fetch 403s
