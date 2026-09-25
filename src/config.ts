@@ -307,6 +307,21 @@ export const BLOOM = {
   passes: 4,
 };
 
+/**
+ * The marks on a small screen (below `READOUT.compactQuery`). Each is a multiplier on
+ * the desktop value, so 1 everywhere is the desktop sky.
+ */
+export const SMALL_SCREEN = {
+  /** Dot size. */
+  markScale: 0.7,
+  /** How far the halo reaches, against `GLOW.haloScale`. */
+  haloReach: 0.7,
+  /** How bright the halo is, against `GLOW.haloGain`. */
+  haloGain: 0.55,
+  /** The glow pass, against `BLOOM.strength`. */
+  bloom: 0.45,
+};
+
 /** Immersion: */
 export const IMMERSION = {
   /** Whether the slider is offered at all. */
@@ -1105,6 +1120,22 @@ export const INTERFERENCE = {
  * It is a class set from `matchMedia` rather than a media query in the stylesheet, so
  * this string is the one place the threshold lives. Rotating the phone re-evaluates it
  * but leaves open or folded as the person left it.
+ */
+
+/**
+ * ### SMALL_SCREEN
+ *
+ * Added 2026-09-25, from the live site on a phone in landscape: bright masses where a
+ * constellation shell was dense. A phone lying down is about 390 px tall for the same
+ * ~95° of sky a desktop spreads over 900, so a mark of the same pixel size covers
+ * more than twice the sky - and because haloes add, the overlap is not just crowding,
+ * it sums into a single glowing cloud. That is the "density reads as many, not as one
+ * white field" check failing on the small screen only.
+ *
+ * So the marks shrink with the frame: smaller dots, a halo that reaches less far and
+ * carries less light, and a softer glow pass. Size is scaled and not only brightness,
+ * because definition is what was lost - a dimmer blob is still a blob. It switches on
+ * the same query as the folded panel, so there is one idea of "small screen".
  */
 
 /**

@@ -14,7 +14,9 @@ import {
   INTERFERENCE,
   KIND_LOOK,
   PALETTE,
+  READOUT,
   SKY,
+  SMALL_SCREEN,
   TRAIL,
 } from './config';
 
@@ -339,6 +341,8 @@ const POINT_VERT = /* glsl */ `
 
   uniform float uRadius;
   uniform float uPixelRatio;
+  /** How large a mark is drawn against the desktop size. See SMALL_SCREEN. */
+  uniform float uMarkScale;
   uniform vec3 uColorLit;
   uniform vec3 uColorEclipsed;
   uniform vec3 uColorBelow;
@@ -503,7 +507,7 @@ const POINT_VERT = /* glsl */ `
     // than full, or a faint two-pixel belt point does not blur, it disappears.
     vColor *= pow(gain, -uImmerseLook.y) * pow(spread, -uImmerseLook.z);
 
-    float dot16 = (above ? 16.0 : 8.0) * nearness * size * uPixelRatio * uGhostSize * gain * spread;
+    float dot16 = (above ? 16.0 : 8.0) * nearness * size * uPixelRatio * uMarkScale * uGhostSize * gain * spread;
 
     // A ghost is a streak, not a dot: it covers the gap back to the ghost behind it,
     // so the trail joins up instead of reading as a row of beads. The span is worked
@@ -1226,6 +1230,7 @@ export class SkyScene {
     uViewport: { value: new THREE.Vector2(1, 1) },
     uRadius: { value: SKY.radius },
     uPixelRatio: { value: 1 },
+    uMarkScale: { value: 1 },
     uSinLowest: { value: Math.sin(THREE.MathUtils.degToRad(SKY.lowestVisibleDeg)) },
     uColorLit: { value: COLOR_LIT },
     uColorEclipsed: { value: COLOR_ECLIPSED },
@@ -2450,6 +2455,13 @@ export class SkyScene {
   private resize() {
     const w = innerWidth;
     const h = innerHeight;
+    // The marks shrink with the frame on a small screen, where the same pixels cover
+    // twice the sky and additive haloes pile into one bright cloud. See SMALL_SCREEN.
+    const small = matchMedia(READOUT.compactQuery).matches;
+    this.uniforms.uMarkScale.value = small ? SMALL_SCREEN.markScale : 1;
+    this.uniforms.uHalo.value.x = GLOW.haloScale * (small ? SMALL_SCREEN.haloReach : 1);
+    this.uniforms.uHalo.value.y = GLOW.haloGain * (small ? SMALL_SCREEN.haloGain : 1);
+    if (this.bloomAdd) this.bloomAdd.uniforms.uStrength!.value = BLOOM.strength * (small ? SMALL_SCREEN.bloom : 1);
     this.renderer.setSize(w, h, false);
     const ratio = this.renderer.getPixelRatio();
     this.uniforms.uViewport.value.set(w * ratio, h * ratio);
