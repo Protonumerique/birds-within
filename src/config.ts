@@ -120,7 +120,7 @@ export const GATE = {
   tagline: 'A visualization of crowded skies. An immersive panorama showing our traces in orbit, our observers above.',
   /** Very short, and it has one job: */
   lede:
-    'Referring to a satellite as "Bird" was common in sat-spotter networks years ago and approaching them as such, allows newcomers to discover the taxonomies of that environment. This piece is an immersive experience of the crowded skies above us, and tool to explore and understand them more, or simply, contemplate their dynamics.',
+    'Referring to a satellite as "Bird" is common in the aerospace community. Approaching them literally as such, allows newcomers to discover the taxonomies and complexities of our orbital environment. This piece is an immersive experience of the crowded skies above us, a tool to explore and understand them more, or simply, contemplate their dynamics.',
   /** The one offer on the screen. */
   launchLabel: 'LAUNCH',
   /** What the press costs, said before it is pressed rather than after. */
