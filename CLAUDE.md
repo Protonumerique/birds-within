@@ -1156,9 +1156,15 @@ same reason.
 Verified with synthetic `deviceorientationabsolute` events in an emulated phone, reading
 where the camera points: upright facing north → az 0°, el 0°; alpha 90 → az 270° (alpha
 runs anticlockwise); alpha 270 → az 90°; beta 135 → el 45°; flat on its back → el −90°;
-leaving at az 180°, el 60° → the drag resumes there. **Not yet checked on a real phone**:
-compass accuracy (±10–20° is normal and fine for this piece), the iOS offset, and the
-screen-rotation term are all things only hardware answers.
+leaving at az 180°, el 60° → the drag resumes there.
+
+**Checked on a real phone on 2026-09-25** — a Xiaomi 15 Pro in Chrome, over
+`dev:https`: it works, and against a compass app by hand north agrees to within about
+5–6°. That is about Berlin's magnetic declination (~4–5° east), and it may be exactly
+that: Android's rotation vector is referenced to **magnetic** north, while many compass
+apps show true north. Correcting it would need a geomagnetic model per observer, which
+is not worth it for a piece about density. **Still unchecked:** the iOS compass offset
+and holding the phone sideways.
 
 Embedded, the iframe needs `allow="accelerometer; gyroscope; magnetometer"` as well.
 
