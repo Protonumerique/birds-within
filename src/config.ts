@@ -127,8 +127,8 @@ export const GATE = {
   loadingLabel: 'LAUNCHING…',
   hint: 'drag to look · click to trace · press LISTEN for sound',
   touchHint: 'drag to look · tap to trace · press LISTEN for sound',
-  /** Said under LAUNCH on a small screen, and never in the way of it. */
-  smallScreenNote: 'Made for a larger screen. It runs here, just not at its best.',
+  /** Over the DRAG / POINT switch, where the device can point. */
+  modeLabel: 'choose view mode',
   /** How long the screen takes to leave once the first frame is on the canvas. */
   fadeMs: 700,
   /** The drawing: */

@@ -1,4 +1,5 @@
-import { GATE, READOUT, observerIsCustom, observerLabel, resetObserver } from './config';
+import { GATE, observerIsCustom, observerLabel, resetObserver } from './config';
+import { askPermission, canPoint, preferPointing } from './orientation';
 import { canLocate, locate } from './place';
 import { posterSvg } from './poster';
 
@@ -48,8 +49,15 @@ export function createGate(root: HTMLElement, handlers: GateHandlers): Gate {
       <h1 class="gate-title">${GATE.title}</h1>
       <div class="gate-tagline">${GATE.tagline}</div>
       <p class="gate-lede">${GATE.lede}</p>
-      <button class="gate-launch" type="button">${GATE.launchLabel}</button>
-      ${matchMedia(READOUT.compactQuery).matches ? `<div class="gate-small">${GATE.smallScreenNote}</div>` : ''}
+      <div class="gate-go">
+        <div class="gate-mode" hidden>
+          <div class="gate-mode-label">${GATE.modeLabel}</div>
+          <button class="mode-switch point" type="button" role="switch" aria-checked="true" aria-label="${GATE.modeLabel}">
+            <span class="ms-drag">DRAG</span><i class="ms-track"><b class="ms-knob"></b></i><span class="ms-point">POINT</span>
+          </button>
+        </div>
+        <button class="gate-launch" type="button">${GATE.launchLabel}</button>
+      </div>
       <div class="gate-status" role="status" aria-live="polite"></div>
       <div class="gate-where">
         <span class="gate-place"></span>
@@ -63,6 +71,27 @@ export function createGate(root: HTMLElement, handlers: GateHandlers): Gate {
   root.append(el);
 
   const button = el.querySelector<HTMLButtonElement>('.gate-launch')!;
+
+  /*
+   * How to look, chosen before the press so the visitor knows what to expect. Offered
+   * only where pointing can work at all - a finger, a sensor API and a secure page - and
+   * it starts on POINT there, because on a phone that is the piece at its best. See
+   * *Pointing the phone at the sky* in CLAUDE.md.
+   */
+  const modeEl = el.querySelector<HTMLElement>('.gate-mode')!;
+  const modeSwitch = el.querySelector<HTMLButtonElement>('.mode-switch')!;
+  const pointable = canPoint();
+  modeEl.hidden = !pointable;
+  let pointMode = pointable;
+  const paintMode = () => {
+    modeSwitch.classList.toggle('point', pointMode);
+    modeSwitch.setAttribute('aria-checked', String(pointMode));
+  };
+  modeSwitch.addEventListener('click', () => {
+    pointMode = !pointMode;
+    paintMode();
+  });
+  paintMode();
   const statusEl = el.querySelector<HTMLElement>('.gate-status')!;
 
   /*
@@ -130,6 +159,11 @@ export function createGate(root: HTMLElement, handlers: GateHandlers): Gate {
     pressed = true;
     button.disabled = true;
     button.textContent = GATE.loadingLabel;
+    // Asked here, synchronously inside the press, because iOS grants the sensor to no
+    // other kind of call - and the piece that will use it loads a second too late.
+    preferPointing(pointMode);
+    if (pointMode) void askPermission();
+    modeSwitch.disabled = true;
     warm();
     handlers.launch();
   });
@@ -152,6 +186,7 @@ export function createGate(root: HTMLElement, handlers: GateHandlers): Gate {
 
     fail(err) {
       button.disabled = false;
+      modeSwitch.disabled = false;
       button.textContent = GATE.launchLabel;
       pressed = false;
       statusEl.classList.add('err');
