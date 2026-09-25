@@ -1078,14 +1078,24 @@ high-inclination shell.
 Added 2026-09-24, from a phone. The column was 272 px of a 390 px portrait screen and
 about 2/5 of a landscape one; the sky, which is the piece, was mostly behind it.
 
-- **Below `READOUT.compactQuery` the panel starts folded**: title, clock, LISTEN and a
-  PANEL button. Open, it is a drawer — the full width under a wash when standing up,
-  **two columns** lying down (controls beside the lists and grid), because a 390 px tall
-  column cannot hold a 290 px header *and* lists. The query tests height as well as
-  width for exactly that reason. It is a class set from `matchMedia`, so the threshold
-  lives in config alone; rotating re-lays it out and leaves open or folded as it was.
-- **PANEL carries the kept count** (`PANEL · 2`). Folded, it is the only sign that a tap
-  on the sky put something in a list you cannot see.
+- **Below `READOUT.compactQuery` the panel starts folded**: the title with a **menu
+  button beside it**, the clock, PAUSE / NOW / speed and LISTEN. The observer, the
+  catalogue line, the scrub slider, the lists and the grid wait behind the menu. Open,
+  it is a drawer — the full width under a near-opaque wash when standing up (0.86, so
+  the sky's rings do not read through the rows), **two columns** lying down (controls
+  beside the lists and grid), because a 390 px tall column cannot hold a 290 px header
+  *and* lists. The query tests height as well as width for exactly that reason. It is a
+  class set from `matchMedia`, so the threshold lives in config alone; rotating
+  re-lays it out and leaves open or folded as it was.
+- **The menu is three drawn bars that turn into an X**, and it never moves: the thing
+  that opened the panel is the thing that closes it, beside the title in both states.
+  The first version was a PANEL button in the LISTEN row, which sat mid-drawer once
+  open and read as one more control among many. Drawn rather than typed, because the
+  font subset has no glyph for either and a drawn mark centres against the capitals.
+- **The compact column is 224 px**, not 208: the title is 175 px and the menu 34, and
+  at 208 the title wrapped onto two lines while folded. It is `nowrap` as well.
+- **A small count beside the menu** says how many objects are kept. Folded, it is the
+  only sign that a tap on the sky put something in a list you cannot see.
 - **A folded column must not stretch.** `#hud` is a flex row, so the column stretched to
   full height with `pointer-events: auto` and swallowed every touch down the left of the
   screen — found by `elementFromPoint` returning the header at mid-screen, not by

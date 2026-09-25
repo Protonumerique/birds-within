@@ -109,7 +109,10 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
     <div class="scrim"></div>
     <div class="col">
       <header>
-        <h1>Birds Within</h1>
+        <div class="titlebar">
+          <h1>Birds Within</h1>
+          <button id="panel" type="button" aria-expanded="false" aria-label="Open the panel"><i></i><i></i><i></i><b class="kept"></b></button>
+        </div>
         <div class="sub">${observerLabel()}</div>
         <div class="sub">${names.length.toLocaleString('en')} objects · ${source.dataset} · ${asOf}</div>
         ${source.dataset === 'synthetic' ? '<div class="warn">invented orbits, not real objects</div>' : ''}
@@ -119,12 +122,11 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
           <button id="now">NOW</button>
           <select id="rate">${CLOCK.rates.map((r) => `<option value="${r}">${r}×</option>`).join('')}</select>
         </div>
-        <div class="controls">
+        <div class="controls scrub">
           <input id="scrub" type="range" min="-720" max="720" step="1" value="0" title="offset from now, minutes" />
         </div>
         <div class="controls sound">
           <button id="listen">LISTEN</button>
-          <button id="panel" type="button" aria-expanded="false">PANEL</button>
         </div>
         <div class="sub" id="soundnote"></div>
       </header>
@@ -190,12 +192,13 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
   // the frame and not the image - see fullscreen.ts. Escape is the browser's own way
   // out; the hint for it is only drawn while there is something to get out of.
   /*
-   * Folding, on a small screen only. The panel starts folded there - title, clock,
-   * LISTEN and this button - because the column is most of a phone's width and the
+   * Folding, on a small screen only. The panel starts folded there - title and this
+   * button, clock, the time controls and LISTEN - because the column is most of a phone's width and the
    * sky is the piece. See READOUT.compactQuery. Everything below is CSS keyed off two
    * classes on the root, so the components inside still do not know where they are.
    */
   const panelBtn = $<HTMLButtonElement>('panel');
+  const keptEl = panelBtn.querySelector<HTMLElement>('.kept')!;
   const compact = matchMedia(READOUT.compactQuery);
   let folded = compact.matches;
   let keptShown = -1;
@@ -203,6 +206,7 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
     root.classList.toggle('compact', compact.matches);
     root.classList.toggle('folded', folded);
     panelBtn.setAttribute('aria-expanded', String(!folded));
+    panelBtn.setAttribute('aria-label', folded ? 'Open the panel' : 'Close the panel');
     panelBtn.classList.toggle('on', !folded);
   };
   // Rotating re-evaluates the layout but leaves open or folded as it was left.
@@ -347,12 +351,12 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
       // because nothing is silenced any more: a held clock stops the phrases and a
       // fast one stands the whole mix back, and in both the belt goes on humming.
       soundNote.textContent = source.audio.attenuated ? (clock.isPaused ? 'held' : 'stood back') : '';
-      // Folded, the kept count on PANEL is the only sign the lists have something in
-      // them - a tap on the sky keeps an object whose row is out of sight.
+      // Folded, the kept count beside the menu is the only sign the lists have
+      // something in them - a tap on the sky keeps an object whose row is out of sight.
       const kept = selection.marked.size;
       if (kept !== keptShown) {
         keptShown = kept;
-        panelBtn.textContent = kept ? `PANEL · ${kept}` : 'PANEL';
+        keptEl.textContent = kept ? String(kept) : '';
       }
       if (!frame) return;
 

@@ -1064,29 +1064,87 @@ input[type="range"] {
  * --- The small screen ------------------------------------------------------------
  *
  * `compact` and `folded` are set by ui.ts from READOUT.compactQuery, so the threshold
- * lives in one place. Folded is the default there: the title, the clock, LISTEN and a
- * PANEL button, and the sky. Open, the panel is a drawer - the whole width standing
+ * lives in one place. Folded is the default there: the title with a menu beside it,
+ * the clock, the time controls and LISTEN, and the sky. Open, the panel is a drawer - the whole width standing
  * up, two columns lying down. Nothing here applies on a desktop-sized window.
+ */
+/* Wide enough for the title and the menu on one line: the title is 175 px. */
+#hud.compact {
+  --col-w: 224px;
+}
+
+/* The title and, on a small screen, the menu beside it. */
+.titlebar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.titlebar h1 {
+  margin: 0;
+  white-space: nowrap;
+}
+
+/*
+ * The menu: three bars folded, an X open, drawn rather than typed - the subset has no
+ * glyph for either, and a drawn mark centres against the capitals beside it the way
+ * the group glyphs do. It stays where it is in both states, beside the title, so the
+ * thing that opened the panel is the thing that closes it.
  */
 #panel {
   display: none;
-}
-
-#hud.compact {
-  --col-w: 208px;
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 30px;
+  padding: 0;
+  background: none;
+  border: none;
 }
 
 #hud.compact #panel {
   display: block;
 }
 
-#panel.on {
-  background-color: rgba(138, 212, 255, 0.16);
-  border-color: rgba(138, 212, 255, 0.5);
-  color: var(--geo);
+#panel i {
+  position: absolute;
+  left: 8px;
+  width: 18px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--ink);
+  transition: transform 180ms ease, opacity 120ms ease;
 }
 
-#hud.compact.folded header > :not(h1):not(.clock):not(.sound),
+#panel i:nth-child(1) { top: 9px; }
+#panel i:nth-child(2) { top: 14px; }
+#panel i:nth-child(3) { top: 19px; }
+
+#panel.on i:nth-child(1) { transform: translateY(5px) rotate(45deg); }
+#panel.on i:nth-child(2) { opacity: 0; }
+#panel.on i:nth-child(3) { transform: translateY(-5px) rotate(-45deg); }
+
+/* How many are kept, while their rows are out of sight. Gone once the panel is open,
+   where the rows say it themselves. */
+#panel .kept {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+#panel.on .kept {
+  display: none;
+}
+
+#hud.compact.folded header > .sub,
+#hud.compact.folded header > .warn,
+#hud.compact.folded header > .scrub,
 #hud.compact.folded .clock small,
 #hud.compact.folded .lists,
 #hud.compact.folded .spacer,
@@ -1105,7 +1163,7 @@ input[type="range"] {
 #hud.compact.folded .scrim {
   bottom: auto;
   width: calc(var(--col-w) + 120px);
-  height: 190px;
+  height: 300px;
   background: radial-gradient(
     ellipse at top left,
     rgb(0 0 0 / var(--scrim-alpha)) 35%,
@@ -1140,9 +1198,10 @@ input[type="range"] {
   #hud.compact:not(.folded) {
     --col-w: 100%;
   }
+  /* Dense enough that the sky's rings do not read through the rows. */
   #hud.compact:not(.folded) .scrim {
     width: 100%;
-    background: rgb(0 0 0 / 0.74);
+    background: rgb(0 0 0 / 0.86);
   }
   #hud.compact:not(.folded) .hints {
     display: none;

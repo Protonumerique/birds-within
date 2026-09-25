@@ -164,7 +164,7 @@ export const READOUT = {
   hint: 'drag to look · scroll to zoom · click to keep',
   /** The same, where the pointer is a finger. */
   touchHint: 'drag to look · pinch to zoom · tap to keep',
-  /** When the panel folds away behind a PANEL button, and starts folded. */
+  /** When the panel folds away behind the menu beside the title, and starts folded. */
   compactQuery: '(max-width: 620px), (max-height: 520px)',
 };
 
@@ -1091,8 +1091,8 @@ export const INTERFERENCE = {
  *
  * Added 2026-09-24, from a phone. The column is 272 px of a 390 px portrait screen and
  * about a third of a landscape one, and a sky you cannot see is not the piece. Below
- * this the panel starts **folded** to the title, the clock, LISTEN and a PANEL button,
- * and opens as a drawer on request. Folded is the default because the sky is the
+ * this the panel starts **folded** to the title with a menu beside it, the clock, the
+ * time controls and LISTEN, and opens as a drawer on request. Folded is the default because the sky is the
  * piece and the panel is the reading of it; someone who wants the names asks.
  *
  * Height is in the query as well as width, because a phone on its side is 844 px wide
