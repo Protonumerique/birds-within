@@ -14,6 +14,7 @@ import type { Clock } from './clock';
 import type { SkyFrame } from './sky-frame';
 import type { Selection } from './selection';
 import { createFullscreen } from './fullscreen';
+import { canPoint, createPointing, type Attitude } from './orientation';
 import { Group } from './ui-group';
 import { ChoirGrid } from './ui-choir';
 import type { AudioEngine } from './audio';
@@ -33,6 +34,8 @@ export interface Hud {
   ringed(): readonly number[];
   /** The FAMILY value the pointer is revealing from the legend, or -1. */
   revealing(): number;
+  /** The phone's attitude while it is being pointed at the sky, else null. */
+  attitude(): Attitude | null;
   /** Every belt object above the sky's floor - what the grid shows, and what sings. */
   belt(): readonly number[];
 }
@@ -142,6 +145,7 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
     <div class="hints">
       <div class="hintline" id="hint"></div>
       <div class="conventions" id="conv"></div>
+      <button id="point" type="button" hidden>POINT TO LOOK</button>
       <button id="full" type="button" hidden>FULL SCREEN</button>
     </div>
   `;
@@ -231,11 +235,44 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
     const on = fullscreen.active;
     fullBtn.textContent = on ? 'LEAVE FULL SCREEN' : 'FULL SCREEN';
     fullBtn.classList.toggle('on', on);
-    const hint = coarse.matches ? READOUT.touchHint : READOUT.hint;
+    const hint = pointing.active ? READOUT.pointHint : coarse.matches ? READOUT.touchHint : READOUT.hint;
     hintEl.textContent = on && !coarse.matches ? `${hint} · esc to leave` : hint;
   };
   fullscreen.onchange = paintFullscreen;
-  paintFullscreen();
+
+  /*
+   * Point the phone at the sky. Offered only where there is a finger and a sensor API,
+   * and asked for only inside this press - iOS will not grant it any other way, and a
+   * permission dialog nobody asked for is the thing the whole first screen avoids.
+   * A device that says it has the API and then sends nothing (most desktops) gets a
+   * plain answer on the button rather than a mode that silently does not move.
+   */
+  const pointBtn = $<HTMLButtonElement>('point');
+  const pointing = createPointing();
+  pointBtn.hidden = !canPoint();
+  const paintPointing = () => {
+    pointBtn.textContent = pointing.active ? 'DRAG TO LOOK' : 'POINT TO LOOK';
+    pointBtn.classList.toggle('on', pointing.active);
+    paintFullscreen();
+  };
+  pointBtn.onclick = async () => {
+    if (pointing.active) {
+      pointing.stop();
+      paintPointing();
+      return;
+    }
+    pointBtn.disabled = true;
+    pointBtn.textContent = 'ASKING…';
+    const ok = await pointing.start();
+    pointBtn.disabled = false;
+    if (!ok) {
+      pointBtn.textContent = 'NO MOTION SENSOR';
+      pointBtn.disabled = true;
+      return;
+    }
+    paintPointing();
+  };
+  paintPointing();
 
   /*
    * Immersion, bottom centre and starting at 0 - which is the piece exactly as it was.
@@ -334,6 +371,7 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
   return {
     ringed: () => ringed,
     revealing: () => (revealed >= 0 ? FAMILY_LEGEND[revealed]!.family : -1),
+    attitude: () => pointing.attitude,
     belt: () => choirUp,
 
     update(date, frame) {

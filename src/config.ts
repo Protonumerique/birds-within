@@ -164,6 +164,8 @@ export const READOUT = {
   hint: 'drag to look · scroll to zoom · click to keep',
   /** The same, where the pointer is a finger. */
   touchHint: 'drag to look · pinch to zoom · tap to keep',
+  /** And while the phone itself is the look. */
+  pointHint: 'move the phone to look · tap to keep',
   /** When the panel folds away behind the menu beside the title, and starts folded. */
   compactQuery: '(max-width: 620px), (max-height: 520px)',
 };

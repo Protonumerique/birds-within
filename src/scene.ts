@@ -40,6 +40,7 @@ const FAMILY_COLORS = Object.entries(FAMILY_LOOK)
 import { NO_POSITION, directionFromAltAz, type SkyFrame } from './sky-frame';
 import type { FramePair } from './sky-stream';
 import { pickNearest } from './picking';
+import type { Attitude } from './orientation';
 
 /** The sky's own colour: the clear colour, and what the haze fades objects into. */
 const SKY_COLOR = PALETTE.sky;
@@ -1167,6 +1168,18 @@ const COLOR_FEATURED = new THREE.Color(FEATURED.color);
 /** How far a press may travel, in CSS pixels, and still count as a click. */
 const DRAG_SLOP = 6;
 
+/**
+ * Pointing the phone. The device's rest pose has its top toward north and its back
+ * toward the ground; a camera looks down its own -Z. This quarter turn about X is the
+ * difference, so the camera looks out of the back of the phone the way a viewfinder
+ * does. It and the screen axis are the whole of what three's retired
+ * DeviceOrientationControls did.
+ */
+const OUT_OF_THE_BACK = new THREE.Quaternion(-Math.SQRT1_2, 0, 0, Math.SQRT1_2);
+const SCREEN_AXIS = new THREE.Vector3(0, 0, 1);
+/** How long the camera takes to catch the sensor: enough to hide jitter, no lag. */
+const POINT_EASE_SECONDS = 0.08;
+
 /** How close to straight up or down the camera may look. See `render`. */
 const ZENITH_LIMIT = {
   min: THREE.MathUtils.degToRad(-89),
@@ -1340,6 +1353,12 @@ export class SkyScene {
   // opens facing south.
   private yaw = THREE.MathUtils.degToRad(SKY.startFacingDeg);
   private pitch = THREE.MathUtils.degToRad(SKY.startPitchDeg);
+  /** Whether the device's attitude is driving the camera. See `setAttitude`. */
+  private pointed = false;
+  private readonly attitudeTarget = new THREE.Quaternion();
+  private readonly attitudeEuler = new THREE.Euler();
+  private readonly attitudeTurn = new THREE.Quaternion();
+  private lastRender = performance.now();
   private pointer: PointerHandlers | null = null;
   private canvasRect: DOMRect;
 
@@ -1866,7 +1885,38 @@ export class SkyScene {
    * field. Pitch does not enter into it - see the note in `Drone.update`.
    */
   get heading(): number {
-    return this.yaw;
+    if (!this.pointed) return this.yaw;
+    // Held by the device, the camera can roll, so there is no yaw to read. The right
+    // vector is what the sound actually wants; this is its angle, flattened.
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion);
+    return Math.atan2(right.z, right.x);
+  }
+
+  /**
+   * Point the phone at the sky: while an attitude is given, the device's orientation
+   * is the camera and drag no longer turns it. See orientation.ts.
+   *
+   * Given null, the drag takes over again **from where the phone was pointing**, so
+   * leaving the mode does not throw the view back to wherever it was before.
+   */
+  setAttitude(attitude: Attitude | null): void {
+    if (!attitude) {
+      if (this.pointed) {
+        const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
+        this.pitch = THREE.MathUtils.clamp(Math.asin(fwd.y), THREE.MathUtils.degToRad(-20), ZENITH_LIMIT.max);
+        this.yaw = Math.atan2(fwd.x, -fwd.z);
+        this.pointed = false;
+      }
+      return;
+    }
+    // The W3C angles, into this scene's frame (+X east, +Y up, -Z north), then turned
+    // so the camera looks out of the back of the phone rather than out of its top, and
+    // unturned by however far the screen is rotated inside the device.
+    this.attitudeEuler.set(attitude.beta, attitude.alpha, -attitude.gamma, 'YXZ');
+    this.attitudeTarget.setFromEuler(this.attitudeEuler).multiply(OUT_OF_THE_BACK);
+    this.attitudeTarget.multiply(this.attitudeTurn.setFromAxisAngle(SCREEN_AXIS, -attitude.screen));
+    if (!this.pointed) this.camera.quaternion.copy(this.attitudeTarget);
+    this.pointed = true;
   }
 
   setPickCursor(over: boolean): void {
@@ -2136,6 +2186,9 @@ export class SkyScene {
       const dx = e.clientX - lastX;
       const dy = e.clientY - lastY;
       travelled += Math.abs(dx) + Math.abs(dy);
+      // Pointing the phone is the look; a drag must not fight it. It still counts as
+      // travel, so a swipe is not taken as a tap.
+      if (this.pointed) return;
       this.yaw -= dx * 0.004;
       this.pitch = THREE.MathUtils.clamp(this.pitch + dy * 0.004, THREE.MathUtils.degToRad(-20), ZENITH_LIMIT.max);
       lastX = e.clientX;
@@ -2259,13 +2312,23 @@ export class SkyScene {
     // build a basis from it, and the entire scene disappears - which looks like a
     // rendering failure rather than a gimbal lock. Anything that sets pitch directly,
     // a debug snippet included, has to be safe.
-    const pitch = THREE.MathUtils.clamp(this.pitch, ZENITH_LIMIT.min, ZENITH_LIMIT.max);
-    const dir = new THREE.Vector3(
-      Math.sin(this.yaw) * Math.cos(pitch),
-      Math.sin(pitch),
-      -Math.cos(this.yaw) * Math.cos(pitch)
-    );
-    this.camera.lookAt(dir);
+    const now = performance.now();
+    const dt = Math.min((now - this.lastRender) / 1000, 0.25);
+    this.lastRender = now;
+    if (this.pointed) {
+      // Held by the phone: eased toward the sensor, which jitters by a degree or so
+      // from one reading to the next. No lookAt, so no gimbal to lock - the zenith is
+      // as safe as anywhere else here.
+      this.camera.quaternion.slerp(this.attitudeTarget, 1 - Math.exp(-dt / POINT_EASE_SECONDS));
+    } else {
+      const pitch = THREE.MathUtils.clamp(this.pitch, ZENITH_LIMIT.min, ZENITH_LIMIT.max);
+      const dir = new THREE.Vector3(
+        Math.sin(this.yaw) * Math.cos(pitch),
+        Math.sin(pitch),
+        -Math.cos(this.yaw) * Math.cos(pitch)
+      );
+      this.camera.lookAt(dir);
+    }
 
     this.renderer.setRenderTarget(null);
     this.renderer.render(this.scene, this.camera);

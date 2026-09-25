@@ -580,6 +580,7 @@ input[type="range"] {
 
 /* On, and it says so in the same blue the belt wears - the only other control that
    changes its own face is LISTEN, and it does it the same way. */
+#point.on,
 #full.on {
   background-color: rgba(138, 212, 255, 0.16);
   border-color: rgba(138, 212, 255, 0.5);
