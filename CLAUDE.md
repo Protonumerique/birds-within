@@ -1111,6 +1111,15 @@ about 2/5 of a landscape one; the sky, which is the piece, was mostly behind it.
 - Hints and legend move to the **foot** of the frame, clear of the title. `#hud` pads by
   `env(safe-area-inset-*)`, since `viewport-fit=cover` hands the notch to the page.
 
+**The marks shrink with the frame** (`SMALL_SCREEN`), added 2026-09-25 from the live
+site on a phone lying down: bright masses wherever a shell was dense. 390 px of height
+holds the same ~95° of sky a desktop spreads over 900, so a mark of the same pixel size
+covers twice the sky, and additive haloes sum the overlap into one cloud. Below the same
+query as the folded panel, dots are drawn at 0.7, the halo reaches 0.7 as far at 0.55 of
+the brightness, and the glow pass runs at 0.45. Size, not only brightness, because
+definition is what was lost. Rings keep their desktop size: they are tap targets. Set in
+`resize`, so rotating re-evaluates it.
+
 **Eclipsed objects keep a fifth of their halo** (`GLOW.eclipsedHalo`), from the same
 phone: at night most of the sky is eclipsed, and a grey dot carrying a full halo read as
 *glow adrift from its mark* — reported as a misaligned glow pass, which it was not.
