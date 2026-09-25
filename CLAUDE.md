@@ -1106,8 +1106,10 @@ about 2/5 of a landscape one; the sky, which is the piece, was mostly behind it.
   real CDP touch events: 95° → 25° on a 6× spread.
 - **Touch has no hover**, so the hint says `tap` (chosen on `(pointer: coarse)`, not on
   size), and a legend name holds its reveal on a tap and lets go on a second.
-- **The first screen says so** on a small screen (`GATE.smallScreenNote`), under LAUNCH
-  and never in its way. Warn, not block: much of a hero section's traffic is phones.
+- **No warning on the first screen any more.** A note under LAUNCH said a phone was not
+  the piece at its best; it came out on 2026-09-25 once the folded panel, pinch and the
+  smaller marks made the phone a good way to see it, and pointing made it arguably the
+  best one.
 - Hints and legend move to the **foot** of the frame, clear of the title. `#hud` pads by
   `env(safe-area-inset-*)`, since `viewport-fit=cover` hands the notch to the page.
 
@@ -1126,7 +1128,7 @@ phone: at night most of the sky is eclipsed, and a grey dot carrying a full halo
 
 ### Pointing the phone at the sky
 
-Added 2026-09-25. On a touch device with a motion sensor, **POINT TO LOOK** in the hints
+Added 2026-09-25. On a touch device with a motion sensor, **POINT** in the hints
 corner hands the camera to the phone: hold it up and the sky on screen is the sky behind
 it. `src/orientation.ts` owns the browser side, `SkyScene.setAttitude` the camera.
 
@@ -1145,7 +1147,7 @@ same reason.
   noisy. A relative reading with no compass beside it is dropped: a sky at an arbitrary
   azimuth is worse than no pointing at all.
 - **A desktop often has the API and never fires it.** `start` waits 2.5 s for a real
-  reading and otherwise says **NO MOTION SENSOR** on the button, rather than entering a
+  reading and otherwise says **NO SENSOR** on the button, rather than entering a
   mode that silently does not move.
 - **The camera takes a quaternion, not yaw and pitch.** A held phone rolls, and the
   lookAt path cannot express that; it also has no gimbal to lock, so the zenith is safe
@@ -1174,6 +1176,28 @@ that: Android's rotation vector is referenced to **magnetic** north, while many 
 apps show true north. Correcting it would need a geomagnetic model per observer, which
 is not worth it for a piece about density. **Still unchecked:** the iOS compass offset
 and holding the phone sideways.
+
+**Chosen before LAUNCH, and POINT by default where it can work** (2026-09-25). The first
+screen draws a switch to the left of LAUNCH — *choose view mode*, DRAG on one side of a
+track and POINT on the other, the word on the knob's side lit — only where `canPoint()`
+says yes, and it starts on POINT. The visitor knows what to expect before the sky
+arrives, and the phone's best mode is the one they get unless they say otherwise.
+
+- **The permission is asked inside the LAUNCH press**, synchronously in its click
+  handler, because iOS grants the sensor to no other kind of call and the piece that uses
+  it loads a second later. `orientation.ts` keeps the choice and the answer in module
+  state; it is imported by both the gate and the panel and lands in the entry chunk, so
+  they share one copy. That costs **+0.7 KB gzipped before the press** (8.38 → 9.10),
+  paid for the one thing on the first screen that cannot wait.
+- **Inside the piece the button is the same switch in short**: `DRAG | POINT` with the
+  mode in force lit, on one line with FULL SCREEN in the hints corner. The long
+  `POINT TO LOOK` / `DRAG TO LOOK` labels are gone. A sensor that never reports turns it
+  into `NO SENSOR`, disabled, and the piece stays on drag.
+- `?launch` skips the first screen and therefore the choice; it opens on drag.
+
+Verified in an emulated phone with synthetic orientation events: POINT chosen → the
+piece opens pointing with the pointing hint; DRAG chosen → it opens dragging; a tap on
+the in-app switch flips it; on a desktop viewport no switch is drawn.
 
 Embedded, the iframe needs `allow="accelerometer; gyroscope; magnetometer"` as well.
 
@@ -2969,8 +2993,8 @@ to do, both cheap and both invisible when missed:
 - **`allow="geolocation"` too**, for the same reason and with the same symptom: without
   it USE MY LOCATION is not drawn. Nothing is ever asked before that button is pressed —
   see *Where you are standing*.
-- **`allow="accelerometer; gyroscope; magnetometer"`** for POINT TO LOOK; without it
-  the sensor sends nothing and the button says NO MOTION SENSOR.
+- **`allow="accelerometer; gyroscope; magnetometer"`** for POINT; without it
+  the sensor sends nothing and the button says NO SENSOR.
 - **Give it a real height.** The canvas fills whatever box it is given, and the panel is
   a full-height column; under about 400 px the lists scroll rather than fitting, which is
   handled but is not the image.

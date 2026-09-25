@@ -14,7 +14,7 @@ import type { Clock } from './clock';
 import type { SkyFrame } from './sky-frame';
 import type { Selection } from './selection';
 import { createFullscreen } from './fullscreen';
-import { canPoint, createPointing, type Attitude } from './orientation';
+import { canPoint, createPointing, prefersPointing, type Attitude } from './orientation';
 import { Group } from './ui-group';
 import { ChoirGrid } from './ui-choir';
 import type { AudioEngine } from './audio';
@@ -145,8 +145,10 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
     <div class="hints">
       <div class="hintline" id="hint"></div>
       <div class="conventions" id="conv"></div>
-      <button id="point" type="button" hidden>POINT TO LOOK</button>
-      <button id="full" type="button" hidden>FULL SCREEN</button>
+      <div class="framebtns">
+        <button id="point" type="button" hidden aria-label="view mode"><span class="pt-drag">DRAG</span><span class="pt-point">POINT</span></button>
+        <button id="full" type="button" hidden>FULL SCREEN</button>
+      </div>
     </div>
   `;
 
@@ -251,28 +253,34 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
   const pointing = createPointing();
   pointBtn.hidden = !canPoint();
   const paintPointing = () => {
-    pointBtn.textContent = pointing.active ? 'DRAG TO LOOK' : 'POINT TO LOOK';
     pointBtn.classList.toggle('on', pointing.active);
+    pointBtn.setAttribute('aria-pressed', String(pointing.active));
     paintFullscreen();
   };
-  pointBtn.onclick = async () => {
-    if (pointing.active) {
-      pointing.stop();
-      paintPointing();
-      return;
-    }
+  const startPointing = async () => {
     pointBtn.disabled = true;
-    pointBtn.textContent = 'ASKING…';
     const ok = await pointing.start();
     pointBtn.disabled = false;
     if (!ok) {
-      pointBtn.textContent = 'NO MOTION SENSOR';
+      pointBtn.textContent = 'NO SENSOR';
       pointBtn.disabled = true;
       return;
     }
     paintPointing();
   };
+  // DRAG | POINT, the word lit being the mode in force - the same switch the first
+  // screen offers, in short. A press flips it.
+  pointBtn.onclick = () => {
+    if (pointing.active) {
+      pointing.stop();
+      paintPointing();
+      return;
+    }
+    void startPointing();
+  };
   paintPointing();
+  // Chosen on the first screen: start as asked. The permission was taken in that press.
+  if (canPoint() && prefersPointing()) void startPointing();
 
   /*
    * Immersion, bottom centre and starting at 0 - which is the piece exactly as it was.

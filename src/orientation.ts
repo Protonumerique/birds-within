@@ -43,6 +43,43 @@ const WAIT_MS = 2500;
 /** How much of the iOS compass offset each reading may move. Small: it is noisy. */
 const COMPASS_BLEND = 0.05;
 
+/**
+ * The choice made on the first screen, carried to the piece. This module is imported by
+ * both, and it lands in the entry chunk, so the two see one copy of this state.
+ */
+let wantPointing = false;
+/** iOS's answer, once asked. Null until then; true everywhere that never asks. */
+let permitted: boolean | null = null;
+
+export function preferPointing(on: boolean): void {
+  wantPointing = on;
+}
+
+export function prefersPointing(): boolean {
+  return wantPointing;
+}
+
+/**
+ * Ask for the sensor, **from inside a press** - iOS refuses the request any other way,
+ * and the first screen's LAUNCH is the press. It calls this synchronously in its click
+ * handler, before anything is awaited, and the piece that loads a second later then
+ * finds the answer here rather than having to ask again without a gesture.
+ */
+export function askPermission(): Promise<boolean> {
+  const ask = (typeof DeviceOrientationEvent !== 'undefined'
+    ? (DeviceOrientationEvent as unknown as { requestPermission?: PermissionCall }).requestPermission
+    : undefined);
+  if (!ask) {
+    permitted = true;
+    return Promise.resolve(true);
+  }
+  // Called on the class itself: a detached static can lose its receiver.
+  return ask.call(DeviceOrientationEvent).then(
+    (r) => (permitted = r === 'granted'),
+    () => (permitted = false)
+  );
+}
+
 /** Whether to offer the mode at all: a sensor API, a finger, and a secure page. */
 export function canPoint(): boolean {
   return (
@@ -118,15 +155,8 @@ export function createPointing(): Pointing {
     },
 
     async start() {
-      const ask = (DeviceOrientationEvent as unknown as { requestPermission?: PermissionCall })
-        .requestPermission;
-      if (ask) {
-        try {
-          if ((await ask()) !== 'granted') return false;
-        } catch {
-          return false;
-        }
-      }
+      // Asked already, on the first screen's press, or asked now from this one.
+      if (!(permitted ?? (await askPermission()))) return false;
       attitude = null;
       compassOffset = null;
       listen();
