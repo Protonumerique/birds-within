@@ -1073,6 +1073,110 @@ about the sky rather than a bug.** Passing objects go the other way — 76 from 
 103 at 85°N, 28 at the equator — because most of what is up there is in a
 high-inclination shell.
 
+### The small screen
+
+Added 2026-09-24, from a phone. The column was 272 px of a 390 px portrait screen and
+about 2/5 of a landscape one; the sky, which is the piece, was mostly behind it.
+
+- **Below `READOUT.compactQuery` the panel starts folded**: the title with a **menu
+  button beside it**, the clock, PAUSE / NOW / speed and LISTEN. The observer, the
+  catalogue line, the scrub slider, the lists and the grid wait behind the menu. Open,
+  it is a drawer — the full width under a near-opaque wash when standing up (0.86, so
+  the sky's rings do not read through the rows), **two columns** lying down (controls
+  beside the lists and grid), because a 390 px tall column cannot hold a 290 px header
+  *and* lists. The query tests height as well as width for exactly that reason. It is a
+  class set from `matchMedia`, so the threshold lives in config alone; rotating
+  re-lays it out and leaves open or folded as it was.
+- **The menu is three drawn bars that turn into an X**, and it never moves: the thing
+  that opened the panel is the thing that closes it, beside the title in both states.
+  The first version was a PANEL button in the LISTEN row, which sat mid-drawer once
+  open and read as one more control among many. Drawn rather than typed, because the
+  font subset has no glyph for either and a drawn mark centres against the capitals.
+- **The compact column is 224 px**, not 208: the title is 175 px and the menu 34, and
+  at 208 the title wrapped onto two lines while folded. It is `nowrap` as well.
+- **A small count beside the menu** says how many objects are kept. Folded, it is the
+  only sign that a tap on the sky put something in a list you cannot see.
+- **A folded column must not stretch.** `#hud` is a flex row, so the column stretched to
+  full height with `pointer-events: auto` and swallowed every touch down the left of the
+  screen — found by `elementFromPoint` returning the header at mid-screen, not by
+  looking. `align-self: flex-start` is the fix.
+- **Pinch zooms.** There is no wheel on glass. Two pointers on the canvas scale the field
+  of view by the ratio of their spread; a pinch is never a tap, and the finger left
+  behind restarts the drag from where it is rather than jumping the view. Verified with
+  real CDP touch events: 95° → 25° on a 6× spread.
+- **Touch has no hover**, so the hint says `tap` (chosen on `(pointer: coarse)`, not on
+  size), and a legend name holds its reveal on a tap and lets go on a second.
+- **The first screen says so** on a small screen (`GATE.smallScreenNote`), under LAUNCH
+  and never in its way. Warn, not block: much of a hero section's traffic is phones.
+- Hints and legend move to the **foot** of the frame, clear of the title. `#hud` pads by
+  `env(safe-area-inset-*)`, since `viewport-fit=cover` hands the notch to the page.
+
+**Eclipsed objects keep a fifth of their halo** (`GLOW.eclipsedHalo`), from the same
+phone: at night most of the sky is eclipsed, and a grey dot carrying a full halo read as
+*glow adrift from its mark* — reported as a misaligned glow pass, which it was not.
+
+### Pointing the phone at the sky
+
+Added 2026-09-25. On a touch device with a motion sensor, **POINT TO LOOK** in the hints
+corner hands the camera to the phone: hold it up and the sky on screen is the sky behind
+it. `src/orientation.ts` owns the browser side, `SkyScene.setAttitude` the camera.
+
+This is the framing taken literally — *observer looking up* — and it fits the scene
+exactly: the camera already only ever rotates about the origin, so the sensor replaces
+the drag and nothing else changes. It is also most of the way to a 3DOF VR view, for the
+same reason.
+
+- **Asked for inside the press, never before**, the same bargain as the sound and the
+  location: iOS will not grant `DeviceOrientationEvent.requestPermission()` any other
+  way, and elsewhere the events simply arrive.
+- **North is a different field per engine.** Chrome on Android fires
+  `deviceorientationabsolute`, measured from north. iOS fires only a relative
+  `deviceorientation` and carries north as `webkitCompassHeading`, so the offset between
+  them is learned continuously and smoothed (5% a reading), because the compass is
+  noisy. A relative reading with no compass beside it is dropped: a sky at an arbitrary
+  azimuth is worse than no pointing at all.
+- **A desktop often has the API and never fires it.** `start` waits 2.5 s for a real
+  reading and otherwise says **NO MOTION SENSOR** on the button, rather than entering a
+  mode that silently does not move.
+- **The camera takes a quaternion, not yaw and pitch.** A held phone rolls, and the
+  lookAt path cannot express that; it also has no gimbal to lock, so the zenith is safe
+  here without the pitch clamp. The conversion is three's retired
+  `DeviceOrientationControls`: the W3C angles as a YXZ Euler, a quarter turn about X so
+  the camera looks out of the **back** of the phone, and the screen's own rotation
+  undone. It is eased toward the sensor over 80 ms, which hides a degree of jitter and
+  adds no visible lag.
+- **`heading` comes from the camera's right vector** while pointing, flattened, because
+  there is no yaw to read off a rolled camera — and the right vector is what the stereo
+  pan actually wants.
+- **Drag is suspended, taps are not.** A drag still counts as travel, so a swipe is not
+  taken for a tap; pinch still zooms.
+- **Leaving hands the drag the view the phone had**, so switching back does not throw the
+  sky back to where it was before.
+
+Verified with synthetic `deviceorientationabsolute` events in an emulated phone, reading
+where the camera points: upright facing north → az 0°, el 0°; alpha 90 → az 270° (alpha
+runs anticlockwise); alpha 270 → az 90°; beta 135 → el 45°; flat on its back → el −90°;
+leaving at az 180°, el 60° → the drag resumes there.
+
+**Checked on a real phone on 2026-09-25** — a Xiaomi 15 Pro in Chrome, over
+`dev:https`: it works, and against a compass app by hand north agrees to within about
+5–6°. That is about Berlin's magnetic declination (~4–5° east), and it may be exactly
+that: Android's rotation vector is referenced to **magnetic** north, while many compass
+apps show true north. Correcting it would need a geomagnetic model per observer, which
+is not worth it for a piece about density. **Still unchecked:** the iOS compass offset
+and holding the phone sideways.
+
+Embedded, the iframe needs `allow="accelerometer; gyroscope; magnetometer"` as well.
+
+**Testing it from a phone needs `npm run dev:https`, and plain `npm run dev` hides the
+button.** Found on a Xiaomi 15 Pro, with every sensor, showing no button at all: over the
+local network the page is `http://192.168…`, which is not a secure context, and browsers
+only deliver motion sensors to secure pages. `canPoint` asks exactly that and declines to
+draw a button that could never work. `dev:https` is the same server behind a self-signed
+certificate (`@vitejs/plugin-basic-ssl`, active only in that mode); the phone warns once
+about the certificate. Nothing reads `import.meta.env.MODE`, so the mode changes nothing
+else. Geolocation has the same rule, which is why USE MY LOCATION was also missing there.
+
 ### Full screen
 
 Added 2026-09-18, in `src/fullscreen.ts`. The button lives in the hints corner rather
@@ -2856,6 +2960,8 @@ to do, both cheap and both invisible when missed:
 - **`allow="geolocation"` too**, for the same reason and with the same symptom: without
   it USE MY LOCATION is not drawn. Nothing is ever asked before that button is pressed —
   see *Where you are standing*.
+- **`allow="accelerometer; gyroscope; magnetometer"`** for POINT TO LOOK; without it
+  the sensor sends nothing and the button says NO MOTION SENSOR.
 - **Give it a real height.** The canvas fills whatever box it is given, and the panel is
   a full-height column; under about 400 px the lists scroll rather than fitting, which is
   handled but is not the image.
@@ -3112,6 +3218,8 @@ intact in any fork; pointing browsers straight at CelesTrak earns 403s and an IP
 ```bash
 npm install
 npm run dev              # localhost:5173 - the synthetic sky until you fetch; add ?debug
+npm run dev:https        # the same over a self-signed certificate, for a phone on the
+                         # local network: sensors and location need a secure page
 npm run fetch:catalog    # CelesTrak -> .catalog-cache/ -> public/data/{active,full}.bin
                          # in Claude Code on the web this needs celestrak.org added to the
                          # environment's network egress allowlist, or every fetch 403s

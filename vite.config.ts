@@ -1,6 +1,14 @@
 import { defineConfig } from 'vite';
+import basicSsl from '@vitejs/plugin-basic-ssl';
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
+  // `npm run dev:https`: the same dev server behind a self-signed certificate, for
+  // testing on a phone over the local network. Motion sensors, geolocation and full
+  // screen are only offered to secure pages, and http://192.168.x.x is not one - so
+  // over plain `npm run dev` from a phone, POINT TO LOOK is simply not drawn. The
+  // browser will warn about the certificate once; accept it and carry on.
+  plugins: mode === 'https' ? [basicSsl()] : [],
+
   // Relative, so the same build works both at a domain root
   // (birds.protonumerique.net/) and under a subpath
   // (protonumerique.github.io/birds-within/). With base: '/' the built index.html
@@ -34,4 +42,4 @@ export default defineConfig({
     target: 'es2022',
     sourcemap: true,
   },
-});
+}));

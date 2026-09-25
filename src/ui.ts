@@ -14,6 +14,7 @@ import type { Clock } from './clock';
 import type { SkyFrame } from './sky-frame';
 import type { Selection } from './selection';
 import { createFullscreen } from './fullscreen';
+import { canPoint, createPointing, type Attitude } from './orientation';
 import { Group } from './ui-group';
 import { ChoirGrid } from './ui-choir';
 import type { AudioEngine } from './audio';
@@ -33,6 +34,8 @@ export interface Hud {
   ringed(): readonly number[];
   /** The FAMILY value the pointer is revealing from the legend, or -1. */
   revealing(): number;
+  /** The phone's attitude while it is being pointed at the sky, else null. */
+  attitude(): Attitude | null;
   /** Every belt object above the sky's floor - what the grid shows, and what sings. */
   belt(): readonly number[];
 }
@@ -109,7 +112,10 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
     <div class="scrim"></div>
     <div class="col">
       <header>
-        <h1>Birds Within</h1>
+        <div class="titlebar">
+          <h1>Birds Within</h1>
+          <button id="panel" type="button" aria-expanded="false" aria-label="Open the panel"><i></i><i></i><i></i><b class="kept"></b></button>
+        </div>
         <div class="sub">${observerLabel()}</div>
         <div class="sub">${names.length.toLocaleString('en')} objects · ${source.dataset} · ${asOf}</div>
         ${source.dataset === 'synthetic' ? '<div class="warn">invented orbits, not real objects</div>' : ''}
@@ -119,10 +125,10 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
           <button id="now">NOW</button>
           <select id="rate">${CLOCK.rates.map((r) => `<option value="${r}">${r}×</option>`).join('')}</select>
         </div>
-        <div class="controls">
+        <div class="controls scrub">
           <input id="scrub" type="range" min="-720" max="720" step="1" value="0" title="offset from now, minutes" />
         </div>
-        <div class="controls">
+        <div class="controls sound">
           <button id="listen">LISTEN</button>
         </div>
         <div class="sub" id="soundnote"></div>
@@ -139,6 +145,7 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
     <div class="hints">
       <div class="hintline" id="hint"></div>
       <div class="conventions" id="conv"></div>
+      <button id="point" type="button" hidden>POINT TO LOOK</button>
       <button id="full" type="button" hidden>FULL SCREEN</button>
     </div>
   `;
@@ -188,8 +195,37 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
   // Full screen. Its own corner rather than the controls block, because it changes
   // the frame and not the image - see fullscreen.ts. Escape is the browser's own way
   // out; the hint for it is only drawn while there is something to get out of.
+  /*
+   * Folding, on a small screen only. The panel starts folded there - title and this
+   * button, clock, the time controls and LISTEN - because the column is most of a phone's width and the
+   * sky is the piece. See READOUT.compactQuery. Everything below is CSS keyed off two
+   * classes on the root, so the components inside still do not know where they are.
+   */
+  const panelBtn = $<HTMLButtonElement>('panel');
+  const keptEl = panelBtn.querySelector<HTMLElement>('.kept')!;
+  const compact = matchMedia(READOUT.compactQuery);
+  let folded = compact.matches;
+  let keptShown = -1;
+  const paintPanel = () => {
+    root.classList.toggle('compact', compact.matches);
+    root.classList.toggle('folded', folded);
+    panelBtn.setAttribute('aria-expanded', String(!folded));
+    panelBtn.setAttribute('aria-label', folded ? 'Open the panel' : 'Close the panel');
+    panelBtn.classList.toggle('on', !folded);
+  };
+  // Rotating re-evaluates the layout but leaves open or folded as it was left.
+  compact.addEventListener('change', paintPanel);
+  panelBtn.onclick = () => {
+    folded = !folded;
+    paintPanel();
+  };
+  paintPanel();
+
   const fullBtn = $<HTMLButtonElement>('full');
   const hintEl = $('hint');
+  // Chosen on the kind of pointer rather than the size of the screen: a tablet is
+  // large and still has no wheel, no hover and no Escape key.
+  const coarse = matchMedia('(pointer: coarse)');
   const fullscreen = createFullscreen(document.documentElement);
   fullBtn.hidden = !fullscreen.available;
   fullBtn.onclick = () => void fullscreen.toggle();
@@ -199,10 +235,44 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
     const on = fullscreen.active;
     fullBtn.textContent = on ? 'LEAVE FULL SCREEN' : 'FULL SCREEN';
     fullBtn.classList.toggle('on', on);
-    hintEl.textContent = on ? `${READOUT.hint} · esc to leave` : READOUT.hint;
+    const hint = pointing.active ? READOUT.pointHint : coarse.matches ? READOUT.touchHint : READOUT.hint;
+    hintEl.textContent = on && !coarse.matches ? `${hint} · esc to leave` : hint;
   };
   fullscreen.onchange = paintFullscreen;
-  paintFullscreen();
+
+  /*
+   * Point the phone at the sky. Offered only where there is a finger and a sensor API,
+   * and asked for only inside this press - iOS will not grant it any other way, and a
+   * permission dialog nobody asked for is the thing the whole first screen avoids.
+   * A device that says it has the API and then sends nothing (most desktops) gets a
+   * plain answer on the button rather than a mode that silently does not move.
+   */
+  const pointBtn = $<HTMLButtonElement>('point');
+  const pointing = createPointing();
+  pointBtn.hidden = !canPoint();
+  const paintPointing = () => {
+    pointBtn.textContent = pointing.active ? 'DRAG TO LOOK' : 'POINT TO LOOK';
+    pointBtn.classList.toggle('on', pointing.active);
+    paintFullscreen();
+  };
+  pointBtn.onclick = async () => {
+    if (pointing.active) {
+      pointing.stop();
+      paintPointing();
+      return;
+    }
+    pointBtn.disabled = true;
+    pointBtn.textContent = 'ASKING…';
+    const ok = await pointing.start();
+    pointBtn.disabled = false;
+    if (!ok) {
+      pointBtn.textContent = 'NO MOTION SENSOR';
+      pointBtn.disabled = true;
+      return;
+    }
+    paintPointing();
+  };
+  paintPointing();
 
   /*
    * Immersion, bottom centre and starting at 0 - which is the piece exactly as it was.
@@ -268,8 +338,15 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
    */
   let revealed = -1;
   convRows.forEach((row, n) => {
-    row.onpointerenter = () => { revealed = n; };
-    row.onpointerleave = () => { if (revealed === n) revealed = -1; };
+    row.onpointerenter = (e) => { if (e.pointerType === 'mouse') revealed = n; };
+    row.onpointerleave = (e) => { if (e.pointerType === 'mouse' && revealed === n) revealed = -1; };
+    // A finger has no hover, so on touch a tap holds the reveal and a second tap, or a
+    // tap on another name, lets it go. It still keeps nothing.
+    row.onpointerup = (e) => {
+      if (e.pointerType === 'mouse') return;
+      revealed = revealed === n ? -1 : n;
+      convRows.forEach((r, m) => r.classList.toggle('held', m === revealed));
+    };
   });
 
   const cols = [names, selection, featured, family] as const;
@@ -294,6 +371,7 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
   return {
     ringed: () => ringed,
     revealing: () => (revealed >= 0 ? FAMILY_LEGEND[revealed]!.family : -1),
+    attitude: () => pointing.attitude,
     belt: () => choirUp,
 
     update(date, frame) {
@@ -311,6 +389,13 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
       // because nothing is silenced any more: a held clock stops the phrases and a
       // fast one stands the whole mix back, and in both the belt goes on humming.
       soundNote.textContent = source.audio.attenuated ? (clock.isPaused ? 'held' : 'stood back') : '';
+      // Folded, the kept count beside the menu is the only sign the lists have
+      // something in them - a tap on the sky keeps an object whose row is out of sight.
+      const kept = selection.marked.size;
+      if (kept !== keptShown) {
+        keptShown = kept;
+        keptEl.textContent = kept ? String(kept) : '';
+      }
       if (!frame) return;
 
       if (frame !== scanned) {

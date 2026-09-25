@@ -288,6 +288,7 @@ export async function run(status: StatusFn): Promise<void> {
     // reading the heading it was just drawn with, which is the ordering that matters.
     scene.setPulses(audio.pulses);
     hud.pulse();
+    scene.setAttitude(hud.attitude());
     scene.render();
 
     // The canvas now holds a sky. Whatever is covering it can go.

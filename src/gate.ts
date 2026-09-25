@@ -1,4 +1,4 @@
-import { GATE, observerIsCustom, observerLabel, resetObserver } from './config';
+import { GATE, READOUT, observerIsCustom, observerLabel, resetObserver } from './config';
 import { canLocate, locate } from './place';
 import { posterSvg } from './poster';
 
@@ -49,6 +49,7 @@ export function createGate(root: HTMLElement, handlers: GateHandlers): Gate {
       <div class="gate-tagline">${GATE.tagline}</div>
       <p class="gate-lede">${GATE.lede}</p>
       <button class="gate-launch" type="button">${GATE.launchLabel}</button>
+      ${matchMedia(READOUT.compactQuery).matches ? `<div class="gate-small">${GATE.smallScreenNote}</div>` : ''}
       <div class="gate-status" role="status" aria-live="polite"></div>
       <div class="gate-where">
         <span class="gate-place"></span>
@@ -56,7 +57,7 @@ export function createGate(root: HTMLElement, handlers: GateHandlers): Gate {
       </div>
       <div class="gate-placenote"></div>
       <div class="gate-meta">elements from CelesTrak, refreshed every six hours</div>
-      <div class="gate-hint">${GATE.hint}</div>
+      <div class="gate-hint">${matchMedia('(pointer: coarse)').matches ? GATE.touchHint : GATE.hint}</div>
     </div>
   `;
   root.append(el);

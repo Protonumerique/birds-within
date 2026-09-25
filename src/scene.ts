@@ -40,6 +40,7 @@ const FAMILY_COLORS = Object.entries(FAMILY_LOOK)
 import { NO_POSITION, directionFromAltAz, type SkyFrame } from './sky-frame';
 import type { FramePair } from './sky-stream';
 import { pickNearest } from './picking';
+import type { Attitude } from './orientation';
 
 /** The sky's own colour: the clear colour, and what the haze fades objects into. */
 const SKY_COLOR = PALETTE.sky;
@@ -304,6 +305,7 @@ const HIDE_GLSL = /* glsl */ `
     vAlpha = 0.0;
     vColor = vec3(0.0);
     vGlow = 0.0;
+    vHalo = 0.0;
     vShard = 0.0;
     vSpin = vec2(1.0, 0.0);
     vSizePx = 0.0;
@@ -357,8 +359,11 @@ const POINT_VERT = /* glsl */ `
    */
   uniform float uGhostStreak;
   uniform vec2 uViewport;
-  /** GLOW: x how far the halo reaches as a multiple of the dot, y how bright it is. */
-  uniform vec2 uHalo;
+  /**
+   * GLOW: x how far the halo reaches as a multiple of the dot, y how bright it is,
+   * z what an eclipsed object keeps of it.
+   */
+  uniform vec3 uHalo;
   /** IMMERSION: x amount 0-1, y nearKm, z farKm, w how much larger a near mark gets. */
   uniform vec4 uImmerse;
   /** x bokeh width for a far mark, y nearDim, z farDim. See IMMERSION. */
@@ -373,6 +378,8 @@ const POINT_VERT = /* glsl */ `
   varying float vAlpha;
   varying vec3 vColor;
   varying float vGlow;
+  /** How much of the halo this object carries: all of it lit, a little eclipsed. */
+  varying float vHalo;
   /** 0 = a light, 1 = a shard. */
   varying float vShard;
   /** cos/sin of this fragment's own tumble, so no two agree. */
@@ -455,6 +462,10 @@ const POINT_VERT = /* glsl */ `
     float size = aKind > 1.5 ? uDebrisLook.x : (aKind > 0.5 ? uRocketLook.x : 1.0);
     if (featured) size *= uFeaturedSize;
     vGlow = aKind > 1.5 ? uDebrisLook.y : (aKind > 0.5 ? uRocketLook.y : 1.0);
+    // An eclipsed object is not a light: it keeps its dot and loses most of its halo,
+    // or a night sky full of them reads as haloes adrift from their marks. The belt
+    // keeps its own, since its brightness is steady by rule. See GLOW.eclipsedHalo.
+    vHalo = (lit || choir || !above) ? 1.0 : uHalo.z;
 
     // A hash off the object's own index: every fragment tumbles at its own rate, from
     // its own starting angle, and the field never falls into step with itself.
@@ -528,6 +539,7 @@ const POINT_FRAG = /* glsl */ `
   varying float vAlpha;
   varying vec3 vColor;
   varying float vGlow;
+  varying float vHalo;
   varying float vShard;
   varying vec2 vSpin;
   varying float vSizePx;
@@ -538,7 +550,7 @@ const POINT_FRAG = /* glsl */ `
   varying float vGain;
   varying float vSolid;
 
-  uniform vec2 uHalo;
+  uniform vec3 uHalo;
   /** 1 the lights, 2 the shards, 0 both. See RENDER_ORDER.shards. */
   uniform float uOnly;
   /** How much the core tightens as a near mark is magnified. See IMMERSION.coreTighten. */
@@ -633,7 +645,7 @@ const POINT_FRAG = /* glsl */ `
      * off the image directly, which is the thing this piece is about.
      */
     float halo = pow(max(1.0 - r / uHalo.x, 0.0), 2.0);
-    float focused = 0.22 * core + 1.9 * glow * vGlow + uHalo.y * halo * vGlow;
+    float focused = 0.22 * core + 1.9 * glow * vGlow + uHalo.y * halo * vGlow * vHalo;
     /*
      * Out of focus, a point is not a softer point: it is a **disc**, nearly flat across
      * its face with a soft rim, because the lens spreads the light evenly over the
@@ -1156,6 +1168,18 @@ const COLOR_FEATURED = new THREE.Color(FEATURED.color);
 /** How far a press may travel, in CSS pixels, and still count as a click. */
 const DRAG_SLOP = 6;
 
+/**
+ * Pointing the phone. The device's rest pose has its top toward north and its back
+ * toward the ground; a camera looks down its own -Z. This quarter turn about X is the
+ * difference, so the camera looks out of the back of the phone the way a viewfinder
+ * does. It and the screen axis are the whole of what three's retired
+ * DeviceOrientationControls did.
+ */
+const OUT_OF_THE_BACK = new THREE.Quaternion(-Math.SQRT1_2, 0, 0, Math.SQRT1_2);
+const SCREEN_AXIS = new THREE.Vector3(0, 0, 1);
+/** How long the camera takes to catch the sensor: enough to hide jitter, no lag. */
+const POINT_EASE_SECONDS = 0.08;
+
 /** How close to straight up or down the camera may look. See `render`. */
 const ZENITH_LIMIT = {
   min: THREE.MathUtils.degToRad(-89),
@@ -1223,7 +1247,7 @@ export class SkyScene {
      * rotation rate in the elements to be faithful to anyway.
      */
     uTime: { value: 0 },
-    uHalo: { value: new THREE.Vector2(GLOW.haloScale, GLOW.haloGain) },
+    uHalo: { value: new THREE.Vector3(GLOW.haloScale, GLOW.haloGain, GLOW.eclipsedHalo) },
     /**
      * Immersion, shared with the ghosts so a streak can never disagree with the mark it
      * follows about how near or how soft it is. x is the slider; the rest are constants
@@ -1329,6 +1353,12 @@ export class SkyScene {
   // opens facing south.
   private yaw = THREE.MathUtils.degToRad(SKY.startFacingDeg);
   private pitch = THREE.MathUtils.degToRad(SKY.startPitchDeg);
+  /** Whether the device's attitude is driving the camera. See `setAttitude`. */
+  private pointed = false;
+  private readonly attitudeTarget = new THREE.Quaternion();
+  private readonly attitudeEuler = new THREE.Euler();
+  private readonly attitudeTurn = new THREE.Quaternion();
+  private lastRender = performance.now();
   private pointer: PointerHandlers | null = null;
   private canvasRect: DOMRect;
 
@@ -1855,7 +1885,38 @@ export class SkyScene {
    * field. Pitch does not enter into it - see the note in `Drone.update`.
    */
   get heading(): number {
-    return this.yaw;
+    if (!this.pointed) return this.yaw;
+    // Held by the device, the camera can roll, so there is no yaw to read. The right
+    // vector is what the sound actually wants; this is its angle, flattened.
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion);
+    return Math.atan2(right.z, right.x);
+  }
+
+  /**
+   * Point the phone at the sky: while an attitude is given, the device's orientation
+   * is the camera and drag no longer turns it. See orientation.ts.
+   *
+   * Given null, the drag takes over again **from where the phone was pointing**, so
+   * leaving the mode does not throw the view back to wherever it was before.
+   */
+  setAttitude(attitude: Attitude | null): void {
+    if (!attitude) {
+      if (this.pointed) {
+        const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
+        this.pitch = THREE.MathUtils.clamp(Math.asin(fwd.y), THREE.MathUtils.degToRad(-20), ZENITH_LIMIT.max);
+        this.yaw = Math.atan2(fwd.x, -fwd.z);
+        this.pointed = false;
+      }
+      return;
+    }
+    // The W3C angles, into this scene's frame (+X east, +Y up, -Z north), then turned
+    // so the camera looks out of the back of the phone rather than out of its top, and
+    // unturned by however far the screen is rotated inside the device.
+    this.attitudeEuler.set(attitude.beta, attitude.alpha, -attitude.gamma, 'YXZ');
+    this.attitudeTarget.setFromEuler(this.attitudeEuler).multiply(OUT_OF_THE_BACK);
+    this.attitudeTarget.multiply(this.attitudeTurn.setFromAxisAngle(SCREEN_AXIS, -attitude.screen));
+    if (!this.pointed) this.camera.quaternion.copy(this.attitudeTarget);
+    this.pointed = true;
   }
 
   setPickCursor(over: boolean): void {
@@ -2059,22 +2120,65 @@ export class SkyScene {
     let lastX = 0;
     let lastY = 0;
     let travelled = 0;
+    /**
+     * Every finger on the glass. Two of them is a pinch, which is the phone's zoom -
+     * there is no wheel on a touch screen. A pinch is never a click, and the finger
+     * left behind when the other lifts must not jump the view, so it restarts the drag
+     * from where it is.
+     */
+    const touches = new Map<number, { x: number; y: number }>();
+    let pinchFrom = 0;
+    const spread = () => {
+      const [a, b] = [...touches.values()];
+      return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
+    };
 
     canvas.addEventListener('pointerdown', (e) => {
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      canvas.setPointerCapture(e.pointerId);
+      if (touches.size === 2) {
+        pinchFrom = spread();
+        travelled = Infinity;
+        return;
+      }
       dragging = true;
       travelled = 0;
       lastX = e.clientX;
       lastY = e.clientY;
-      canvas.setPointerCapture(e.pointerId);
     });
     canvas.addEventListener('pointerup', (e) => {
-      dragging = false;
+      const wasPinch = touches.size > 1;
+      touches.delete(e.pointerId);
       canvas.releasePointerCapture(e.pointerId);
+      if (wasPinch) {
+        const [rest] = [...touches.values()];
+        if (rest) {
+          lastX = rest.x;
+          lastY = rest.y;
+        }
+        return;
+      }
+      dragging = false;
       if (travelled < DRAG_SLOP) this.pointer?.click(e.clientX, e.clientY);
       // The view may have turned under a still pointer: re-read what is beneath it.
       this.pointer?.hover(e.clientX, e.clientY);
     });
     canvas.addEventListener('pointermove', (e) => {
+      const touch = touches.get(e.pointerId);
+      if (touch) {
+        touch.x = e.clientX;
+        touch.y = e.clientY;
+      }
+      if (touches.size >= 2) {
+        const now = spread();
+        if (pinchFrom > 0 && now > 0) {
+          // Fingers apart is closer in: the field of view shrinks by their ratio.
+          this.camera.fov = THREE.MathUtils.clamp((this.camera.fov * pinchFrom) / now, 25, 130);
+          this.camera.updateProjectionMatrix();
+        }
+        pinchFrom = now;
+        return;
+      }
       if (!dragging) {
         this.pointer?.hover(e.clientX, e.clientY);
         return;
@@ -2082,13 +2186,17 @@ export class SkyScene {
       const dx = e.clientX - lastX;
       const dy = e.clientY - lastY;
       travelled += Math.abs(dx) + Math.abs(dy);
+      // Pointing the phone is the look; a drag must not fight it. It still counts as
+      // travel, so a swipe is not taken as a tap.
+      if (this.pointed) return;
       this.yaw -= dx * 0.004;
       this.pitch = THREE.MathUtils.clamp(this.pitch + dy * 0.004, THREE.MathUtils.degToRad(-20), ZENITH_LIMIT.max);
       lastX = e.clientX;
       lastY = e.clientY;
     });
     canvas.addEventListener('pointerleave', () => this.pointer?.leave());
-    canvas.addEventListener('pointercancel', () => {
+    canvas.addEventListener('pointercancel', (e) => {
+      touches.delete(e.pointerId);
       dragging = false;
       this.pointer?.leave();
     });
@@ -2204,13 +2312,23 @@ export class SkyScene {
     // build a basis from it, and the entire scene disappears - which looks like a
     // rendering failure rather than a gimbal lock. Anything that sets pitch directly,
     // a debug snippet included, has to be safe.
-    const pitch = THREE.MathUtils.clamp(this.pitch, ZENITH_LIMIT.min, ZENITH_LIMIT.max);
-    const dir = new THREE.Vector3(
-      Math.sin(this.yaw) * Math.cos(pitch),
-      Math.sin(pitch),
-      -Math.cos(this.yaw) * Math.cos(pitch)
-    );
-    this.camera.lookAt(dir);
+    const now = performance.now();
+    const dt = Math.min((now - this.lastRender) / 1000, 0.25);
+    this.lastRender = now;
+    if (this.pointed) {
+      // Held by the phone: eased toward the sensor, which jitters by a degree or so
+      // from one reading to the next. No lookAt, so no gimbal to lock - the zenith is
+      // as safe as anywhere else here.
+      this.camera.quaternion.slerp(this.attitudeTarget, 1 - Math.exp(-dt / POINT_EASE_SECONDS));
+    } else {
+      const pitch = THREE.MathUtils.clamp(this.pitch, ZENITH_LIMIT.min, ZENITH_LIMIT.max);
+      const dir = new THREE.Vector3(
+        Math.sin(this.yaw) * Math.cos(pitch),
+        Math.sin(pitch),
+        -Math.cos(this.yaw) * Math.cos(pitch)
+      );
+      this.camera.lookAt(dir);
+    }
 
     this.renderer.setRenderTarget(null);
     this.renderer.render(this.scene, this.camera);
