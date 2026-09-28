@@ -924,17 +924,40 @@ explained the bird metaphor and the crowded sky; the site's own copy does that, 
 page it is embedded in it was the third telling.
 
 - **It was a height problem before it was a redundancy one.** The copy block measured
-  **524 px on a laptop and 586 px on a phone**; it is now **366 and 393** — a third
-  shorter, and on a 780 px phone it takes half the frame rather than three quarters. On a
-  620 px hero it went from 85% of the frame to 59%. That is what "things get too crowded"
-  was.
+  **524 px on a laptop and 586 px on a phone**; cutting the lede took it to **366 and
+  393** — a third shorter. On a 620 px hero it went from 85% of the frame to 59%. That is
+  what "things get too crowded" was.
 - **The tagline is now set for reading rather than for scanning.** It was 11 px uppercase
   at 0.16em in `--ink-dim`, which is a *label* treatment — right for three words, wrong
   for two sentences, where the tracking pulls the words apart and the caps take away the
-  shapes a reader scans by. It inherits what the lede had: `--ink`, 14–17 px fluid, 1.55
-  line, and the rule above it that used to separate the two.
+  shapes a reader scans by. It has `--ink`, a 1.5 line and the rule above it that used to
+  separate the two.
 - Both strings lived in `GATE`, so this is a config change and a stylesheet change; the
   markup lost one element.
+
+**Then the room the lede gave back was spent on size**, the same day, from the live site:
+everything read as small. **The block under LAUNCH went up 1.8×** — status, the observer
+line, the place note, the CelesTrak line and the hint, all 10 px → **18 px**, the LOCATE
+button 9 → 13 — and the tagline from 14–17 px fluid to **19–23**.
+
+- **It stops at 1.8× rather than the literal 2× that was asked for, and the reason is one
+  screen.** At 20 px the copy runs **665 px into a 360×640 phone** and the hint falls
+  below the fold — the first thing a visitor needs and the last thing that should go. 18 px
+  fits everywhere: **610 px with 39 px of clearance** on that phone, and 504 on a laptop,
+  which is still under the **524** it was before the lede came out. Bigger type in a
+  shorter block, which is what the two passes together bought.
+- **The gaps paid for part of it, not the type.** `.gate-where` came in from 24 px to 17
+  and `.gate-meta` from 11 to 8; whitespace is the cheaper thing to spend when the size is
+  what was asked for.
+- **The ladder is the constraint, not the pixel count.** Title 23–40, tagline 19–23, the
+  small block 18: a literal double would have put the meta line level with the tagline and
+  flattened the screen's only hierarchy, so the tagline had to rise with it. Anything that
+  raises one of the three has to check the other two.
+- **Tracking came down wherever size went up**, the same rule the tagline established:
+  0.1em → 0.05em on the uppercase lines, 0.08em → 0.03em on the sentence-case ones. Heavy
+  tracking is how small type buys presence, and at 18 px it is not needed.
+- Measured at 1440×800, 1600×620, 390×780 and 360×640 — no overflow at any of them. **Do
+  this again after any size pass here**: 360×640 is the one that fails first.
 
 **`OPEN FULL PAGE`, and LAUNCH deliberately did not become it.** Added the same day,
 beside LAUNCH and drawn only when `isEmbedded()`. The question it answers was put the
@@ -964,7 +987,8 @@ press. **Re-measure rather than trusting this line** — it is the number the co
 below asks you to check. Latest: the entry chunk is **21.82 KB / 9.17 gzipped** and the
 stylesheet **14.04 / 4.10**, against 21.47 / 9.11 and 13.66 / 3.99 before the 2026-09-28
 first-screen pass — **+0.17 KB gzipped** all told, the lede's own bytes having paid for
-most of the policy check and the full-page link.
+most of the policy check and the full-page link. The size pass after it changed neither
+number: it is the same declarations with different values.
 
 **The trap in that, and it cost the whole saving before it was caught.** The button is
 focused on creation, so Enter works for anyone who never touches a pointer. Warming the

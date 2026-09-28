@@ -930,8 +930,8 @@ input[type="range"] {
   padding-top: 15px;
   border-top: 1px solid rgba(120, 160, 190, 0.16);
   color: var(--ink);
-  font-size: clamp(14px, 1.45vw, 17px);
-  line-height: 1.55;
+  font-size: clamp(19px, 2.05vw, 23px);
+  line-height: 1.5;
   letter-spacing: 0.005em;
 }
 
@@ -973,10 +973,10 @@ input[type="range"] {
 }
 
 .gate-embednote {
-  margin-top: 9px;
+  margin-top: 10px;
   color: var(--ink-dim);
-  font-size: 11px;
-  letter-spacing: 0.04em;
+  font-size: 18px;
+  letter-spacing: 0.02em;
 }
 
 .gate-mode-label {
@@ -1070,9 +1070,11 @@ input[type="range"] {
    when the press starts reporting progress. */
 .gate-status {
   margin-top: 12px;
-  min-height: 15px;
-  font-size: 10px;
-  letter-spacing: 0.08em;
+  /* Holds its line open before there is anything to say, so the block below it does
+     not jump when LAUNCH starts reporting. Tracks the font size. */
+  min-height: 24px;
+  font-size: 18px;
+  letter-spacing: 0.03em;
   color: var(--ink-dim);
 }
 
@@ -1090,18 +1092,18 @@ input[type="range"] {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-  margin-top: 26px;
-  font-size: 10px;
-  letter-spacing: 0.1em;
+  margin-top: 17px;
+  font-size: 18px;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--ink-faint);
 }
 
 /* Outlined and quiet. LAUNCH is the offer on this screen; this is not competing. */
 .gate-locate {
-  padding: 5px 10px;
-  font-size: 9px;
-  letter-spacing: 0.14em;
+  padding: 6px 11px;
+  font-size: 13px;
+  letter-spacing: 0.1em;
   color: var(--ink-dim);
 }
 
@@ -1115,25 +1117,25 @@ input[type="range"] {
 }
 
 .gate-placenote {
-  margin-top: 6px;
-  font-size: 10px;
-  letter-spacing: 0.08em;
+  margin-top: 7px;
+  font-size: 18px;
+  letter-spacing: 0.03em;
   color: var(--ink-dim);
 }
 
 .gate-meta {
-  margin-top: 10px;
-  font-size: 10px;
-  letter-spacing: 0.1em;
+  margin-top: 8px;
+  font-size: 18px;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--ink-faint);
 }
 
 
 .gate-hint {
-  margin-top: 5px;
-  font-size: 10px;
-  letter-spacing: 0.08em;
+  margin-top: 7px;
+  font-size: 18px;
+  letter-spacing: 0.03em;
   color: var(--ink-faint);
 }
 
