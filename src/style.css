@@ -921,23 +921,18 @@ input[type="range"] {
   color: var(--ink);
 }
 
+/* The only writing left on this screen, so it takes the setting the lede vacated:
+   set for reading rather than for scanning. It was 11px uppercase at 0.16em, which is
+   a *label* treatment - right for three words and wrong for two sentences, where the
+   tracking pulls the words apart and the caps remove the shapes a reader scans by. */
 .gate-tagline {
-  margin-top: 11px;
-  color: var(--ink-dim);
-  font-size: 11px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-}
-
-.gate-lede {
-  margin: 18px 0 0;
-  padding-top: 18px;
+  margin-top: 14px;
+  padding-top: 15px;
   border-top: 1px solid rgba(120, 160, 190, 0.16);
-  /* The only running prose in the piece, so it is the one place set for reading
-     rather than for scanning: larger, and looser in the line than anything else. */
-  font-size: 14px;
-  line-height: 1.7;
   color: var(--ink);
+  font-size: clamp(14px, 1.45vw, 17px);
+  line-height: 1.55;
+  letter-spacing: 0.005em;
 }
 
 /* The one offer on the screen, and it is the only thing here that is filled. */
@@ -950,6 +945,38 @@ input[type="range"] {
   flex-wrap: wrap;
   gap: 14px 18px;
   margin-top: 22px;
+}
+
+/* Beside LAUNCH and deliberately under it in weight: an offer, not the offer. Outlined
+   where LAUNCH is filled, and only drawn when the piece is framed. */
+.gate-fullpage {
+  align-self: flex-end;
+  padding: 9px 13px;
+  border: 1px solid rgba(120, 160, 190, 0.3);
+  border-radius: 2px;
+  color: var(--ink-dim);
+  font: 700 10px/1 var(--sans);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.gate-fullpage::after {
+  content: ' \2197';
+}
+
+.gate-fullpage:hover,
+.gate-fullpage:focus-visible {
+  border-color: rgba(120, 160, 190, 0.6);
+  color: var(--ink);
+}
+
+.gate-embednote {
+  margin-top: 9px;
+  color: var(--ink-dim);
+  font-size: 11px;
+  letter-spacing: 0.04em;
 }
 
 .gate-mode-label {

@@ -80,13 +80,78 @@ export function askPermission(): Promise<boolean> {
   );
 }
 
-/** Whether to offer the mode at all: a sensor API, a finger, and a secure page. */
+/** True when the piece is running inside an iframe. */
+export function isEmbedded(): boolean {
+  try {
+    return window.self !== window.top;
+  } catch {
+    // A cross-origin parent throws on the comparison in some engines, which is itself
+    // the answer: there is a parent and it is not us.
+    return true;
+  }
+}
+
+/**
+ * Positive evidence that the **embedding page's Permissions Policy** is withholding the
+ * sensor, added 2026-09-28. See *The sensor needs the embedding page's permission* in
+ * CLAUDE.md.
+ *
+ * The three features `DeviceOrientationEvent` is built on - gyroscope, accelerometer,
+ * magnetometer - default to `self` in a cross-origin iframe, so an embed gets them only
+ * if the host page says `allow="gyroscope; accelerometer; magnetometer"`. Without it
+ * Chromium fires no event at all, and **nothing else gives the game away**: the
+ * constructor is still on `window`, the page is still a secure context, and
+ * `navigator.permissions` still answers *granted*. Measured, all three cases.
+ *
+ * `document.featurePolicy` is non-standard and Chromium-only, so this reports blocked
+ * only on **positive** evidence and says nothing where the API is absent - which is
+ * every WebKit engine. Getting a false *no* here would take the mode away from a phone
+ * it works on, which is worse than the wait it saves.
+ */
+export function sensorBlockedByPolicy(): boolean {
+  if (typeof document === 'undefined') return false;
+  const doc = document as unknown as {
+    featurePolicy?: { allowsFeature(f: string): boolean };
+    permissionsPolicy?: { allowsFeature(f: string): boolean };
+  };
+  const policy = doc.permissionsPolicy ?? doc.featurePolicy;
+  if (!policy) return false;
+  try {
+    return !policy.allowsFeature('gyroscope');
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * True when this device could point but the page it is embedded in will not let it -
+ * the one case worth explaining, because the whole mode is simply absent and a visitor
+ * has no way to know the difference between "your phone cannot" and "this page will
+ * not". The offer that answers it is a link to the piece's own page.
+ */
+export function pointingNeedsFullPage(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    'DeviceOrientationEvent' in window &&
+    matchMedia('(pointer: coarse)').matches &&
+    isEmbedded() &&
+    sensorBlockedByPolicy()
+  );
+}
+
+/**
+ * Whether to offer the mode at all: a sensor API, a finger, a secure page - and an
+ * embedding page that is not withholding the sensor. That last clause is what stops the
+ * first screen offering POINT and the piece then answering NO SENSOR 2.5 seconds later,
+ * which is how this surfaced.
+ */
 export function canPoint(): boolean {
   return (
     typeof window !== 'undefined' &&
     'DeviceOrientationEvent' in window &&
     window.isSecureContext &&
-    matchMedia('(pointer: coarse)').matches
+    matchMedia('(pointer: coarse)').matches &&
+    !sensorBlockedByPolicy()
   );
 }
 

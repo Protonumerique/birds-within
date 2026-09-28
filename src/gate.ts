@@ -1,10 +1,10 @@
 import { GATE, observerIsCustom, observerLabel, resetObserver } from './config';
-import { askPermission, canPoint, preferPointing } from './orientation';
+import { askPermission, canPoint, isEmbedded, pointingNeedsFullPage, preferPointing } from './orientation';
 import { canLocate, locate } from './place';
 import { posterSvg } from './poster';
 
 /**
- * The first screen: a title, a drawing, four sentences and one button.
+ * The first screen: a title, a drawing, a tagline and one button.
  *
  * It exists because the piece is meant to sit in a hero section on someone else's
  * page, and a visitor who scrolls past one should pay nothing for it. Three.js,
@@ -47,8 +47,7 @@ export function createGate(root: HTMLElement, handlers: GateHandlers): Gate {
     <div class="gate-scrim"></div>
     <div class="gate-copy">
       <h1 class="gate-title">${GATE.title}</h1>
-      <div class="gate-tagline">${GATE.tagline}</div>
-      <p class="gate-lede">${GATE.lede}</p>
+      <p class="gate-tagline">${GATE.tagline}</p>
       <div class="gate-go">
         <div class="gate-mode" hidden>
           <div class="gate-mode-label">${GATE.modeLabel}</div>
@@ -57,7 +56,9 @@ export function createGate(root: HTMLElement, handlers: GateHandlers): Gate {
           </button>
         </div>
         <button class="gate-launch" type="button">${GATE.launchLabel}</button>
+        <a class="gate-fullpage" href="${location.href}" target="_blank" rel="noopener" hidden>${GATE.fullPageLabel}</a>
       </div>
+      <div class="gate-embednote" hidden>${GATE.embedNote}</div>
       <div class="gate-status" role="status" aria-live="polite"></div>
       <div class="gate-where">
         <span class="gate-place"></span>
@@ -71,6 +72,24 @@ export function createGate(root: HTMLElement, handlers: GateHandlers): Gate {
   root.append(el);
 
   const button = el.querySelector<HTMLButtonElement>('.gate-launch')!;
+
+  /*
+   * The way out of the frame, offered only when there is a frame to get out of.
+   *
+   * **LAUNCH deliberately stays in place.** The piece is built to *be* the hero section
+   * - see *Embedding it* in CLAUDE.md - and a press that threw the visitor into a new
+   * tab would spend that design to serve the one case that needs it. So this is a
+   * second, quieter offer beside it, and it is a plain link rather than a `window.open`:
+   * a link survives a popup blocker, and it can be middle-clicked and long-pressed like
+   * any other.
+   *
+   * It earns its place beyond the sensor. Full screen and the location button are both
+   * simply **not drawn** inside an iframe that does not allow them, which is honest and
+   * looks exactly like a feature that was never built; the whole page has all three.
+   */
+  const fullPage = el.querySelector<HTMLAnchorElement>('.gate-fullpage')!;
+  fullPage.hidden = !isEmbedded();
+  el.querySelector<HTMLElement>('.gate-embednote')!.hidden = !pointingNeedsFullPage();
 
   /*
    * How to look, chosen before the press so the visitor knows what to expect. Offered

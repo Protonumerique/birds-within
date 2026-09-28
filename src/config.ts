@@ -117,14 +117,16 @@ export const catalogUrl = (dataset: Dataset) => `${import.meta.env.BASE_URL}data
 /** The first screen. */
 export const GATE = {
   title: 'Birds Within',
+  /** The whole of the writing on this screen, and it carries what the lede used to. */
   tagline: 'A visualization of crowded skies. An immersive panorama showing our traces in orbit, our observers above.',
-  /** Very short, and it has one job: */
-  lede:
-    'Referring to a satellite as "Bird" is common in the aerospace community. Approaching them literally as such, allows newcomers to discover the taxonomies and complexities of our orbital environment. This piece is an immersive experience of the crowded skies above us, a tool to explore and understand them more, or simply, contemplate their dynamics.',
   /** The one offer on the screen. */
   launchLabel: 'LAUNCH',
   /** What the press costs, said before it is pressed rather than after. */
   loadingLabel: 'LAUNCHING…',
+  /** Offered only when the piece is framed, where it is the way to the whole page. */
+  fullPageLabel: 'OPEN FULL PAGE',
+  /** Shown when the embedding page's policy is what is keeping POINT off the screen. */
+  embedNote: 'pointing the phone at the sky needs the full page',
   hint: 'drag to look · click to trace · press LISTEN for sound',
   touchHint: 'drag to look · tap to trace · press LISTEN for sound',
   /** Over the DRAG / POINT switch, where the device can point. */
@@ -1029,11 +1031,17 @@ export const INTERFERENCE = {
  */
 
 /**
- * ### GATE.lede
+ * ### GATE.tagline
  *
- * Very short, and it has one job: say what changed between 2010 and now. That
- * change *is* the piece - see the top of CLAUDE.md - and it is the one thing a
- * reader cannot get from looking at the sky, because they never saw the old one.
+ * The whole of the writing on this screen since 2026-09-28, when the lede below it was
+ * deleted. There were two blocks of prose and they said the same thing twice - the lede
+ * explained the bird metaphor and the crowded sky, which the site around the piece
+ * already says, and on a short hero the pair crowded everything else off the screen.
+ *
+ * So the tagline inherits the job and the *setting*: `.gate-tagline` was 11px uppercase
+ * at 0.16em tracking, which is a label treatment, and a label treatment over two
+ * sentences reads as small print. It is now set for reading, at the size and leading
+ * the lede had.
  */
 
 /**

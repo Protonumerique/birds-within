@@ -903,12 +903,12 @@ would fight over one gesture.
 
 Added 2026-09-18. The piece is meant to sit in a hero section on another page, and a
 visitor who scrolls past one should pay nothing for it. So `main.ts` is now almost
-nothing — it renders a title, a drawing, four sentences and a LAUNCH button — and
+nothing — it renders a title, a drawing, a tagline and a LAUNCH button — and
 **everything else is behind a dynamic `import('./piece')`**: three.js, satellite.js, the
 WASM propagator, the worker and the packed catalogue. `src/piece.ts` is the old `main`,
 `src/gate.ts` is the screen, `src/poster.ts` is the drawing.
 
-**Measured, on the production build: 25.3 KB before the press**, of which **13.8 KB is
+**Measured, on the production build: ~26 KB before the press**, of which **13.8 KB is
 the typeface** — see *The typeface* under **The panel**. The page (559 B), the
 stylesheet (3.2 KB gzipped), a 19.0 KB entry chunk (8.2 gzipped) and two woff2 faces.
 It was 25.0 before the four new family voices, which land here rather than in the piece
@@ -916,6 +916,40 @@ chunk because `config.ts` is in the entry: +0.25 KB gzipped for the voice specs.
 Without the fonts it is 11.2 KB. It was 10.5 before the typeface and 10.4 before the
 poster was rewritten — that last 0.6 KB is the cover's own drawing code, which is the
 one thing in the entry chunk that exists purely to be looked at.
+
+**The lede is gone, and the tagline took its job and its setting.** Changed 2026-09-28,
+from looking at the piece inside the site it is meant to live in: there were two blocks
+of prose saying the same thing, and the page around the piece already said it. The lede
+explained the bird metaphor and the crowded sky; the site's own copy does that, so on the
+page it is embedded in it was the third telling.
+
+- **It was a height problem before it was a redundancy one.** The copy block measured
+  **524 px on a laptop and 586 px on a phone**; it is now **366 and 393** — a third
+  shorter, and on a 780 px phone it takes half the frame rather than three quarters. On a
+  620 px hero it went from 85% of the frame to 59%. That is what "things get too crowded"
+  was.
+- **The tagline is now set for reading rather than for scanning.** It was 11 px uppercase
+  at 0.16em in `--ink-dim`, which is a *label* treatment — right for three words, wrong
+  for two sentences, where the tracking pulls the words apart and the caps take away the
+  shapes a reader scans by. It inherits what the lede had: `--ink`, 14–17 px fluid, 1.55
+  line, and the rule above it that used to separate the two.
+- Both strings lived in `GATE`, so this is a config change and a stylesheet change; the
+  markup lost one element.
+
+**`OPEN FULL PAGE`, and LAUNCH deliberately did not become it.** Added the same day,
+beside LAUNCH and drawn only when `isEmbedded()`. The question it answers was put the
+right way round — *is the sensor fixable, or should LAUNCH open a new window?* — and the
+answer is that it is fixable by the host page, so LAUNCH should not pay for it. The piece
+is built to **be** the hero section; a press that threw the visitor into a new tab would
+spend that design on the minority case, and on a desktop, where pointing is irrelevant,
+it would be a cost with no return at all. So the escape hatch is a second, quieter offer.
+- **A link, not `window.open`.** It survives a popup blocker, and it can be
+  middle-clicked and long-pressed like any other link.
+- **It earns its place beyond the sensor.** Full screen and USE MY LOCATION are both
+  simply *not drawn* inside a frame that does not allow them — honest, and
+  indistinguishable from a feature that was never built. The whole page has all three.
+- A one-line note appears under it only when the embed is what is keeping POINT off the
+  screen, so the offer is explained exactly when it needs to be and is silent otherwise.
 
 **Nothing blocks on the fonts**, which is what makes that affordable: `font-display:
 swap` paints the fallback immediately and reflows when the face lands, so a visitor who
@@ -927,7 +961,10 @@ this cheap to not look at. It was 8.7 KB when the screen shipped and drifted upw
 the screen gained the location control; `config.ts` is in the entry chunk because
 `gate.ts` reads the observer from it, so anything added there is paid for before the
 press. **Re-measure rather than trusting this line** — it is the number the convention
-below asks you to check.
+below asks you to check. Latest: the entry chunk is **21.82 KB / 9.17 gzipped** and the
+stylesheet **14.04 / 4.10**, against 21.47 / 9.11 and 13.66 / 3.99 before the 2026-09-28
+first-screen pass — **+0.17 KB gzipped** all told, the lede's own bytes having paid for
+most of the policy check and the full-page link.
 
 **The trap in that, and it cost the whole saving before it was caught.** The button is
 focused on creation, so Enter works for anyone who never touches a pointer. Warming the
@@ -1149,6 +1186,22 @@ same reason.
 - **A desktop often has the API and never fires it.** `start` waits 2.5 s for a real
   reading and otherwise says **NO SENSOR** on the button, rather than entering a
   mode that silently does not move.
+- **An embedding page that withholds the sensor looks exactly like that desktop**, and
+  until 2026-09-28 it was treated as one: the first screen offered POINT, the piece
+  waited, and the button said NO SENSOR — on a phone that has a perfectly good compass.
+  Reported from the live site, which is the only place it could be.
+  `sensorBlockedByPolicy()` asks the browser instead, and `canPoint()` takes it, so the
+  mode is **not offered** where it cannot work. That is the same rule FULL SCREEN and
+  USE MY LOCATION already follow: not drawn beats drawn and broken.
+  - **It reports blocked only on positive evidence.** `document.featurePolicy` is
+    non-standard and Chromium-only, so a missing API means *no opinion*, never *no*.
+    A false negative would take the mode away from a phone it works on, which costs more
+    than the 2.5 s it saves.
+  - **WebKit gives no such signal**, so on iOS in a frame this still falls through to
+    the wait and the NO SENSOR answer. Safari has its own restriction on
+    `requestPermission()` inside a third-party iframe on top of the policy, and **that
+    has not been tested here** — no iOS device in reach. The full-page link is the
+    honest answer for it either way.
 - **The camera takes a quaternion, not yaw and pitch.** A held phone rolls, and the
   lookAt path cannot express that; it also has no gimbal to lock, so the zenith is safe
   here without the pitch clamp. The conversion is three's retired
@@ -2993,8 +3046,29 @@ to do, both cheap and both invisible when missed:
 - **`allow="geolocation"` too**, for the same reason and with the same symptom: without
   it USE MY LOCATION is not drawn. Nothing is ever asked before that button is pressed —
   see *Where you are standing*.
-- **`allow="accelerometer; gyroscope; magnetometer"`** for POINT; without it
-  the sensor sends nothing and the button says NO SENSOR.
+- **`allow="gyroscope; accelerometer; magnetometer"`** for POINT, and this is the one
+  that was actually missed in the wild: the piece went into a real site and every phone
+  said **NO SENSOR**. `DeviceOrientationEvent` is built on those three policy-controlled
+  features, and all three default to `self`, so a **cross-origin** iframe gets them only
+  if the host page hands them over.
+  - **Nothing else gives it away, which is why it reads as a broken feature rather than
+    a missing permission.** Measured in Chromium, same page at top level, in a
+    cross-origin iframe, and in one with the attribute:
+
+    | | policy for the three | constructing a sensor |
+    |---|---|---|
+    | top level | yes / yes / yes | `NotReadableError` (no hardware in headless) |
+    | cross-origin iframe, no `allow` | **NO / NO / NO** | **`SecurityError`** |
+    | cross-origin iframe, with `allow` | yes / yes / yes | `NotReadableError` — identical to top level |
+
+    In the blocked case `DeviceOrientationEvent` is **still on `window`**, the page is
+    **still a secure context**, and `navigator.permissions` still answers **granted**.
+    Only the events never come. The attribute restores the top-level state exactly.
+  - **The piece detects it now** rather than waiting 2.5 s and blaming the device — see
+    *Pointing the phone at the sky* — and offers **OPEN FULL PAGE** when it is framed,
+    which is the only thing that can recover the sensor without the host page changing.
+  - The three are worth granting together with `fullscreen` and `geolocation`:
+    `allow="fullscreen; geolocation; gyroscope; accelerometer; magnetometer"`.
 - **Give it a real height.** The canvas fills whatever box it is given, and the panel is
   a full-height column; under about 400 px the lists scroll rather than fitting, which is
   handled but is not the image.
