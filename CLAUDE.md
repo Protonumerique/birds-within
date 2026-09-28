@@ -1259,7 +1259,7 @@ button.** Found on a Xiaomi 15 Pro, with every sensor, showing no button at all:
 local network the page is `http://192.168…`, which is not a secure context, and browsers
 only deliver motion sensors to secure pages. `canPoint` asks exactly that and declines to
 draw a button that could never work. `dev:https` is the same server behind a self-signed
-certificate (`@vitejs/plugin-basic-ssl`, active only in that mode); the phone warns once
+certificate (`@vitejs/plugin-basic-ssl`, **imported** only in that mode, so plain `dev` and the build start without it installed); the phone warns once
 about the certificate. Nothing reads `import.meta.env.MODE`, so the mode changes nothing
 else. Geolocation has the same rule, which is why USE MY LOCATION was also missing there.
 

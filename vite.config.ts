@@ -1,13 +1,17 @@
 import { defineConfig } from 'vite';
-import basicSsl from '@vitejs/plugin-basic-ssl';
 
-export default defineConfig(({ mode }) => ({
+const SSL_PLUGIN = '@vitejs/plugin-basic-ssl';
+
+export default defineConfig(async ({ mode }) => ({
   // `npm run dev:https`: the same dev server behind a self-signed certificate, for
   // testing on a phone over the local network. Motion sensors, geolocation and full
   // screen are only offered to secure pages, and http://192.168.x.x is not one - so
   // over plain `npm run dev` from a phone, POINT TO LOOK is simply not drawn. The
   // browser will warn about the certificate once; accept it and carry on.
-  plugins: mode === 'https' ? [basicSsl()] : [],
+  // Imported only in that mode, so plain `npm run dev` and the build never need the
+  // plugin installed - a clone that has not re-run `npm install` still starts. The
+  // name is in a variable so the config bundler does not try to resolve it up front.
+  plugins: mode === 'https' ? [(await import(SSL_PLUGIN)).default()] : [],
 
   // Relative, so the same build works both at a domain root
   // (birds.protonumerique.net/) and under a subpath
