@@ -1091,11 +1091,20 @@ block has always done.
 the *pair* is centred and the button is not, which puts the screen's only offer off the
 axis everything else sits on — on the one kind of screen where the switch exists at all.
 
+**The tagline is the mock-up's own**, adopted on the second pass: *"A 3D soundscape of
+crowded skies: an immersive panorama lets you track our observers above, listen to their
+dynamics and get to know their types and families."* It is the first copy on this screen
+to say the piece makes a **sound**, which the hint line already promised and the words
+did not. It is 45% longer than the line it replaced and still breaks to three lines on a
+laptop, because the measure is capped rather than fluid — the copy block went 426 → 455 px
+there, and **360×640 from 68 px of clearance to 46**, which is the number to watch if it
+grows again.
+
 **The costs, stated.** The stylesheet went 14.04 → 14.57 KB (4.10 → 4.20 gzipped) and the
-entry chunk 21.82 → 21.86 (9.17 → 9.16, unchanged); +0.1 KB gzipped before the press for
-the whole redesign. And the CelesTrak credit is **kept**, last and quietest, although the
-mock-up dropped it: `public/data/SOURCES.md` is where the terms live, but a data credit is
-not mine to remove unasked.
+entry chunk 21.82 → 21.91 (9.17 → 9.19); +0.1 KB gzipped before the press for the whole
+redesign and the longer tagline together. And the CelesTrak credit is **kept**, last and
+quietest, although the mock-up dropped it: `public/data/SOURCES.md` is where the terms
+live, but a data credit is not mine to remove unasked.
 
 #### The poster
 

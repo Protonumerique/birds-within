@@ -118,7 +118,8 @@ export const catalogUrl = (dataset: Dataset) => `${import.meta.env.BASE_URL}data
 export const GATE = {
   title: 'Birds Within',
   /** The whole of the writing on this screen, and it carries what the lede used to. */
-  tagline: 'A visualization of crowded skies. An immersive panorama showing our traces in orbit, our observers above.',
+  tagline:
+    'A 3D soundscape of crowded skies: an immersive panorama lets you track our observers above, listen to their dynamics and get to know their types and families.',
   /** The one offer on the screen. */
   launchLabel: 'LAUNCH',
   /** What the press costs, said before it is pressed rather than after. */
