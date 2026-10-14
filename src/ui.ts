@@ -43,9 +43,8 @@ export interface Hud {
 export interface HudSource {
   /** Object names, indexed like every SkyFrame column. */
   names: string[];
+  /** Only to tell a synthetic sky from a real one - see the note in `createHud`. */
   dataset: Dataset;
-  /** When the element sets were fetched. */
-  generatedAt: Date;
   /** 1 where the object is in the geosynchronous belt, indexed like `names`. */
   choir: Uint8Array;
   /** KIND per object: 0 payload, 1 rocket body, 2 debris. */
@@ -104,10 +103,20 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
   const isChoir = (i: number) => choir[i] === 1;
   const isDebris = (i: number) => kind[i] === 2;
 
-  const asOf = source.generatedAt.toISOString().slice(0, 10);
+
 
   document.documentElement.style.setProperty('--bar-w', `${thinBarWidth()}px`);
 
+  /*
+   * The catalogue line is a count and nothing else. The dataset name and the elements'
+   * date were both internal: "full" is a default nobody chose, so it read as a setting
+   * left switched on, and a fetch date beside a live clock read as the piece being out
+   * of date. Both moved to ?debug, which is where internal things live.
+   *
+   * Nothing is lost that a visitor came for. The count doubles as the dataset label -
+   * 21k, 17k and 2k are three plainly different numbers - and a synthetic sky still
+   * says so in its own warning line below.
+   */
   root.innerHTML = `
     <div class="scrim"></div>
     <div class="col">
@@ -117,7 +126,7 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
           <button id="panel" type="button" aria-expanded="false" aria-label="Open the panel"><i></i><i></i><i></i><b class="kept"></b></button>
         </div>
         <div class="sub">${observerLabel()}</div>
-        <div class="sub">${names.length.toLocaleString('en')} objects · ${source.dataset} · ${asOf}</div>
+        <div class="sub">${names.length.toLocaleString('en')} objects</div>
         ${source.dataset === 'synthetic' ? '<div class="warn">invented orbits, not real objects</div>' : ''}
         <div class="clock" id="t">--:--:--<small id="tl">&nbsp;</small></div>
         <div class="controls">

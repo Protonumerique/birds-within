@@ -99,7 +99,9 @@ question, answered by looking. **`full` became the default on 2026-09-14**, once
 had a mark of its own — the piece is about density, and `active` is payloads only, so it
 was publishing a sky with the wreckage edited out. `?catalog=active` still gives that sky.
 It costs 831 KB gzipped against 661, and a worker tick of 14–17 ms against ~13. The **dev server** falls back to `synthetic` when the real
-catalogue has not been fetched, and the HUD labels it. **Production never falls back** —
+catalogue has not been fetched, and the HUD says so in its own warning line — the panel
+no longer names the dataset at all, see *The catalogue line is a count*. **Production
+never falls back** —
 a missing catalogue is an error, because the piece is about what is actually up there.
 
 **CelesTrak has no full-catalogue query.** `SPECIAL=GPZ` is the GEO Protected Zone, not
@@ -1564,6 +1566,38 @@ local date with a UTC time — the UTC *date* is a day behind. The separator mak
 facts rather than one timestamp, nobody needs the UTC date, and the catalogue's own as-of
 date is on the line above; spelling out both dates would cost the line its brevity for a
 handful of timezones for part of a day.
+
+#### The catalogue line is a count
+
+Cut 2026-10-14, the same pass and for the same reason as the clock. It read
+`20,990 objects · full · 2026-09-22`; it reads **`20,990 objects`**.
+
+**Both of the things removed were internal.** `full` is a *default* nobody chose — there
+is no control that sets it, only `?catalog=`, so on screen it read as a setting left
+switched on and invited the question "as opposed to what?". And a fetch date sitting two
+lines above a live ticking clock reads as the piece being out of date, which is the
+opposite of what it says: the elements are at most six hours old and accuracy degrades
+over *days*.
+
+**Nothing a visitor came for is lost.** The count is the one of the three that is about
+the sky, and it **doubles as the dataset label**, because the three are 20,990, 16,588 and
+2,013 — plainly different numbers. A synthetic sky also still announces itself in its own
+warning line, which is the signal that actually matters.
+
+**It moved to `?debug` rather than out**, as a first line above the frame timings:
+`sky    full   20,990 objects   elements 2026-09-22`. That is where internal things
+live, and the panel is where `?debug` reads it from the stream directly — `HudSource`
+lost `generatedAt` entirely, since nothing in `ui.ts` had a use for it any more.
+
+Verified at both datasets: `?launch` gives `20,990 objects` with no warning, and
+`?catalog=synthetic` gives `2,013 objects` with `invented orbits, not real objects`
+under it and `sky    synthetic … elements 2026-09-12` in the debug panel.
+
+**A footnote on the observer, which this leaves as it is.** There is no search and no way
+to set a place, so the observer is Berlin, a URL coordinate, or the browser's own fix —
+which is why the clock's "local means the browser's timezone, not the observer's" is a
+smaller wrinkle than it sounds: in practice the two agree, because the only way most
+people move the observer is by handing over their actual location.
 
 #### The pulse
 

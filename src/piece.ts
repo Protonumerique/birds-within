@@ -88,7 +88,6 @@ export async function run(status: StatusFn): Promise<void> {
   const hud = createHud(hudRoot, clock, {
     names: stream.names,
     dataset,
-    generatedAt: stream.generatedAt,
     selection,
     choir: stream.choir,
     kind: stream.kind,
@@ -97,7 +96,13 @@ export async function run(status: StatusFn): Promise<void> {
     audio,
     immersion: (amount) => scene.setImmersion(amount),
   });
-  const debug = DEBUG ? createDebugPanel(document.body) : null;
+  const debug = DEBUG
+    ? createDebugPanel(
+        document.body,
+        `sky    ${dataset}   ${stream.names.length.toLocaleString('en')} objects   ` +
+          `elements ${stream.generatedAt.toISOString().slice(0, 10)}`,
+      )
+    : null;
   // ?debug: the running piece, for poking at from the console.
   if (DEBUG) Object.assign(window, { birds: { stream, scene, clock, selection, audio } });
 
