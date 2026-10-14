@@ -1496,6 +1496,30 @@ no row escaping, no clipping, no overflow.
 Neither bundle number moved — 21.82 KB / 9.17 gzipped for the entry chunk and 14.04 / 4.10
 for the stylesheet — because it is the same declarations with different values.
 
+**And then the names and the numbers got the tracking everything else already had.**
+Reported the same day, once the sizes were balanced: the object names and their data read
+as very tight. They were — `.row` and `.cbox` set no `letter-spacing` at all, so they ran
+at `normal` while every other line in the column sat between 0.05em and 0.1em. Both carry
+**0.05em** now, the same as `.sub` and `.hints`, the panel's other informational lines.
+
+**It looked like text squeezed to fit and is not**, which is the thing worth checking
+before widening anything in a fixed column. `OBJECT_NAME` inherits TLE line 0's fixed
+field, so **24 characters is the hard ceiling**, and the worst cases measure well inside
+the column at the new tracking:
+
+| | ink width | room |
+|---|---|---|
+| `COSMOS 2564 [GLONASS-M]` | 182 px | 264 |
+| `USA 245 (KH-11) DEB (2)` | 149 px | 264 |
+| `90° 183°SSW 126343km -10.5` — the widest data line | 192 px | 264 |
+
+264 px is the narrowest case, the 272 px desktop column; the phone drawer gives 324–354.
+**0 names clipped** at 1440, 1280, 700, 620, 390 and 360 px wide, and every layout number
+— overflow, group spacing, rows escaping, `.cbox` clipping, the legend's three lines —
+identical to before the change. Twenty-four literal capital W's would *not* fit, at 312 px,
+and that is the honest bound rather than a problem: no catalogue name is that shape, and
+one would ellipsise.
+
 #### The pulse
 
 Added 2026-09-21. A bar at the right of every **sounding** row, filling from the bottom

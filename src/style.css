@@ -483,6 +483,12 @@ input[type="range"] {
   padding: 1px 4px;
   color: var(--tone);
   font-size: 12px;
+  /* The same 0.05em the observer line and the hints carry. A catalogue name is set in
+     capitals and a data line is all figures, and both ran at `normal` while every other
+     line in the column was tracked - which read as the names being squeezed to fit.
+     They are not: the longest name the format can hold is 24 characters, and at this
+     tracking the worst case measures well inside the column. */
+  letter-spacing: 0.05em;
   line-height: 1.45;
   white-space: nowrap;
   overflow: hidden;
@@ -798,6 +804,9 @@ input[type="range"] {
   border: 1px solid rgba(138, 212, 255, 0.38);
   color: var(--geo);
   font-size: 12px;
+  /* A belt object's name and numbers are the same kind of text as a row's, so they take
+     the same tracking. */
+  letter-spacing: 0.05em;
   line-height: 1.35;
   white-space: nowrap;
   overflow: hidden;
