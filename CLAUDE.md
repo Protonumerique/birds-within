@@ -1246,8 +1246,9 @@ about 2/5 of a landscape one; the sky, which is the piece, was mostly behind it.
   The first version was a PANEL button in the LISTEN row, which sat mid-drawer once
   open and read as one more control among many. Drawn rather than typed, because the
   font subset has no glyph for either and a drawn mark centres against the capitals.
-- **The compact column is 224 px**, not 208: the title is 175 px and the menu 34, and
-  at 208 the title wrapped onto two lines while folded. It is `nowrap` as well.
+- **The compact column is 248 px**, and that number is nothing but the title. It was 208
+  until the title measured 175 px and wrapped, then 224, then 248 on 2026-10-14 when the
+  title took the gate's 0.3em — see *One title, one tracking*. It is `nowrap` as well.
 - **A small count beside the menu** says how many objects are kept. Folded, it is the
   only sign that a tap on the sky put something in a list you cannot see.
 - **A folded column must not stretch.** `#hud` is a flex row, so the column stretched to
@@ -1497,10 +1498,13 @@ Keeping a feature in the subset only makes it *available*. Applying it is the
 stylesheet's job.
 
 **Tracking came down wherever weight went up**, and that is the whole shape of the
-change. The title was `400 20px` at `0.22em`; it is now `700 22px` at `0.1em`. Heavy
+change. The title was `400 20px` at `0.22em`; it became `700 22px` at `0.1em`. Heavy
 tracking was doing a monospace's job — a face with no weight contrast has to buy
 presence somewhere and letter spacing is the only lever it has. Satoshi Bold has the
 presence already, so the old tracking would read as a logotype stretched to fill a box.
+(**The title alone went back out to 0.3em on 2026-10-14**, to match the first screen's —
+see *One title, one tracking*. The argument survives everywhere else; it loses on the
+title because the words sit alone on a line with nothing to be stretched against.)
 
 **Everything went up about 10%**, because Satoshi's x-height is **0.484 em** against a
 system monospace's ~0.53: the same pixel size reads a tenth smaller. Body 12 → 13, rows
@@ -1535,6 +1539,42 @@ allowed-domains list, exactly as `celestrak.org` does — the **Trusted** level 
 neither. The setting lives behind the cloud icon above the message box at claude.ai/code
 (**edit cloud environment** → **Network access** → **Custom**), and it applies to a
 **running** session, no restart needed.
+
+#### One title, one tracking
+
+Changed 2026-10-14, right after the first screen was centred: the panel's **BIRDS
+WITHIN** now carries the gate's `0.3em` rather than its own `0.1em`. Same words, same
+face, two screens a press apart — the press should not restyle them.
+
+**It is a real reversal of *Tracking came down wherever weight went up*, and only for
+the title.** That rule is still right everywhere else, and it is the reason this file
+records a dozen tracking cuts. It loses here because a title alone on a line is not
+buying presence against anything — there is no body text beside it for the tracking to
+look stretched against, which is exactly the condition the rule was written for.
+
+**The compact header is where it binds, and the size had to give.** Measured ink width,
+13 characters of Satoshi Bold:
+
+| | 0.1em | 0.2em | 0.3em | room |
+|---|---|---|---|---|
+| desktop, 272 px column | 179 | 205 | **231** | 272 |
+| compact, 22 px | 179 | 205 | 231 | **204** |
+| compact, 18 px | 146 | 168 | **189** | 204 |
+
+There is no version that keeps 22 px on a phone: at 0.3em the title needs **275 px of
+column**, which is wider than the desktop one and most of a 360 px screen. So the compact
+column went 224 → **248** and the compact title 22 → **18 px**, which lands at 189 against
+204 of room — 15 px clear, against the 1 px that 17 px at the old column would have left.
+**The tracking is what was asked for, so the size is what gives.**
+
+Re-ran the layout checks a size pass always owes: the desktop column at 900, 620, 480 and
+400 px tall with five rows kept is **identical** to before — overflow −14, groups 10 px
+apart, 0 rows escaping, 0 px of `.cbox` clipping — and the phone drawer at 390×780,
+360×640 and 780×390 landscape opens with no overlap, no row escaping, no clipping and no
+horizontal overflow. **The title does not wrap at any of them.**
+
+The cost is 24 px more of the sky behind a folded header on a phone. The controls under
+it get the same 24 px, which on glass is a gain rather than a cost.
 
 #### Nothing but a button is under 12px
 

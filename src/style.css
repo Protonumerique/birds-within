@@ -272,14 +272,18 @@ body {
 h1 {
   margin: 0 0 4px;
   /*
-   * Bold, and the tracking comes right down with it. 0.22em was doing a monospace's
-   * job - a face with no weight contrast has to buy presence somewhere, and letter
-   * spacing is the only lever it has. Satoshi Bold has the presence already, so the
-   * same tracking would read as a logotype stretched to fill a box rather than as a
-   * title. 22px fits the 272px column at 0.1em.
+   * Bold, and 0.3em to match the first screen's title exactly - the same words in the
+   * same face, so the press should not restyle them. It went 0.22em -> 0.1em when
+   * Satoshi arrived (a monospace has no weight contrast and buys presence with
+   * tracking; Satoshi Bold has it already) and back out to 0.3em on 2026-10-14, which
+   * is the gate's, where it reads as a title rather than as a logotype because the
+   * words sit alone on a line with nothing competing.
+   *
+   * Measured: 231 px of ink in the 272 px column, 41 px clear. The compact rule below
+   * is the one that had to give.
    */
   font: 700 22px/1.12 var(--sans);
-  letter-spacing: 0.1em;
+  letter-spacing: 0.3em;
   text-transform: uppercase;
   color: var(--ink);
 }
@@ -1292,9 +1296,18 @@ input[type="range"] {
  * the clock, the time controls and LISTEN, and the sky. Open, the panel is a drawer - the whole width standing
  * up, two columns lying down. Nothing here applies on a desktop-sized window.
  */
-/* Wide enough for the title and the menu on one line: the title is 175 px. */
+/*
+ * Wide enough for the title and the menu on one line, which is the whole reason this
+ * number exists - it went 208 -> 224 when the title was 175 px and wrapped, and
+ * 224 -> 248 on 2026-10-14 when the title took the gate's 0.3em tracking.
+ *
+ * The arithmetic, because this is the one place it binds: 248 less the 34 px menu and
+ * its 10 px gap leaves **204 px of room**, and the title at 0.3em measures 231 at 22 px
+ * and **189 at 18**. There is no version of this that keeps 22 px: at 0.3em the title
+ * needs 275 px of column, wider than the desktop one and most of a 360 px phone.
+ */
 #hud.compact {
-  --col-w: 224px;
+  --col-w: 248px;
 }
 
 /* The title and, on a small screen, the menu beside it. */
@@ -1305,9 +1318,16 @@ input[type="range"] {
   margin-bottom: 4px;
 }
 
+/* `nowrap`, because two lines is what the column width above exists to prevent. */
 .titlebar h1 {
   margin: 0;
   white-space: nowrap;
+}
+
+/* The size gives way rather than the tracking, which is what was asked for. 18 px of
+   ink is 189 against 204 of room; 22 px would be 231. */
+#hud.compact .titlebar h1 {
+  font-size: 18px;
 }
 
 /*
