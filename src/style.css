@@ -21,8 +21,9 @@
   --bar-w: 10px;
   --bar-gap: 6px;
   --scrim-fade: 76px;
-  /* The first screen's column. Wider than the panel's, because a sentence is. */
-  --gate-w: 430px;
+  /* The first screen's block. Centred since 2026-10-14, so it is a measure rather
+     than a column - the tagline caps itself narrower still. */
+  --gate-w: 760px;
   /* Overwritten by gate.ts from GATE.fadeMs, so the two cannot disagree. */
   --gate-fade: 700ms;
   /* PALETTE.sky. The page's own background, and the first screen's. */
@@ -845,10 +846,18 @@ input[type="range"] {
 /* --- the first screen ------------------------------------------------------- */
 
 /*
- * What a visitor meets before the piece exists. Its layout is the panel's own - words
- * in a column at the left, over a scrim feathered on its right edge, sky filling the
- * rest - so the press does not swap one image for another: the poster becomes the
- * thing it was a drawing of, and the column is already where the column will be.
+ * What a visitor meets before the piece exists.
+ *
+ * **Centred since 2026-10-14.** It used to be the panel's own layout - words in a
+ * column at the left, over a scrim feathered on its right edge, sky filling the rest -
+ * on the argument that the press then does not swap one image for another. What that
+ * cost is what a first screen is for: a title pinned to one edge over a busy drawing
+ * reads as a caption on a picture rather than as a way in to a piece.
+ *
+ * So: the copy is centred over the whole frame, every line is set in caps on the
+ * title's own terms, and the drawing behind it is turned down to a hint (see
+ * GATE.poster.veil). White carries nearly all of it, with --ink-dim reserved for the
+ * two lines that are labels rather than words.
  *
  * It sits over everything, including the canvas, and is removed once the first frame
  * with a sky in it has been drawn. See gate.ts and main.ts.
@@ -859,6 +868,7 @@ input[type="range"] {
   z-index: 10;
   display: flex;
   align-items: center;
+  justify-content: center;
   overflow: hidden;
   background: var(--sky);
   transition: opacity var(--gate-fade) ease;
@@ -913,67 +923,89 @@ input[type="range"] {
   }
 }
 
-/* The panel's scrim, widened for a column that holds sentences rather than names. */
+/*
+ * A veil rather than a scrim: deepest where the words are and gone by the corners, so
+ * the drawing survives at the edges of the frame and the copy has black under it. The
+ * left-edge gradient this replaces had one hard job - keep a column readable - and an
+ * ellipse is what the same job looks like when the column becomes a block in the
+ * middle. No edge of it lands inside the image, which is the rule the panel's own
+ * scrim already follows: a lit rectangle would read as a window.
+ */
 .gate-scrim {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: calc(var(--gate-w) + 96px + var(--scrim-fade));
-  background: linear-gradient(
-    to right,
-    rgb(0 0 0 / 0.82) 0,
-    rgb(0 0 0 / 0.72) calc(100% - var(--scrim-fade)),
-    rgb(0 0 0 / 0) 100%
+  inset: 0;
+  background: radial-gradient(
+    ellipse 76% 68% at 50% 50%,
+    rgb(0 0 0 / 0.84) 0%,
+    rgb(0 0 0 / 0.68) 46%,
+    rgb(0 0 0 / 0.12) 100%
   );
   pointer-events: none;
 }
 
 .gate-copy {
   position: relative;
-  margin: 0 24px 0 48px;
   width: var(--gate-w);
-  max-width: calc(100vw - 72px);
+  max-width: calc(100vw - 48px);
   /* A hero section is often short. The words scroll rather than being cut off. */
   max-height: 100%;
   overflow-y: auto;
   padding: 24px 0;
+  text-align: center;
   scrollbar-width: thin;
   scrollbar-color: var(--ink-faint) transparent;
 }
 
+/*
+ * **Every tracked line here carries a `text-indent` equal to its own tracking**, and
+ * that is not decoration. Letter spacing is applied *after* every glyph including the
+ * last, so a centred line sits half a space left of true centre - about 5 px on the
+ * title. The indent puts the space back on the near side, and the line centres on its
+ * ink rather than on its box. It is invisible until two tracked lines of different
+ * sizes are stacked, which is exactly what this screen is.
+ */
 .gate-title {
   margin: 0;
-  font: 700 clamp(23px, 3.5vw, 40px) / 1.1 var(--sans);
-  letter-spacing: 0.08em;
+  font: 700 clamp(22px, 2.9vw, 34px) / 1.15 var(--sans);
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
   text-transform: uppercase;
-  color: var(--ink);
+  color: #fff;
 }
 
-/* The only writing left on this screen, so it takes the setting the lede vacated:
-   set for reading rather than for scanning. It was 11px uppercase at 0.16em, which is
-   a *label* treatment - right for three words and wrong for two sentences, where the
-   tracking pulls the words apart and the caps remove the shapes a reader scans by. */
+/*
+ * Set on the title's own terms: caps, tracked, white. That reverses the 2026-09-28
+ * pass, which had argued the opposite - that caps and tracking are a *label*
+ * treatment, wrong for two sentences because they take away the shapes a reader scans
+ * by. Both things are true, and which one wins depends on where the block sits. In a
+ * column at the left it is prose and reads as prose; centred under a tracked title it
+ * is the title's second line, and setting it any other way makes it look pasted on.
+ *
+ * The line height carries the cost: 1.95 rather than 1.5, because tracked caps need
+ * the leading to stay a block rather than a wall. The measure is capped so it breaks
+ * to three lines on a laptop, which is the shape the screen was drawn around.
+ */
 .gate-tagline {
-  margin-top: 14px;
-  padding-top: 15px;
-  border-top: 1px solid rgba(120, 160, 190, 0.16);
-  color: var(--ink);
-  font-size: clamp(19px, 2.05vw, 23px);
-  line-height: 1.5;
-  letter-spacing: 0.005em;
+  margin: 20px auto 0;
+  max-width: 640px;
+  color: #fff;
+  font-size: clamp(12px, 1.1vw, 15px);
+  line-height: 1.95;
+  letter-spacing: 0.17em;
+  text-indent: 0.17em;
+  text-transform: uppercase;
 }
 
-/* The one offer on the screen, and it is the only thing here that is filled. */
-/* LAUNCH, with the view-mode switch to its left where the device can point. Aligned
-   on the bottom, so the switch's label sits above it and the two controls share a
+/* LAUNCH, centred, with the view-mode switch beside it where the device can point.
+   Aligned on the bottom, so the switch's label sits above it and the two share a
    line. */
 .gate-go {
   display: flex;
   align-items: flex-end;
+  justify-content: center;
   flex-wrap: wrap;
   gap: 14px 18px;
-  margin-top: 22px;
+  margin-top: 26px;
 }
 
 /* Beside LAUNCH and deliberately under it in weight: an offer, not the offer. Outlined
@@ -1002,16 +1034,20 @@ input[type="range"] {
 }
 
 .gate-embednote {
-  margin-top: 10px;
+  margin-top: 12px;
   color: var(--ink-dim);
-  font-size: 18px;
-  letter-spacing: 0.02em;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-indent: 0.08em;
+  text-transform: uppercase;
 }
 
 .gate-mode-label {
   margin-bottom: 7px;
   font-size: 12px;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.16em;
+  text-indent: 0.16em;
+  text-transform: uppercase;
   color: var(--ink-dim);
 }
 
@@ -1095,15 +1131,15 @@ input[type="range"] {
   cursor: default;
 }
 
-/* Holds its line whether or not it has anything to say, so nothing below it jumps
-   when the press starts reporting progress. */
+/* Holds its line open before there is anything to say, so the block below it does not
+   jump when LAUNCH starts reporting. The height tracks the font size. */
 .gate-status {
-  margin-top: 12px;
-  /* Holds its line open before there is anything to say, so the block below it does
-     not jump when LAUNCH starts reporting. Tracks the font size. */
-  min-height: 24px;
-  font-size: 18px;
-  letter-spacing: 0.03em;
+  margin-top: 14px;
+  min-height: 18px;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-indent: 0.1em;
+  text-transform: uppercase;
   color: var(--ink-dim);
 }
 
@@ -1112,20 +1148,39 @@ input[type="range"] {
 }
 
 /*
- * Where you are standing, and the offer to stand somewhere else. It sits with the
- * meta line rather than beside LAUNCH, because it is a fact about the sky you are
- * about to see and not a second thing to press.
+ * Where you are standing, and the offer to stand somewhere else. It sits **above**
+ * LAUNCH since 2026-10-14: it is a fact about the sky you are about to see, so it
+ * belongs with the words rather than under the press, and a centred screen reads top
+ * to bottom with the offer last.
+ *
+ * There is no search and no way to type a place, so this is only ever Berlin, a URL
+ * coordinate, or the browser's own fix - which is why one label and one line is the
+ * whole of it.
  */
+.gate-placeblock {
+  margin-top: 32px;
+}
+
+/* A label rather than a word, so it is the one thing here that is not white. */
+.gate-wherelabel {
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  text-indent: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
 .gate-where {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  gap: 12px;
   flex-wrap: wrap;
-  margin-top: 17px;
-  font-size: 18px;
-  letter-spacing: 0.05em;
+  margin-top: 10px;
+  font-size: 14px;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--ink-faint);
+  color: #fff;
 }
 
 /* Outlined and quiet. LAUNCH is the offer on this screen; this is not competing. */
@@ -1146,25 +1201,31 @@ input[type="range"] {
 }
 
 .gate-placenote {
-  margin-top: 7px;
-  font-size: 18px;
-  letter-spacing: 0.03em;
+  margin-top: 8px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-indent: 0.08em;
+  text-transform: uppercase;
   color: var(--ink-dim);
 }
 
-.gate-meta {
-  margin-top: 8px;
-  font-size: 18px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
+/* How to work it, in the piece's own lower case - it is an instruction rather than a
+   title, and it is the one line here that gains nothing from caps. */
+.gate-hint {
+  margin-top: 18px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--ink-dim);
 }
 
-
-.gate-hint {
-  margin-top: 7px;
-  font-size: 18px;
-  letter-spacing: 0.03em;
+/* Whose elements these are. Last, quietest, and still said: the credit belongs on the
+   screen even though SOURCES.md is where the terms actually live. */
+.gate-meta {
+  margin-top: 9px;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-indent: 0.12em;
+  text-transform: uppercase;
   color: var(--ink-faint);
 }
 
@@ -1185,13 +1246,31 @@ input[type="range"] {
     --gate-w: 100%;
   }
   .gate-copy {
-    margin: 0 20px;
+    max-width: calc(100vw - 40px);
   }
-  /* Nothing left to feather against: the words take the whole width, so the scrim
-     does too, and reads as a wash over the drawing rather than as a column on it. */
+  /* A phone shows about a centred third of the drawing, which is too little of it for
+     an ellipse to read as anything but a vignette. A flat wash instead, and the hint
+     survives in the corners above and below the words. */
   .gate-scrim {
-    width: 100%;
-    background: rgb(0 0 0 / 0.74);
+    background: rgb(0 0 0 / 0.7);
+  }
+  /* Stacked, so LAUNCH sits dead centre. Side by side the *pair* is centred and the
+     button is not, which on the one screen where the switch exists puts the screen's
+     only offer off the axis everything else is on. */
+  .gate-go {
+    flex-direction: column;
+    align-items: center;
+  }
+  /* The ladder compresses rather than breaking: the title can afford its tracking,
+     a 12px line cannot afford that much of it on a 360px screen. */
+  .gate-title {
+    letter-spacing: 0.2em;
+    text-indent: 0.2em;
+  }
+  .gate-tagline {
+    letter-spacing: 0.12em;
+    text-indent: 0.12em;
+    line-height: 1.85;
   }
   .clock {
     font-size: 15px;

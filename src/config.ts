@@ -131,20 +131,24 @@ export const GATE = {
   touchHint: 'drag to look · tap to trace · press LISTEN for sound',
   /** Over the DRAG / POINT switch, where the device can point. */
   modeLabel: 'choose view mode',
+  /** Over the observer, so the coordinates are introduced rather than just present. */
+  placeLabel: 'location',
   /** How long the screen takes to leave once the first frame is on the canvas. */
   fadeMs: 700,
-  /** The drawing: */
+  /** The drawing. A hint behind the words since 2026-10-14, not a statement. */
   poster: {
-    /** Passing objects. */
-    passing: 420,
+    /** Passing objects. Dense and dim: the field, not the subject. */
+    passing: 300,
     /** Fragments, drawn as the shards they are on the sky. */
-    shards: 34,
+    shards: 26,
     /** The belt, as the fixed arc across the south it actually is. */
     belt: 90,
-    /** The kept objects: */
-    orbits: 4,
-    /** White rings on objects the readout is listing. A cluster, as the panel makes. */
-    listed: 11,
+    /** The kept objects. Two, since the words moved to the middle. */
+    orbits: 2,
+    /** White rings on objects the readout is listing. Scattered, not a cluster. */
+    listed: 5,
+    /** Everything the drawing draws, scaled down behind centred copy. */
+    veil: 0.62,
     /** Fixed, so the poster is the same drawing every time the page is opened. */
     seed: 19,
   },

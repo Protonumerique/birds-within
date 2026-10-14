@@ -11,10 +11,17 @@ import { posterSvg } from './poster';
  * satellite.js, the WASM propagator and 831 KB of elements are all behind the press -
  * see `GATE` in config.ts, and the dynamic import in main.ts that does the splitting.
  *
- * The layout is the panel's own: the words sit in a column at the left, over a scrim
- * feathered on its right edge, with the sky filling the rest of the frame. So the
- * press does not replace one image with another - the poster becomes the thing it was
- * a drawing of, and the column is already where the column will be.
+ * **Centred since 2026-10-14**, and that reversed the layout it had. The words used to
+ * sit in a column at the left, where the panel's column will be, over a scrim feathered
+ * on its right edge - the argument being that the press then does not replace one image
+ * with another. What that cost is the thing a first screen is actually for: a title
+ * pinned to one edge over a busy drawing reads as a caption on a picture rather than as
+ * the way in to a piece.
+ *
+ * So the copy is centred over the whole frame, set in caps, and the drawing behind it
+ * turned down to a hint. The continuity argument survives in a quieter form - it is
+ * still the same sky, in the same grammar, and the press still only turns the hint into
+ * the thing it was a hint of.
  */
 export interface Gate {
   /** What the press is doing, said under the button while it does it. */
@@ -48,6 +55,14 @@ export function createGate(root: HTMLElement, handlers: GateHandlers): Gate {
     <div class="gate-copy">
       <h1 class="gate-title">${GATE.title}</h1>
       <p class="gate-tagline">${GATE.tagline}</p>
+      <div class="gate-placeblock">
+        <div class="gate-wherelabel">${GATE.placeLabel}</div>
+        <div class="gate-where">
+          <span class="gate-place"></span>
+          <button class="gate-locate" type="button" hidden></button>
+        </div>
+        <div class="gate-placenote"></div>
+      </div>
       <div class="gate-go">
         <div class="gate-mode" hidden>
           <div class="gate-mode-label">${GATE.modeLabel}</div>
@@ -60,13 +75,8 @@ export function createGate(root: HTMLElement, handlers: GateHandlers): Gate {
       </div>
       <div class="gate-embednote" hidden>${GATE.embedNote}</div>
       <div class="gate-status" role="status" aria-live="polite"></div>
-      <div class="gate-where">
-        <span class="gate-place"></span>
-        <button class="gate-locate" type="button" hidden></button>
-      </div>
-      <div class="gate-placenote"></div>
-      <div class="gate-meta">elements from CelesTrak, refreshed every six hours</div>
       <div class="gate-hint">${matchMedia('(pointer: coarse)').matches ? GATE.touchHint : GATE.hint}</div>
+      <div class="gate-meta">elements from CelesTrak, refreshed every six hours</div>
     </div>
   `;
   root.append(el);

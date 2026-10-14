@@ -214,15 +214,16 @@ function passes(): { marks: string; tracks: string; ring: string } {
 function listed(): string {
   const parts: string[] = [];
   for (let i = 0; i < GATE.poster.listed; i++) {
-    const a = hash(i, 20) * Math.PI * 2;
-    const rad = 26 + hash(i, 21) ** 0.7 * 150;
-    const cx = W * 0.47 + Math.cos(a) * rad * 1.5;
-    const cy = y(46) + Math.sin(a) * rad * 0.8;
-    const d = HIGHLIGHT.diameterPx * (0.9 + hash(i, 22) * 0.5);
+    // Spread across the whole width, and kept out of the middle band in elevation,
+    // where the copy now is. A cluster at the centre is what this used to draw.
+    const cx = W * (0.06 + hash(i, 20) * 0.88);
+    const el = hash(i, 21) < 0.5 ? 70 + hash(i, 22) * 16 : 8 + hash(i, 23) * 10;
+    const cy = y(el);
+    const d = HIGHLIGHT.diameterPx * (0.55 + hash(i, 24) * 0.25);
     parts.push(
       `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${(d / 2).toFixed(1)}" fill="none" ` +
-        `stroke="${HIGHLIGHT.color}" stroke-width="${HIGHLIGHT.strokePx * 1.3}" opacity="0.8"/>` +
-        light(cx, cy, 1.9, PALETTE.lit, 0.9, 1)
+        `stroke="${HIGHLIGHT.color}" stroke-width="${HIGHLIGHT.strokePx}" opacity="0.5"/>` +
+        light(cx, cy, 1.5, PALETTE.lit, 0.7, 1)
     );
   }
   return parts.join('');
@@ -260,22 +261,29 @@ function orbits(): { arcs: string; rings: string } {
    * as a curve parameter meant guessing, and the guesses put two of the four rings
    * under the text column and a third off the right edge.
    *
-   * **Every one sits between 0.44 and 0.63 of the width, and that window is narrow
-   * because it is the intersection of two crops pulling opposite ways.** The copy
-   * occupies the left third on a laptop, so a ring has to be past 0.42. A phone shows
-   * about a centred third, so it has to be under 0.65. Spread them wider than that -
-   * the first attempt put them at 0.53 to 0.86 - and a phone keeps three of the four
-   * *arcs* while cropping away their rings, which is the failure this file already
-   * records once for the single amber ring: a coloured line crossing the frame with
-   * nothing on it reads as a stray mark rather than as an orbit somebody chose.
+   * **The window inverted on 2026-10-14, when the copy moved to the middle**, and then
+   * the constraint it was balancing was dropped. It used to be 0.44 to 0.63: the words
+   * were a column down the left, so a ring had to clear 0.42, and a phone's
+   * centred-third crop meant it also had to stay under 0.65.
    *
-   * They are separated by elevation instead, which the crop never takes.
+   * Centred copy breaks that. The middle is now both where the words are *and* where
+   * the veil is deepest - measured, a ring at x = 0.5 comes through at rgb(22, 17, 39),
+   * which carries its hue in the arithmetic and none of it to the eye. Separating the
+   * two rings by elevation alone was the first answer and it is what produced those
+   * numbers: above the title and below the hint is still inside the ellipse.
+   *
+   * So they sit at 0.17 and 0.84, out where the veil has thinned to about half, and
+   * **a phone crops both of them away.** That is the trade, taken deliberately: on a
+   * phone the copy covers the middle and the drawing is two faint arcs in the corners
+   * anyway. The failure this window originally existed to prevent - a bright coloured
+   * line crossing the frame with nothing on it, reading as a stray mark - needed the
+   * line to be bright. At `veil` these are sky.
+   *
+   * Two rather than four, because a hint behind words is not a gallery.
    */
   const kept = [
-    { color: FAMILY_LOOK[FAMILY.STARLINK]!, el: 40, atX: 0.45, bow: -150, debris: false },
-    { color: HIGHLIGHT.markColor, el: 52, atX: 0.62, bow: -46, debris: false },
-    { color: FAMILY_LOOK[FAMILY.MILITARY]!, el: 33, atX: 0.55, bow: -58, debris: false },
-    { color: HIGHLIGHT.debrisMarkColor, el: 24, atX: 0.60, bow: 30, debris: true },
+    { color: FAMILY_LOOK[FAMILY.STARLINK]!, el: 64, atX: 0.17, bow: -150, debris: false },
+    { color: HIGHLIGHT.debrisMarkColor, el: 11, atX: 0.84, bow: 30, debris: true },
   ].slice(0, GATE.poster.orbits);
 
   for (const [i, k] of kept.entries()) {
@@ -299,13 +307,13 @@ function orbits(): { arcs: string; rings: string } {
     const t = (k.atX * W - x0) / (x1 - x0);
     const mx = (1 - t) ** 2 * x0 + 2 * (1 - t) * t * cx + t ** 2 * x1;
     const my = (1 - t) ** 2 * y0 + 2 * (1 - t) * t * cyc + t ** 2 * y1;
-    const d = HIGHLIGHT.diameterPx * 1.35;
+    const d = HIGHLIGHT.diameterPx * 1.1;
     rings.push(
       (k.debris
-        ? shard(mx, my, 5.2 * KIND_LOOK.debris.size, 0.95, 26, i * 5)
-        : light(mx, my, 2.6, k.color, 0.95, 1.2)) +
+        ? shard(mx, my, 4.6 * KIND_LOOK.debris.size, 0.95, 26, i * 5)
+        : light(mx, my, 2.2, k.color, 0.95, 0.7)) +
         `<circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="${(d / 2).toFixed(1)}" fill="none" ` +
-        `stroke="${k.color}" stroke-width="${HIGHLIGHT.strokePx * 1.5}" opacity="0.95"/>`
+        `stroke="${k.color}" stroke-width="${HIGHLIGHT.strokePx * 1.7}" opacity="1"/>`
     );
   }
   return { arcs: arcs.join(''), rings: rings.join('') };
@@ -317,13 +325,20 @@ function orbits(): { arcs: string; rings: string } {
  * there because somebody clicked it. See *The one with people in it*.
  */
 function station(): string {
-  const el = 62;
+  /*
+   * **High and nearly flat since 2026-10-14**, and that is the copy's doing. At 62
+   * degrees with a 340 px sweep this crossed the exact band the centred title now
+   * occupies, and a pale wide line through lettering reads as a scratch on the screen
+   * rather than as the orbit of the one object with people in it. It is the brightest
+   * track the poster draws, so it is the one that had to move rather than dim.
+   */
+  const el = 80;
   const x0 = -160;
   const x1 = W + 160;
-  const y0 = y(el) + 210;
-  const y1 = y(el) - 130;
+  const y0 = y(el) + 62;
+  const y1 = y(el) - 58;
   const cx = W * 0.44;
-  const cyc = y(el) - 96;
+  const cyc = y(el) - 40;
   const t = 0.62;
   const mx = (1 - t) ** 2 * x0 + 2 * (1 - t) * t * cx + t ** 2 * x1;
   const my = (1 - t) ** 2 * y0 + 2 * (1 - t) * t * cyc + t ** 2 * y1;
@@ -381,6 +396,16 @@ export function posterSvg(): string {
     `</defs>` +
     `<rect width="${W}" height="${H}" fill="${PALETTE.sky}"/>` +
     `<rect width="${W}" height="${H}" fill="url(#dome)"/>` +
+    /*
+     * Everything drawn, behind one opacity. The copy is centred over the whole frame
+     * since 2026-10-14, so the drawing is a hint rather than a statement - and the
+     * cheapest honest way to say that is to turn the whole thing down at once, rather
+     * than to re-tune forty alphas that were balanced against each other.
+     *
+     * The two background rects stay outside it: they are the sky itself, and veiling
+     * the sky against the sky does nothing.
+     */
+    `<g opacity="${GATE.poster.veil}">` +
     // Everything that moves drifts, very slowly. The belt is not in this group: those
     // objects never rise and never set, and the poster says so by holding them still.
     // Tracks under the marks, which is the piece's own render order since 2026-09-18:
@@ -393,6 +418,7 @@ export function posterSvg(): string {
     `<rect x="0" y="${y(SKY.haze.topDeg)}" width="${W}" height="${H - y(SKY.haze.topDeg)}" fill="url(#haze)"/>` +
     `<rect x="0" y="${HORIZON}" width="${W}" height="${H - HORIZON}" fill="${PALETTE.sky}"/>` +
     graticule() +
+    `</g>` +
     `</svg>`
   );
 }

@@ -933,7 +933,8 @@ page it is embedded in it was the third telling.
   at 0.16em in `--ink-dim`, which is a *label* treatment — right for three words, wrong
   for two sentences, where the tracking pulls the words apart and the caps take away the
   shapes a reader scans by. It has `--ink`, a 1.5 line and the rule above it that used to
-  separate the two.
+  separate the two. (**Reversed on 2026-10-14** — see *Centred, in caps, over a hint*.
+  Both readings are true, and which one wins depends on where the block sits.)
 - Both strings lived in `GATE`, so this is a config change and a stylesheet change; the
   markup lost one element.
 
@@ -960,6 +961,8 @@ button 9 → 13 — and the tagline from 14–17 px fluid to **19–23**.
   tracking is how small type buys presence, and at 18 px it is not needed.
 - Measured at 1440×800, 1600×620, 390×780 and 360×640 — no overflow at any of them. **Do
   this again after any size pass here**: 360×640 is the one that fails first.
+  (The sizes in this list were **superseded on 2026-10-14**; the check itself was re-run
+  and still holds.)
 
 **`OPEN FULL PAGE`, and LAUNCH deliberately did not become it.** Added the same day,
 beside LAUNCH and drawn only when `isEmbedded()`. The question it answers was put the
@@ -1016,6 +1019,84 @@ object remain the two ways in. See *Turning it on*.
 inside the piece. Without the screen the loading text goes back to where the panel will
 be.
 
+#### Centred, in caps, over a hint
+
+Redesigned 2026-10-14, from a screenshot and a GIMP mock-up. The words were a column
+down the left over a busy drawing; they are now **centred over the whole frame, set in
+caps on the title's own terms, in white**, with the drawing turned down behind them.
+
+**It reverses the layout argument the screen was built on, and the reversal is the
+point.** The column existed so that the press would not swap one image for another — the
+poster becomes the thing it was a drawing of, and the column is already where the panel's
+column will be. That continuity is real and survives in a quieter form; what it cost is
+what a first screen is actually for. A title pinned to one edge over a full drawing reads
+as a **caption on a picture** rather than as the way in to a piece.
+
+**The type is the title's, all the way down.** Everything is uppercase and tracked: the
+tagline at 12–15 px against the 19–23 it had, the location line at 14, and the five small
+lines at 12. That reverses *The tagline is now set for reading* above, which argued caps
+and tracking are a label treatment, wrong for two sentences. Both are true. In a column
+at the left the tagline is prose and reads as prose; centred under a tracked title it is
+**the title's second line**, and set any other way it looks pasted on. The leading
+carries the cost — 1.95 rather than 1.5, because tracked caps need the air to stay a
+block rather than a wall.
+
+**Every tracked line carries a `text-indent` equal to its own tracking**, and that is the
+one non-obvious thing here. Letter spacing is applied after *every* glyph including the
+last, so a centred line sits half a space left of true centre — about 5 px on the title
+at 0.3em. The indent puts the space back on the near side. Measured: the title's centre
+and LAUNCH's centre agree with the frame's **to the pixel** at 1440×800, 1600×620,
+1280×720, 390×780, 360×640 and 820×400 — 720/720, 800/800, 640/640, 195/195, 180/180,
+410/410. Without it they do not.
+
+**The scrim became a veil.** A left-edge gradient is the shape of "keep a column
+readable"; an ellipse at the centre is the same job once the column is a block in the
+middle. Below the compact query it flattens to a plain wash, because a phone shows too
+little of the drawing for a vignette to read as anything but a vignette.
+
+**The drawing is a hint**: `GATE.poster.veil` at 0.62 over everything it draws, the
+passing field down from 420 marks to 300, the kept orbits from four to two, and the
+listed rings from a cluster of eleven at the centre to five scattered out of the copy's
+band. One opacity over the whole group rather than forty re-tuned alphas — those were
+balanced against each other and still are.
+
+**Two things in the drawing had to move, both because the middle is occupied now.**
+
+- **The station's track crossed the title.** At 62° with a 340 px sweep it ran straight
+  through the lettering, and the ISS's wide cool-white line is the brightest thing the
+  poster draws — a pale scratch across a title rather than an orbit. It is high and
+  nearly flat now, above the copy. It is the one that had to move rather than dim.
+- **The kept rings were invisible where the crop wanted them**, and this is the measured
+  part. The old window — every ring between 0.44 and 0.63 of the width — existed because
+  the copy was on the left and a phone shows a centred third. Centred copy makes the
+  middle both where the words are *and* where the veil is deepest: a ring at x = 0.5
+  samples **rgb(22, 17, 39)**, which carries its hue in the arithmetic and none of it to
+  the eye. Separating the two by elevation alone was the first answer and it is what
+  produced that number — above the title and below the hint is still inside the ellipse.
+
+  So they sit at **0.17 and 0.84**, out where the veil has thinned to about half, and **a
+  phone crops both away**. Taken deliberately: the failure that window originally
+  prevented — a coloured line crossing the frame with nothing on it, reading as a stray
+  mark — needed the line to be *bright*, and at `veil` these are sky. The violet arc
+  still measures **rgb(47, 36, 83)** on a laptop, the most saturated thing in the frame
+  after the UI itself.
+
+**Measured at six sizes, nothing overflows and nothing falls below the fold.** The copy
+block is 426 px on a laptop and 552 on a phone, centred with 211 px of clearance at
+1440×800 and **68 px at 360×640**, which is still the one that fails first. A very short
+landscape window (820×400) scrolls the copy rather than cutting it, which is what that
+block has always done.
+
+**LAUNCH is stacked under the view-mode switch below the compact query.** Side by side
+the *pair* is centred and the button is not, which puts the screen's only offer off the
+axis everything else sits on — on the one kind of screen where the switch exists at all.
+
+**The costs, stated.** The stylesheet went 14.04 → 14.57 KB (4.10 → 4.20 gzipped) and the
+entry chunk 21.82 → 21.86 (9.17 → 9.16, unchanged); +0.1 KB gzipped before the press for
+the whole redesign. And the CelesTrak credit is **kept**, last and quietest, although the
+mock-up dropped it: `public/data/SOURCES.md` is where the terms live, but a data credit is
+not mine to remove unasked.
+
 #### The poster
 
 `src/poster.ts` builds it as an SVG string from `PALETTE`, `KIND_LOOK` and `HIGHLIGHT`,
@@ -1054,18 +1135,19 @@ it is what the image measures itself against. Hence the deliberately thin strip 
 at the bottom of the viewBox. What survives: a 16:9 frame shows all of it, a wide hero the
 bottom two thirds, a phone the full height and about a third of the width, centred.
 
-**Every ring sits between 0.44 and 0.63 of the width, and that window is narrow because
-it is the intersection of two crops pulling opposite ways.** The copy occupies the left
-third on a laptop, so a ring has to clear 0.42; a phone shows a centred third, so it has
-to stay under 0.65. This is the second time that trap has been paid for. The first
-version put the single amber ring on whatever object happened to be highest, and a
-1600×620 hero cropped it away while leaving its track visible — a stray orange line. The
-rewrite repeated it at four times the scale: rings spread from 0.53 to 0.86 kept all four
-at 1600×620 and at 1280×720, and at 390×780 kept **one of four**, leaving three coloured
-arcs crossing the frame with nothing on them. Measured at all three shapes, every time:
-11 white rings and 4 colours, all in view.
+**Every ring sat between 0.44 and 0.63 of the width, and that window was narrow because
+it was the intersection of two crops pulling opposite ways** — superseded 2026-10-14, see
+*Centred, in caps, over a hint*, though the trap it records is still the trap. The copy
+occupied the left third on a laptop, so a ring had to clear 0.42; a phone shows a centred
+third, so it had to stay under 0.65. The first version put the single amber ring on
+whatever object happened to be highest, and a 1600×620 hero cropped it away while leaving
+its track visible — a stray orange line. The rewrite repeated it at four times the scale:
+rings spread from 0.53 to 0.86 kept all four at 1600×620 and at 1280×720, and at 390×780
+kept **one of four**, leaving three coloured arcs crossing the frame with nothing on them.
 
-They are separated by **elevation** instead, which no crop takes.
+What dissolved the window was the drawing going quiet: the failure needed a *bright*
+line, and a veiled one is sky. The two rings left sit at 0.17 and 0.84, and a phone crops
+both, knowingly.
 
 **`atX` is a width fraction, not a curve parameter**, and it can be because each arc's
 control point is the midpoint of its two ends: a quadratic with `cx` halfway is exactly
