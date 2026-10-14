@@ -1443,6 +1443,59 @@ neither. The setting lives behind the cloud icon above the message box at claude
 (**edit cloud environment** → **Network access** → **Custom**), and it applies to a
 **running** session, no restart needed.
 
+#### Nothing but a button is under 12px
+
+Added 2026-10-14, from the live site on a 2k screen: the panel's own data — the observer
+line, the catalogue line, the group headings, the numbers on a kept row — had drifted down
+to 9, 10 and 10.5 px while the gate was raised to 18, and at that pixel density it stopped
+being readable. **12 px is now the floor for every piece of text in the app**, and the one
+exemption is a control: `button, select` stays at 10.5, the gate's mode switch at 11 and
+its OPEN FULL PAGE at 10. Those read well because a button is a short uppercase word in a
+box with a border around it; a line of catalogue data is neither.
+
+| | was | now |
+|---|---|---|
+| `.sub` — the observer and catalogue lines | 11 | 12 |
+| `.clock small` — `held` / `stood back` | 10.5 | 12 |
+| `.group h2` — PASSING / DEBRIS / GEOSTATIONARY | 10 | 12 |
+| `.row.open .rd` — elevation, azimuth, range, range rate | 10.5 | 12 |
+| `.hints` | 10 | 12 |
+| `.conv` — the legend | 10 | 12 |
+| `.cbox` — the belt grid's readout | 10 | 12 |
+| `.gate-mode-label` | 10 | 12 |
+| `#panel .kept` — the count beside the menu | 10 | 12 |
+| `.immerse-label` | 9 | 12 |
+| `#debug` | 11 | 12 |
+
+**Tracking came down wherever size went up**, which is the rule this file already carries
+twice: 0.24em → 0.14em on the immersion label, 0.14 → 0.08 on the legend, 0.14 → 0.1 on
+the group headings, and smaller cuts elsewhere. Heavy tracking is how small type buys
+presence, and at 12 px it is not needed — on the legend it is also what kept the block
+from rewrapping.
+
+**`.cbox` needed its height raised with it**, 30 px → 36. It holds two lines at a fixed
+height so nothing jumps when the pointer leaves a square, and two lines at 12px/1.35 are
+32.4 px: the box would have clipped its own second line. **A fixed-height box is the thing
+a size pass breaks**, and it is the only one here.
+
+**Measured before and after, and the layout did not move.** The column at 900, 620, 480
+and 400 px tall with five rows kept open: `colOverflow` −14 px, groups 10 px apart, **0
+rows escaping their group, 0 px of `.cbox` clipping**, every number identical to the
+baseline. The lists absorb the extra height by scrolling, which is what the spacer and the
+84 px floor are for. The legend held its documented invariant — **3 lines at rest and 3
+lit at 1600, 1280, 1024 and 820 px wide**, before and after — because `.conventions` is
+width-capped and the tracking cut paid for the size. The whole visible cost is the hints
+corner: 126 → 138 px tall and 9 px wider.
+
+The first screen moves 3 px, from the mode label alone, and **360×640 is still the one
+that fails first**: 39 px of clearance became 38, with the hint still above the fold and
+no horizontal overflow at 1440×800, 1600×620, 390×780 or 360×640. The phone drawer was
+checked too — 390×780, 360×640 and 780×390 landscape, five kept, drawer open: no overlap,
+no row escaping, no clipping, no overflow.
+
+Neither bundle number moved — 21.82 KB / 9.17 gzipped for the entry chunk and 14.04 / 4.10
+for the stylesheet — because it is the same declarations with different values.
+
 #### The pulse
 
 Added 2026-09-21. A bar at the right of every **sounding** row, filling from the bottom

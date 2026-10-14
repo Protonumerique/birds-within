@@ -1,3 +1,16 @@
+/*
+ * ONE RULE ABOUT SIZE, AND IT HOLDS EVERYWHERE BELOW: nothing in this file sets text
+ * under 12px except a control. `button, select`, `.mode-switch` and `.gate-fullpage`
+ * are the whole exemption - a short uppercase word inside a bordered box reads fine at
+ * 10.5, and a line of catalogue data does not. Added 2026-10-14, from a 2k screen where
+ * the panel's own data had become unreadable. See *Nothing but a button is under 12px*
+ * in CLAUDE.md for what was measured.
+ *
+ * Two things follow from it whenever a size here changes. Tracking comes down wherever
+ * size goes up - heavy tracking is how small type buys presence and at 12px it is not
+ * needed. And a fixed-height box has to be raised with its own font, or it clips: see
+ * .cbox.
+ */
 :root {
   color-scheme: dark;
   --col-w: 272px;
@@ -272,8 +285,8 @@ h1 {
 
 .sub {
   color: var(--ink-dim);
-  letter-spacing: 0.06em;
-  font-size: 11px;
+  letter-spacing: 0.05em;
+  font-size: 12px;
 }
 
 /* The note under LISTEN only exists while it has something to say; otherwise it would
@@ -302,8 +315,8 @@ h1 {
 
 .clock small {
   display: block;
-  font-size: 10.5px;
-  letter-spacing: 0.1em;
+  font-size: 12px;
+  letter-spacing: 0.07em;
   color: var(--ink-dim);
 }
 
@@ -404,15 +417,16 @@ input[type="range"] {
   display: flex;
   gap: 5px;
   /* Centred, not baseline: a disc and a triangle sit low on a baseline, and next to
-     9px capitals that reads as the glyph having slipped rather than as alignment. */
+     capitals this small that reads as the glyph having slipped rather than as
+     alignment. */
   align-items: center;
   margin: 0 0 3px;
   padding-bottom: 2px;
   border-bottom: 1px solid rgba(120, 160, 190, 0.14);
   /* Bold, because a heading is a name of a thing - and the tracking comes down for
      the same reason the title's did. */
-  font: 700 10px/1.4 var(--sans);
-  letter-spacing: 0.14em;
+  font: 700 12px/1.4 var(--sans);
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--ink-faint);
 }
@@ -509,7 +523,7 @@ input[type="range"] {
 
 .row.open .rd {
   display: block;
-  font-size: 10.5px;
+  font-size: 12px;
   line-height: 1.3;
   opacity: 0.8;
   /* Elevation, azimuth, range and range rate, rewritten four times a second. Without
@@ -567,8 +581,8 @@ input[type="range"] {
   align-items: flex-end;
   gap: 8px;
   color: var(--ink);
-  font-size: 10px;
-  letter-spacing: 0.08em;
+  font-size: 12px;
+  letter-spacing: 0.05em;
   text-align: right;
 }
 
@@ -628,8 +642,8 @@ input[type="range"] {
 
 .immerse-label {
   margin-top: 4px;
-  font-size: 9px;
-  letter-spacing: 0.24em;
+  font-size: 12px;
+  letter-spacing: 0.14em;
   color: var(--ink-faint);
 }
 
@@ -659,9 +673,11 @@ input[type="range"] {
  * #3d5566 - barely off the sky, and asking a reader to hold six hues in their head
  * against a list they could not read. Two things changed.
  *
- * It is legible at rest: --ink-dim rather than --ink-faint, 10px rather than 9. But it
- * is still deliberately recessive, because most of the time none of these colours is
- * on screen at all - nothing wears a family hue until it is kept or pointed at.
+ * It is legible at rest: --ink-dim rather than --ink-faint, and 12px since the floor
+ * below. But it is still deliberately recessive, because most of the time none of these
+ * colours is on screen at all - nothing wears a family hue until it is kept or pointed
+ * at. The tracking came down from 0.14em with the size, which is also what kept the
+ * block to its three lines at every width.
  *
  * And it *answers*. When a member of a family is picked up, that row goes to the full
  * --ink the instructions use, bold, with its dot at full strength; everything else
@@ -678,8 +694,8 @@ input[type="range"] {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 10px;
-  letter-spacing: 0.14em;
+  font-size: 12px;
+  letter-spacing: 0.08em;
   color: var(--ink-dim);
   transition: color 160ms ease-out;
   /* The one thing in the hints corner besides FULL SCREEN that takes the pointer:
@@ -767,17 +783,21 @@ input[type="range"] {
   background-color: var(--geo);
 }
 
-/* Blank until the pointer is on a square. Fixed height, so nothing jumps. */
+/*
+ * Blank until the pointer is on a square. Fixed height, so nothing jumps - which means
+ * the height is not independent of the size: two lines at 12px/1.35 are 32.4px, and at
+ * the old 30 the box clipped its own second line. Raise them together.
+ */
 .cbox {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  height: 30px;
+  height: 36px;
   margin-bottom: 4px;
   padding: 2px 5px;
   border: 1px solid rgba(138, 212, 255, 0.38);
   color: var(--geo);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.35;
   white-space: nowrap;
   overflow: hidden;
@@ -799,7 +819,7 @@ input[type="range"] {
   bottom: 12px;
   padding: 8px 10px;
   white-space: pre;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ink);
   background: rgba(5, 7, 10, 0.8);
   border: 1px solid rgba(120, 160, 190, 0.22);
@@ -981,8 +1001,8 @@ input[type="range"] {
 
 .gate-mode-label {
   margin-bottom: 7px;
-  font-size: 10px;
-  letter-spacing: 0.1em;
+  font-size: 12px;
+  letter-spacing: 0.06em;
   color: var(--ink-dim);
 }
 
@@ -1247,7 +1267,7 @@ input[type="range"] {
   position: absolute;
   top: 0;
   right: -4px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   line-height: 1;
   color: var(--ink);
