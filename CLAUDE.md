@@ -1520,6 +1520,51 @@ identical to before the change. Twenty-four literal capital W's would *not* fit,
 and that is the honest bound rather than a problem: no catalogue name is that shape, and
 one would ellipsise.
 
+#### The clock reads local, and UTC is the reference under it
+
+Inverted 2026-10-14. The big clock was `15:39:07 UTC` with `2026-10-14 · 13:39 local`
+underneath; it is now **`15:39:07`** with **`2026-10-14 · 13:39 UTC`** underneath.
+
+**A prominent UTC read as a mistake rather than as a choice.** Not everyone knows why a
+sky piece would keep its clock in UTC, and a time that is visibly not yours, with no
+explanation beside it, looks like something nobody got round to localising. So the main
+clock is the reader's own time and the reference moves under it, where a reference
+belongs — the piece still has a sky, and a sky still has UTC.
+
+**The big clock carries no label at all**, which is the other half of the fix: an
+unqualified clock is universally read as local, so saying so would be the panel
+explaining itself — the thing *The wording is deliberately thin* exists to prevent. What
+told the reader it was UTC was the word UTC; take the word away and nothing is left to
+misread.
+
+**The date beside it is the LOCAL date**, which is not what it was and is the one real
+correctness point here. It used to be `iso.slice(0, 10)`, the UTC date, which was right
+while the time next to it was also UTC. Against a local clock the two disagree by a day
+wherever the offset crosses midnight — at 03:38 on Kiritimati (UTC+14) the UTC date is
+still yesterday — and a date contradicting the time above it is worse than either alone.
+
+Verified in four timezones against `clock.date`, with the scrub at +330 m:
+
+| | big | small |
+|---|---|---|
+| UTC | `13:37:57` | `2026-10-14 · 13:37 UTC` |
+| Europe/Berlin | `15:38:05` | `2026-10-14 · 13:38 UTC` |
+| America/Los_Angeles | `06:38:12` | `2026-10-14 · 13:38 UTC` |
+| **Pacific/Kiritimati (+14)** | `03:38:18` | **`2026-10-15`** ` · 13:38 UTC` |
+
+The last row is the case the date fix exists for, and the scrub offset still rides the
+small line in all four.
+
+**Two things it knowingly does not solve.** "Local" is the *browser's* timezone, not the
+observer's — set `?lat=&lon=` to Tokyo from Berlin and the clock stays Berlin. That is
+defensible (it is your clock, and the sky above the coordinates is what the image is for)
+and the alternative is a timezone database per visitor, which is the arrangement
+`fetch-catalog.mjs` exists to avoid. And on the Kiritimati row a strict reading pairs a
+local date with a UTC time — the UTC *date* is a day behind. The separator makes them two
+facts rather than one timestamp, nobody needs the UTC date, and the catalogue's own as-of
+date is on the line above; spelling out both dates would cost the line its brevity for a
+handful of timezones for part of a day.
+
 #### The pulse
 
 Added 2026-09-21. A bar at the right of every **sounding** row, filling from the bottom

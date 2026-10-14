@@ -383,10 +383,22 @@ export function createHud(root: HTMLElement, clock: Clock, source: HudSource): H
     belt: () => choirUp,
 
     update(date, frame) {
+      /*
+       * The big clock is the reader's own time and carries no label, because an
+       * unqualified clock is always read as local - which is exactly why a prominent
+       * `UTC` read as a mistake rather than as a choice. UTC moves to the small line
+       * as the reference it is: the piece is about a sky, and a sky has one.
+       *
+       * The date beside it is the LOCAL date, not `iso.slice(0, 10)`. East of
+       * Greenwich after midnight the two disagree by a day, and a date contradicting
+       * the time next to it is worse than either alone.
+       */
       const iso = date.toISOString();
-      tEl.firstChild!.textContent = `${iso.slice(11, 19)} UTC`;
+      tEl.firstChild!.textContent =
+        `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
       const offset = lastScrub ? `  ${lastScrub >= 0 ? '+' : ''}${lastScrub}m` : '';
-      tlEl.textContent = `${iso.slice(0, 10)} · ${pad(date.getHours())}:${pad(date.getMinutes())} local${offset}`;
+      const day = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+      tlEl.textContent = `${day} · ${iso.slice(11, 16)} UTC${offset}`;
 
       // Every control's face comes from state, not from whatever set that state.
       pauseBtn.textContent = clock.isPaused ? 'PLAY' : 'PAUSE';
